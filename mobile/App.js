@@ -273,6 +273,7 @@ function InnerApp() {
       ...trip,
       id: `board-${Date.now()}`,
       sourcePublicTripId: trip.id,
+      isPublic: false,
       subtitle: trip.location,
       placesList: (trip.placesList ?? []).map((place, index) => ({
         ...place,
@@ -313,6 +314,7 @@ function InnerApp() {
       days: Math.max(1, Math.round((endDate - start) / (1000 * 60 * 60 * 24)) + 1),
       startDate: start.toISOString(),
       endDate: endDate.toISOString(),
+      isPublic: false,
       placesList: []
     };
 
@@ -581,7 +583,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 140
+    paddingBottom: 92
   },
   contentWrapper: {
     flex: 1,
@@ -653,14 +655,15 @@ const styles = StyleSheet.create({
     color: '#C26CF8'
   },
   verticalCards: {
-    marginBottom: 24
+    marginBottom: 4
   },
   fullBoardCard: {
     width: '100%',
-    marginBottom: 16
+    marginBottom: 12
   },
   createTripRow: {
-    marginTop: 10,
+    marginTop: 0,
+    marginBottom: 12,
     alignItems: 'center'
   },
   createTripButton: {

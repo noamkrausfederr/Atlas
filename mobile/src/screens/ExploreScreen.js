@@ -1,9 +1,12 @@
-import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useMemo, useState } from 'react';
+import { Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RecommendationCard } from '../components/RecommendationCard';
 import { formatDateRange, generateRecommendationsForRefresh } from '../../data/recommendations';
 import { publicTrips } from '../../data/trips';
+
+const DAY_RANGE_MIN = 1;
+const DAY_RANGE_MAX = 30;
 
 function groupRecommendationsByCategory(recommendations) {
   return recommendations.reduce((sections, rec) => {
@@ -17,13 +20,42 @@ function groupRecommendationsByCategory(recommendations) {
 }
 
 const FILTER_DEFAULTS = {
-  country: 'All',
-  continent: 'All',
-  days: 'All',
-  people: 'All',
+  country: [],
+  minDays: DAY_RANGE_MIN,
+  maxDays: DAY_RANGE_MAX,
+  pace: 'All',
+  travelerType: 'All',
+  accessibility: 'All',
+  budget: 'All',
   startDate: '',
   endDate: ''
 };
+
+const COUNTRY_OPTIONS = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda', 'Argentina', 'Armenia',
+  'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium',
+  'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
+  'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cambodia', 'Cameroon', 'Canada', 'Central African Republic', 'Chad',
+  'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica', 'Cote d’Ivoire', 'Croatia', 'Cuba', 'Cyprus',
+  'Czechia', 'Democratic Republic of the Congo', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+  'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji',
+  'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala',
+  'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran',
+  'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait',
+  'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania',
+  'Luxembourg', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands',
+  'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco',
+  'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger',
+  'Nigeria', 'North Korea', 'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama',
+  'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia',
+  'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino',
+  'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore',
+  'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain',
+  'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania',
+  'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan',
+  'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay',
+  'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe'
+];
 
 function uniqueValues(items, key) {
   return ['All', ...Array.from(new Set(items.map((item) => item[key]).filter(Boolean)))];
@@ -43,6 +75,57 @@ function formatDateForInput(date) {
   return `${day}/${month}/${date.getFullYear()}`;
 }
 
+function getDateKey(date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getOrdinalSuffix(day) {
+  if (day % 100 >= 11 && day % 100 <= 13) return 'th';
+  if (day % 10 === 1) return 'st';
+  if (day % 10 === 2) return 'nd';
+  if (day % 10 === 3) return 'rd';
+  return 'th';
+}
+
+function formatItineraryDate(date) {
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' }).toLowerCase();
+  const month = date.toLocaleDateString(undefined, { month: 'long' }).toLowerCase();
+  const day = date.getDate();
+  return `${weekday}, ${day}${getOrdinalSuffix(day)} ${month}`;
+}
+
+function getTripDateSections(startDateValue, endDateValue) {
+  const start = new Date(startDateValue);
+  const end = new Date(endDateValue);
+  const sections = [];
+  const cursor = Number.isNaN(start.getTime()) ? new Date() : start;
+  const finalDate = Number.isNaN(end.getTime()) ? cursor : end;
+  cursor.setHours(0, 0, 0, 0);
+  finalDate.setHours(0, 0, 0, 0);
+
+  while (cursor <= finalDate && sections.length < 60) {
+    sections.push({
+      key: getDateKey(cursor),
+      title: formatItineraryDate(cursor),
+      date: new Date(cursor),
+      places: []
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return sections.length ? sections : [{ key: getDateKey(start), title: formatItineraryDate(start), date: start, places: [] }];
+}
+
+function getPublicPlaceSectionIndex(place, placeIndex, sectionCount) {
+  if (typeof place.dayIndex === 'number') return Math.min(Math.max(place.dayIndex, 0), sectionCount - 1);
+  if (typeof place.day === 'number') return Math.min(Math.max(place.day - 1, 0), sectionCount - 1);
+  if (place.date) {
+    const placeDate = new Date(place.date);
+    if (!Number.isNaN(placeDate.getTime())) return placeDate;
+  }
+  return Math.min(placeIndex, sectionCount - 1);
+}
+
 function getFilterDateValue(filters, field) {
   const parsed = parseFilterDate(filters[field]);
   if (parsed) return parsed;
@@ -50,19 +133,16 @@ function getFilterDateValue(filters, field) {
   return fallback || new Date();
 }
 
-function formatTripDate(dateValue) {
-  return new Date(dateValue).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
-  });
-}
-
 function matchesPublicTripFilters(trip, filters) {
-  if (filters.country !== 'All' && trip.country !== filters.country) return false;
-  if (filters.continent !== 'All' && trip.continent !== filters.continent) return false;
-  if (filters.days !== 'All' && trip.days !== Number(filters.days)) return false;
-  if (filters.people !== 'All' && trip.people !== Number(filters.people)) return false;
+  if (filters.country.length > 0 && !filters.country.includes(trip.country)) return false;
+  const lowDays = Math.min(filters.minDays, filters.maxDays);
+  const highDays = Math.max(filters.minDays, filters.maxDays);
+  if (trip.days < lowDays) return false;
+  if (trip.days > highDays) return false;
+  if (filters.pace !== 'All' && trip.pace !== filters.pace) return false;
+  if (filters.travelerType !== 'All' && trip.travelerType !== filters.travelerType) return false;
+  if (filters.accessibility !== 'All' && trip.accessibility !== filters.accessibility) return false;
+  if (filters.budget !== 'All' && trip.budget !== filters.budget) return false;
 
   const filterStart = parseFilterDate(filters.startDate);
   const filterEnd = parseFilterDate(filters.endDate);
@@ -75,21 +155,36 @@ function matchesPublicTripFilters(trip, filters) {
 }
 
 export function ExploreScreen({ boards, onAddPublicTrip }) {
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isFilterPageOpen, setIsFilterPageOpen] = useState(false);
   const [filters, setFilters] = useState(FILTER_DEFAULTS);
   const [selectedPublicTrip, setSelectedPublicTrip] = useState(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState(null);
   const [activeFilterDateField, setActiveFilterDateField] = useState(null);
-  const countries = useMemo(() => uniqueValues(publicTrips, 'country'), []);
-  const continents = useMemo(() => uniqueValues(publicTrips, 'continent'), []);
-  const dayOptions = useMemo(() => ['All', ...Array.from(new Set(publicTrips.map((trip) => trip.days))).sort((a, b) => a - b).map(String)], []);
-  const peopleOptions = useMemo(
-    () => ['All', ...Array.from(new Set(publicTrips.map((trip) => trip.people))).sort((a, b) => a - b).map(String)],
-    []
-  );
+  const [showCountryOptions, setShowCountryOptions] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const paceOptions = useMemo(() => uniqueValues(publicTrips, 'pace'), []);
+  const travelerTypeOptions = useMemo(() => uniqueValues(publicTrips, 'travelerType'), []);
+  const accessibilityOptions = useMemo(() => uniqueValues(publicTrips, 'accessibility'), []);
+  const budgetOptions = useMemo(() => uniqueValues(publicTrips, 'budget'), []);
   const filteredTrips = publicTrips.filter((trip) => matchesPublicTripFilters(trip, filters));
   const addedPublicTripIds = new Set(boards.map((board) => board.sourcePublicTripId).filter(Boolean));
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const toggleCountryFilter = (country) => {
+    setFilters((current) => {
+      const selected = current.country.includes(country)
+        ? current.country.filter((item) => item !== country)
+        : [...current.country, country];
+      return { ...current, country: selected };
+    });
+    setCountrySearch('');
+    setShowCountryOptions(false);
+  };
+  const clearFilters = () => {
+    setFilters(FILTER_DEFAULTS);
+    setCountrySearch('');
+    setShowCountryOptions(false);
+  };
+  const updateDayRange = (minDays, maxDays) => setFilters((current) => ({ ...current, minDays, maxDays }));
   const handleFilterDateChange = (field, _event, selectedDate) => {
     if (Platform.OS === 'android') {
       setActiveFilterDateField(null);
@@ -113,6 +208,12 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
       const safeEnd = start && nextDate < start ? start : nextDate;
       return { ...current, endDate: formatDateForInput(safeEnd) };
     });
+
+    if (field === 'startDate') {
+      setActiveFilterDateField('endDate');
+    } else {
+      setActiveFilterDateField(null);
+    }
   };
   const openPublicTrip = (trip) => {
     setSelectedPublicTrip(trip);
@@ -149,83 +250,63 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
     );
   }
 
+  if (isFilterPageOpen) {
+    return (
+      <ExploreFilterScreen
+        filters={filters}
+        activeFilterDateField={activeFilterDateField}
+        showCountryOptions={showCountryOptions}
+        countrySearch={countrySearch}
+        paceOptions={paceOptions}
+        travelerTypeOptions={travelerTypeOptions}
+        accessibilityOptions={accessibilityOptions}
+        budgetOptions={budgetOptions}
+        onBack={() => {
+          setIsFilterPageOpen(false);
+          setActiveFilterDateField(null);
+          setShowCountryOptions(false);
+        }}
+        onUpdateFilter={updateFilter}
+        onToggleCountry={toggleCountryFilter}
+        onSearchCountry={(value) => {
+          setCountrySearch(value);
+          setShowCountryOptions(true);
+        }}
+        onFocusCountrySearch={() => setShowCountryOptions(true)}
+        onUpdateDayRange={updateDayRange}
+        onFilterDateChange={handleFilterDateChange}
+        onToggleDateField={(field) => setActiveFilterDateField((current) => (current === field ? null : field))}
+        onClearFilters={clearFilters}
+      />
+    );
+  }
+
   return (
     <View>
       <View style={styles.exploreHeader}>
-        <View>
-          <Text style={styles.brandLabel}>Explore</Text>
-          <Text style={styles.heroTitle}>Public trips</Text>
-          <Text style={styles.heroDescription}>{publicTrips.length} trips shared by travelers on Atlas</Text>
-        </View>
-        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterOpen((current) => !current)}>
+        <Text style={styles.explorePageTitle}>Explore</Text>
+        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
           <Text style={styles.filterButtonText}>Filter</Text>
         </TouchableOpacity>
       </View>
 
-      {isFilterOpen && (
-        <View style={styles.filterPanel}>
-          <Text style={styles.filterLabel}>Dates</Text>
-          <View style={styles.filterDateRow}>
-            <FilterDateButton
-              label="From"
-              value={filters.startDate}
-              active={activeFilterDateField === 'startDate'}
-              onPress={() => setActiveFilterDateField((current) => (current === 'startDate' ? null : 'startDate'))}
-            />
-            <FilterDateButton
-              label="To"
-              value={filters.endDate}
-              active={activeFilterDateField === 'endDate'}
-              onPress={() => setActiveFilterDateField((current) => (current === 'endDate' ? null : 'endDate'))}
-            />
+      <View style={styles.publicTripMasonry}>
+        {[0, 1].map((column) => (
+          <View key={column} style={styles.publicTripMasonryColumn}>
+            {filteredTrips
+              .filter((_, index) => index % 2 === column)
+              .map((trip, index) => (
+                <PublicTripCard
+                  key={trip.id}
+                  trip={trip}
+                  variantIndex={index * 2 + column}
+                  onOpenTrip={() => openPublicTrip(trip)}
+                  onOpenProfile={() => openPublicProfile(trip.ownerName)}
+                />
+              ))}
           </View>
-          {activeFilterDateField === 'startDate' && (
-            <View style={styles.filterCalendarWrap}>
-              <DateTimePicker
-                value={getFilterDateValue(filters, 'startDate')}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                onChange={(event, selectedDate) => handleFilterDateChange('startDate', event, selectedDate)}
-                style={styles.inlineCalendar}
-              />
-            </View>
-          )}
-          {activeFilterDateField === 'endDate' && (
-            <View style={styles.filterCalendarWrap}>
-              <DateTimePicker
-                value={getFilterDateValue(filters, 'endDate')}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={parseFilterDate(filters.startDate) || undefined}
-                onChange={(event, selectedDate) => handleFilterDateChange('endDate', event, selectedDate)}
-                style={styles.inlineCalendar}
-              />
-            </View>
-          )}
-
-          <FilterChips label="Country" options={countries} value={filters.country} onChange={(value) => updateFilter('country', value)} />
-          <FilterChips label="Continent" options={continents} value={filters.continent} onChange={(value) => updateFilter('continent', value)} />
-          <FilterChips label="Days" options={dayOptions} value={filters.days} onChange={(value) => updateFilter('days', value)} />
-          <FilterChips label="People" options={peopleOptions} value={filters.people} onChange={(value) => updateFilter('people', value)} />
-
-          <TouchableOpacity style={styles.clearFiltersButton} onPress={() => setFilters(FILTER_DEFAULTS)}>
-            <Text style={styles.clearFiltersText}>Clear filters</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <Text style={styles.publicTripCount}>
-        {filteredTrips.length} public {filteredTrips.length === 1 ? 'trip' : 'trips'}
-      </Text>
-
-      {filteredTrips.map((trip) => (
-        <PublicTripCard
-          key={trip.id}
-          trip={trip}
-          onOpenTrip={() => openPublicTrip(trip)}
-          onOpenProfile={() => openPublicProfile(trip.ownerName)}
-        />
-      ))}
+        ))}
+      </View>
 
       {filteredTrips.length === 0 && (
         <View style={styles.emptyPublicTrips}>
@@ -236,39 +317,125 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
   );
 }
 
-function PublicTripCard({ trip, onOpenTrip, onOpenProfile }) {
+function PublicTripCard({ trip, onOpenTrip, onOpenProfile, variantIndex = 0 }) {
+  const imageHeights = [210, 164, 176, 224, 190, 152];
+
   return (
     <View style={styles.publicTripCard}>
       <TouchableOpacity activeOpacity={0.88} onPress={onOpenTrip}>
-        <Image source={{ uri: trip.image }} style={styles.publicTripImage} />
+        <Image source={{ uri: trip.image }} style={[styles.publicTripImage, { height: imageHeights[variantIndex % imageHeights.length] }]} />
       </TouchableOpacity>
       <View style={styles.publicTripBody}>
-        <View style={styles.publicTripTopRow}>
-          <View style={{ flex: 1 }}>
-            <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
-              <Text style={styles.publicTripTitle}>{trip.title}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripOwnerButton}>
-              <Text style={styles.publicTripOwner}>By {trip.ownerName}</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.publicTripDays}>{trip.days} days</Text>
-        </View>
         <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
-          <Text style={styles.publicTripMeta}>
-            {trip.location} · {trip.people} {trip.people === 1 ? 'person' : 'people'}
-          </Text>
-          <View style={styles.publicTripDateRow}>
-            <View style={styles.publicTripDateBox}>
-              <Text style={styles.publicTripDateLabel}>Start</Text>
-              <Text style={styles.publicTripDateValue}>{formatTripDate(trip.startDate)}</Text>
-            </View>
-            <View style={styles.publicTripDateBox}>
-              <Text style={styles.publicTripDateLabel}>End</Text>
-              <Text style={styles.publicTripDateValue}>{formatTripDate(trip.endDate)}</Text>
-            </View>
+          <View style={styles.publicTripTitleRow}>
+            <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
+            <Text style={styles.publicTripMore}>...</Text>
           </View>
-          <Text style={styles.publicTripDescription}>{trip.description}</Text>
+          <Text style={styles.publicTripMeta} numberOfLines={2}>{trip.location}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripOwnerButton}>
+          <Text style={styles.publicTripOwner} numberOfLines={1}>By {trip.ownerName}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function ExploreFilterScreen({
+  filters,
+  activeFilterDateField,
+  showCountryOptions,
+  countrySearch,
+  paceOptions,
+  travelerTypeOptions,
+  accessibilityOptions,
+  budgetOptions,
+  onBack,
+  onUpdateFilter,
+  onToggleCountry,
+  onSearchCountry,
+  onFocusCountrySearch,
+  onUpdateDayRange,
+  onFilterDateChange,
+  onToggleDateField,
+  onClearFilters
+}) {
+  return (
+    <View style={styles.exploreSubScreen}>
+      <View style={styles.exploreSubHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        <View style={[styles.exploreSubHeaderText, styles.filterSubHeaderText]}>
+          <Text style={styles.exploreSubTitle}>Filters</Text>
+        </View>
+      </View>
+
+      <View style={styles.filterPanel}>
+        <Text style={styles.filterLabel}>Dates</Text>
+        <View style={styles.filterDateRow}>
+          <FilterDateButton
+            label="From"
+            value={filters.startDate}
+            active={activeFilterDateField === 'startDate'}
+            onPress={() => onToggleDateField('startDate')}
+          />
+          <FilterDateButton
+            label="To"
+            value={filters.endDate}
+            active={activeFilterDateField === 'endDate'}
+            onPress={() => onToggleDateField('endDate')}
+          />
+        </View>
+        {activeFilterDateField === 'startDate' && (
+          <View style={styles.filterCalendarWrap}>
+            <DateTimePicker
+              value={getFilterDateValue(filters, 'startDate')}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              onChange={(event, selectedDate) => onFilterDateChange('startDate', event, selectedDate)}
+              style={styles.inlineCalendar}
+            />
+          </View>
+        )}
+        {activeFilterDateField === 'endDate' && (
+          <View style={styles.filterCalendarWrap}>
+            <DateTimePicker
+              value={getFilterDateValue(filters, 'endDate')}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              minimumDate={parseFilterDate(filters.startDate) || undefined}
+              onChange={(event, selectedDate) => onFilterDateChange('endDate', event, selectedDate)}
+              style={styles.inlineCalendar}
+            />
+          </View>
+        )}
+
+        <CountryMultiSelect
+          selectedCountries={filters.country}
+          searchValue={countrySearch}
+          showOptions={showCountryOptions}
+          onSearchChange={onSearchCountry}
+          onFocusSearch={onFocusCountrySearch}
+          onToggleCountry={onToggleCountry}
+        />
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterLabel}>Trip length</Text>
+          <DaysRangeSlider
+            minValue={DAY_RANGE_MIN}
+            maxValue={DAY_RANGE_MAX}
+            valueMin={filters.minDays}
+            valueMax={filters.maxDays}
+            onChange={onUpdateDayRange}
+          />
+        </View>
+        <FilterChips label="Traveler type" options={travelerTypeOptions} value={filters.travelerType} onChange={(value) => onUpdateFilter('travelerType', value)} />
+        <FilterChips label="Budget" options={budgetOptions} value={filters.budget} onChange={(value) => onUpdateFilter('budget', value)} />
+        <FilterChips label="Traveler pace" options={paceOptions} value={filters.pace} onChange={(value) => onUpdateFilter('pace', value)} />
+        <FilterChips label="Accessibility" options={accessibilityOptions} value={filters.accessibility} onChange={(value) => onUpdateFilter('accessibility', value)} />
+
+        <TouchableOpacity style={styles.clearFiltersButton} onPress={onClearFilters}>
+          <Text style={styles.clearFiltersText}>Clear filters</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -284,7 +451,167 @@ function FilterDateButton({ label, value, active, onPress }) {
   );
 }
 
+function PublicTripTags({ trip }) {
+  return (
+    <View style={styles.publicTripTagRow}>
+      {[trip.travelerType, trip.budget, trip.pace, trip.accessibility].filter(Boolean).map((tag) => (
+        <View key={tag} style={styles.publicTripTag}>
+          <Text style={styles.publicTripTagText}>{tag}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function CountryMultiSelect({
+  selectedCountries,
+  searchValue,
+  showOptions,
+  onSearchChange,
+  onFocusSearch,
+  onToggleCountry
+}) {
+  const visibleCountries = COUNTRY_OPTIONS.filter((country) =>
+    country.toLowerCase().includes(searchValue.trim().toLowerCase())
+  ).slice(0, 18);
+
+  return (
+    <View style={styles.filterGroup}>
+      <Text style={styles.filterLabel}>Country</Text>
+      <TextInput
+        style={styles.countrySearchInput}
+        placeholder="Search country"
+        value={searchValue}
+        onChangeText={onSearchChange}
+        onFocus={onFocusSearch}
+        placeholderTextColor="#A1A1AA"
+      />
+
+      {selectedCountries.length > 0 && (
+        <View style={styles.selectedCountryRow}>
+          {selectedCountries.map((country) => (
+            <TouchableOpacity key={country} style={styles.selectedCountryBubble} onPress={() => onToggleCountry(country)}>
+              <Text style={styles.selectedCountryBubbleText}>{country} x</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {showOptions && (
+        <View style={styles.countryDropdownPanel}>
+          <View style={styles.countryOptionList}>
+            {visibleCountries.map((country) => {
+              const selected = selectedCountries.includes(country);
+              return (
+                <TouchableOpacity
+                  key={country}
+                  style={[styles.countryOption, selected && styles.countryOptionSelected]}
+                  onPress={() => onToggleCountry(country)}
+                >
+                  <Text style={[styles.countryOptionText, selected && styles.countryOptionTextSelected]}>{country}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function DaysRangeSlider({ minValue, maxValue, valueMin, valueMax, onChange }) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [activeThumb, setActiveThumb] = useState(null);
+  const activeThumbRef = useRef(null);
+  const range = Math.max(1, maxValue - minValue);
+  const lowerValue = Math.min(valueMin, valueMax);
+  const upperValue = Math.max(valueMin, valueMax);
+  const minPosition = trackWidth * ((lowerValue - minValue) / range);
+  const maxPosition = trackWidth * ((upperValue - minValue) / range);
+
+  const positionToValue = (position) => {
+    const clampedPosition = Math.max(0, Math.min(position, trackWidth));
+    return Math.round((clampedPosition / Math.max(1, trackWidth)) * range + minValue);
+  };
+  const updateRangeFromPosition = (position, thumb = activeThumbRef.current || activeThumb) => {
+    const selectedThumb = thumb || (Math.abs(position - minPosition) <= Math.abs(position - maxPosition) ? 'min' : 'max');
+    const nextValue = Math.min(positionToValue(position), upperValue);
+    const nextUpperValue = Math.max(positionToValue(position), lowerValue);
+
+    if (selectedThumb === 'min') {
+      onChange(nextValue, upperValue);
+      return selectedThumb;
+    }
+
+    onChange(lowerValue, nextUpperValue);
+    return selectedThumb;
+  };
+  const handleRangeGrant = (event) => {
+    const position = event.nativeEvent.locationX;
+    const selectedThumb = Math.abs(position - minPosition) <= Math.abs(position - maxPosition) ? 'min' : 'max';
+    activeThumbRef.current = selectedThumb;
+    setActiveThumb(selectedThumb);
+    updateRangeFromPosition(position, selectedThumb);
+  };
+  const handleRangeMove = (event) => {
+    updateRangeFromPosition(event.nativeEvent.locationX);
+  };
+  const clearActiveThumb = () => {
+    activeThumbRef.current = null;
+    setActiveThumb(null);
+  };
+
+  return (
+    <View style={styles.daysRangeContainer}>
+      <Text style={styles.daysRangeValue}>
+        {lowerValue === upperValue ? `${lowerValue} days` : `${lowerValue} - ${upperValue} days`}
+      </Text>
+      <View
+        style={styles.daysRangeTrackWrap}
+        onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+        onStartShouldSetResponder={() => true}
+        onStartShouldSetResponderCapture={() => true}
+        onMoveShouldSetResponder={() => true}
+        onMoveShouldSetResponderCapture={() => true}
+        onResponderGrant={handleRangeGrant}
+        onResponderMove={handleRangeMove}
+        onResponderRelease={clearActiveThumb}
+        onResponderTerminate={clearActiveThumb}
+        onResponderTerminationRequest={() => false}
+      >
+        <View style={styles.daysRangeTrack} />
+        <View
+          style={[
+            styles.daysRangeFill,
+            {
+              left: minPosition,
+              width: Math.max(0, maxPosition - minPosition)
+            }
+          ]}
+        />
+        <View pointerEvents="none" style={[styles.daysRangeThumb, styles.daysRangeThumbMin, { left: Math.max(0, Math.min(trackWidth - 20, minPosition - 10)) }]} />
+        <View pointerEvents="none" style={[styles.daysRangeThumb, styles.daysRangeThumbMax, { left: Math.max(0, Math.min(trackWidth - 20, maxPosition - 10)) }]} />
+      </View>
+      <View style={styles.daysRangeEndLabels}>
+        <Text style={styles.daysRangeEndLabel}>{minValue}</Text>
+        <Text style={styles.daysRangeEndLabel}>{maxValue}</Text>
+      </View>
+    </View>
+  );
+}
+
 function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPublicTrip }) {
+  const itinerarySections = getTripDateSections(trip.startDate, trip.endDate);
+  (trip.placesList ?? []).forEach((place, index) => {
+    const target = getPublicPlaceSectionIndex(place, index, itinerarySections.length);
+    if (target instanceof Date) {
+      const matchingIndex = itinerarySections.findIndex((section) => section.key === getDateKey(target));
+      itinerarySections[matchingIndex >= 0 ? matchingIndex : 0].places.push(place);
+      return;
+    }
+    itinerarySections[target].places.push(place);
+  });
+
   return (
     <View style={styles.publicDetailScreen}>
       <View style={styles.exploreSubHeader}>
@@ -293,7 +620,6 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
         </TouchableOpacity>
         <View style={styles.exploreSubHeaderText}>
           <Text style={styles.exploreSubTitle}>{trip.title}</Text>
-          <Text style={styles.exploreSubMeta}>Public trip</Text>
         </View>
       </View>
 
@@ -309,19 +635,28 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
       </TouchableOpacity>
 
       <Text style={styles.publicDetailMeta}>
-        {trip.location} · {trip.people} {trip.people === 1 ? 'person' : 'people'} · {formatDateRange(trip)}
+        {trip.location} · {formatDateRange(trip)}
       </Text>
+      <PublicTripTags trip={trip} />
       <Text style={styles.publicDetailDescription}>{trip.description}</Text>
 
-      <View style={styles.readOnlyBadge}>
-        <Text style={styles.readOnlyBadgeText}>Read-only public trip</Text>
-      </View>
-
       <Text style={styles.publicDetailSectionTitle}>Itinerary</Text>
-      {(trip.placesList ?? []).map((place) => (
-        <View key={place.id} style={styles.publicPlaceRow}>
-          <Text style={styles.publicPlaceName}>{place.name}</Text>
-          {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
+      {itinerarySections.map((section, index) => (
+        <View key={section.key} style={styles.publicItineraryDaySection}>
+          <View style={styles.publicItineraryDayRail}>
+            <View style={styles.publicItineraryDayDot} />
+            {index < itinerarySections.length - 1 && <View style={styles.publicItineraryDayLine} />}
+          </View>
+          <View style={styles.publicItineraryDayContent}>
+            <Text style={styles.publicItineraryDayTitle}>{section.title}</Text>
+            {section.places.length === 0 && <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>}
+            {section.places.map((place) => (
+              <View key={place.id} style={styles.publicPlaceRow}>
+                <Text style={styles.publicPlaceName}>{place.name}</Text>
+                {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
+              </View>
+            ))}
+          </View>
         </View>
       ))}
 
@@ -371,11 +706,11 @@ function PublicProfile({ ownerName, trips, addedPublicTripIds, onBack, onOpenTri
   );
 }
 
-function FilterChips({ label, options, value, onChange }) {
+function FilterChips({ label, options, value, onChange, compact = false }) {
   return (
-    <View style={styles.filterGroup}>
-      <Text style={styles.filterLabel}>{label}</Text>
-      <View style={styles.filterChipRow}>
+    <View style={!compact && styles.filterGroup}>
+      {label && <Text style={styles.filterLabel}>{label}</Text>}
+      <View style={[styles.filterChipRow, compact && styles.filterChipRowCompact]}>
         {options.map((option) => (
           <TouchableOpacity
             key={option}
@@ -425,37 +760,17 @@ export function ExploreMoreScreen({ board, onBack, onOpenRecommendation, refresh
 
 const styles = StyleSheet.create({
   exploreHeader: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    marginBottom: 16,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 16,
     gap: 12
   },
-  brandLabel: {
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: '#C26CF8',
-    fontWeight: '700',
-    marginBottom: 10
-  },
-  heroTitle: {
-    fontSize: 28,
-    lineHeight: 36,
-    fontWeight: '800',
+  explorePageTitle: {
     color: '#2A0A2B',
-    marginBottom: 12
-  },
-  heroDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#6F3E56',
-    marginTop: 6
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '900'
   },
   filterButton: {
     borderRadius: 14,
@@ -536,10 +851,134 @@ const styles = StyleSheet.create({
     transform: Platform.OS === 'ios' ? [{ scale: 0.92 }] : [],
     marginVertical: Platform.OS === 'ios' ? -12 : 0
   },
+  selectedCountryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10
+  },
+  selectedCountryBubble: {
+    backgroundColor: '#F6E4F8',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#DD77F2',
+    paddingHorizontal: 11,
+    paddingVertical: 7
+  },
+  selectedCountryBubbleText: {
+    color: '#7D3DBA',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  countryDropdownPanel: {
+    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10
+  },
+  countrySearchInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0F172A',
+    marginBottom: 0
+  },
+  countryOptionList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  countryOption: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  countryOptionSelected: {
+    backgroundColor: '#F6E4F8',
+    borderColor: '#DD77F2'
+  },
+  countryOptionText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  countryOptionTextSelected: {
+    color: '#7D3DBA'
+  },
+  daysRangeContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10
+  },
+  daysRangeValue: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 18
+  },
+  daysRangeTrackWrap: {
+    width: '100%',
+    height: 28,
+    justifyContent: 'center'
+  },
+  daysRangeTrack: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#E2E8F0'
+  },
+  daysRangeFill: {
+    position: 'absolute',
+    top: 12,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#DD77F2'
+  },
+  daysRangeThumb: {
+    position: 'absolute',
+    top: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: '#DD77F2',
+    borderWidth: 3,
+    borderColor: '#FFFFFF'
+  },
+  daysRangeThumbMin: {
+    zIndex: 2
+  },
+  daysRangeThumbMax: {
+    zIndex: 3
+  },
+  daysRangeEndLabels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2
+  },
+  daysRangeEndLabel: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700'
+  },
   filterChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8
+  },
+  filterChipRowCompact: {
+    marginBottom: 4
   },
   filterChip: {
     borderRadius: 999,
@@ -570,95 +1009,79 @@ const styles = StyleSheet.create({
     color: '#7D3DBA',
     fontWeight: '800'
   },
-  publicTripCount: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 12
+  publicTripMasonry: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start'
+  },
+  publicTripMasonryColumn: {
+    flex: 1,
+    gap: 14
   },
   publicTripCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginBottom: 16
+    overflow: 'hidden'
   },
   publicTripImage: {
     width: '100%',
-    height: 170
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC'
   },
   publicTripBody: {
-    padding: 16
+    paddingTop: 8,
+    paddingHorizontal: 2,
+    paddingBottom: 4
   },
-  publicTripTopRow: {
+  publicTripTitleRow: {
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
-    marginBottom: 8
+    alignItems: 'center',
+    gap: 6
   },
   publicTripTitle: {
-    fontSize: 19,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '800',
     color: '#0F172A'
   },
+  publicTripMore: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 16
+  },
   publicTripOwner: {
-    marginTop: 3,
     color: '#7D3DBA',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700'
   },
   publicTripOwnerButton: {
-    alignSelf: 'flex-start'
+    alignSelf: 'flex-start',
+    marginTop: 4
   },
-  publicTripDays: {
+  publicTripMeta: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2
+  },
+  publicTripTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginBottom: 12
+  },
+  publicTripTag: {
     backgroundColor: '#F8FAFC',
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    color: '#0F172A',
-    fontSize: 12,
-    fontWeight: '800'
+    paddingHorizontal: 9,
+    paddingVertical: 6
   },
-  publicTripMeta: {
+  publicTripTagText: {
     color: '#64748B',
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 10
-  },
-  publicTripDateRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12
-  },
-  publicTripDateBox: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 10
-  },
-  publicTripDateLabel: {
-    color: '#94A3B8',
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 3
-  },
-  publicTripDateValue: {
-    color: '#0F172A',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '800'
-  },
-  publicTripDescription: {
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 20,
   },
   addPublicTripButton: {
     backgroundColor: '#DD77F2',
@@ -741,34 +1164,52 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 12
   },
-  readOnlyBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginBottom: 18
-  },
-  readOnlyBadgeText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '800'
-  },
   publicDetailSectionTitle: {
     color: '#2A0A2B',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 10
   },
+  publicItineraryDaySection: {
+    flexDirection: 'row',
+    alignItems: 'stretch'
+  },
+  publicItineraryDayRail: {
+    width: 24,
+    alignItems: 'center'
+  },
+  publicItineraryDayDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#DD77F2',
+    marginTop: 6
+  },
+  publicItineraryDayLine: {
+    flex: 1,
+    width: 2,
+    backgroundColor: '#F3E7F3',
+    marginTop: 4
+  },
+  publicItineraryDayContent: {
+    flex: 1,
+    paddingBottom: 18
+  },
+  publicItineraryDayTitle: {
+    marginBottom: 10,
+    color: '#2A0A2B',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  publicItineraryEmpty: {
+    color: '#94A3B8',
+    marginBottom: 10,
+    fontSize: 13
+  },
   publicPlaceRow: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
-    marginBottom: 10
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3E7F3'
   },
   publicPlaceName: {
     color: '#0F172A',
@@ -839,6 +1280,9 @@ const styles = StyleSheet.create({
   },
   exploreSubHeaderText: {
     flex: 1
+  },
+  filterSubHeaderText: {
+    alignItems: 'flex-end'
   },
   exploreSubTitle: {
     fontSize: 20,

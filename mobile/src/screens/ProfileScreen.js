@@ -1,14 +1,43 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
 import { BoardCard } from '../components/BoardCard';
 import { countSavedPlaces } from '../../data/tripUtils';
 
 export function ProfileScreen({ boards, pastTrips, onOpenBoard }) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const pinCount = countSavedPlaces(boards);
-  const favoriteCount = boards.length;
-  const inspoCount = Math.max(1, boards.length - pastTrips.length);
+
+  if (isSettingsOpen) {
+    return (
+      <View style={styles.settingsScreen}>
+        <View style={styles.settingsHeader}>
+          <TouchableOpacity style={styles.settingsBackButton} onPress={() => setIsSettingsOpen(false)}>
+            <Text style={styles.settingsBackText}>Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.settingsTitle}>Settings</Text>
+        </View>
+
+        <View style={styles.settingsBody}>
+          <Text style={styles.settingsSectionTitle}>Account</Text>
+          <View style={styles.settingsRow}>
+            <Text style={styles.settingsRowLabel}>Sofia Walker</Text>
+            <Text style={styles.settingsRowValue}>Travel curator</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={[styles.detailActionButton, styles.profileLogoutButton]}>
+          <Text style={[styles.detailActionText, styles.profileLogoutText]}>Sign out</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View>
+      <TouchableOpacity style={styles.settingsButton} onPress={() => setIsSettingsOpen(true)}>
+        <Text style={styles.settingsButtonText}>Settings</Text>
+      </TouchableOpacity>
+
       <View style={styles.profileCard}>
         <View style={styles.avatarPlaceholder} />
         <Text style={styles.profileName}>Sofia Walker</Text>
@@ -27,48 +56,47 @@ export function ProfileScreen({ boards, pastTrips, onOpenBoard }) {
         </View>
       </View>
 
-      {pastTrips.length > 0 && (
-        <View style={styles.pastTripsSection}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionLabel}>Archive</Text>
-              <Text style={styles.sectionTitle}>Past trips</Text>
-            </View>
-            <Text style={styles.sectionAction}>{pastTrips.length} completed</Text>
+      <View style={styles.pastTripsSection}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionLabel}>Archive</Text>
+            <Text style={styles.sectionTitle}>Past trips</Text>
           </View>
+          <Text style={styles.sectionAction}>{pastTrips.length} completed</Text>
+        </View>
+        {pastTrips.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
             {pastTrips.map((board) => (
               <BoardCard key={board.id} board={board} onPress={onOpenBoard} />
             ))}
           </ScrollView>
+        ) : (
+          <View style={styles.emptyPastTrips}>
+            <Text style={styles.emptyPastTripsText}>No past trips yet.</Text>
+          </View>
+        )}
         </View>
-      )}
 
-      <View style={styles.metricGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Saved</Text>
-          <Text style={styles.statValue}>{pinCount}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Favorites</Text>
-          <Text style={styles.statValue}>{favoriteCount}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Inspo</Text>
-          <Text style={styles.statValue}>{inspoCount}</Text>
-        </View>
-      </View>
-
-      <View style={styles.profileActions}>
-        <TouchableOpacity style={[styles.detailActionButton, styles.profileLogoutButton]}>
-          <Text style={[styles.detailActionText, styles.profileLogoutText]}>Sign out</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  settingsButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 12
+  },
+  settingsButtonText: {
+    color: '#7D3DBA',
+    fontSize: 12,
+    fontWeight: '800'
+  },
   profileCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 32,
@@ -106,11 +134,6 @@ const styles = StyleSheet.create({
     fontSize: 15
   },
   profileStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 18
-  },
-  metricGrid: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 18
@@ -165,8 +188,71 @@ const styles = StyleSheet.create({
   horizontalCards: {
     marginBottom: 24
   },
-  profileActions: {
-    gap: 12
+  emptyPastTrips: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 18,
+    alignItems: 'center'
+  },
+  emptyPastTripsText: {
+    color: '#94A3B8',
+    fontWeight: '700'
+  },
+  settingsScreen: {
+    minHeight: '100%',
+    paddingBottom: 120
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18
+  },
+  settingsBackButton: {
+    backgroundColor: '#F6E4F8',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8
+  },
+  settingsBackText: {
+    color: '#7D3DBA',
+    fontWeight: '800'
+  },
+  settingsTitle: {
+    color: '#2A0A2B',
+    fontSize: 22,
+    fontWeight: '800'
+  },
+  settingsBody: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 18,
+    marginBottom: 'auto'
+  },
+  settingsSectionTitle: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12
+  },
+  settingsRow: {
+    gap: 4
+  },
+  settingsRowLabel: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  settingsRowValue: {
+    color: '#7D3DBA',
+    fontSize: 13,
+    fontWeight: '700'
   },
   detailActionButton: {
     backgroundColor: '#DD77F2',

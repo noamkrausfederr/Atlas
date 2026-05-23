@@ -1,5 +1,5 @@
-import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useState } from 'react';
+import { Animated, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 function startOfToday() {
@@ -75,6 +75,19 @@ function getPlaceSectionIndex(place, sectionCount) {
 export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommendations }) {
   const today = startOfToday();
   const [itinerary, setItinerary] = useState(board.placesList ?? []);
+  const [draggedPlaceId, setDraggedPlaceId] = useState(null);
+  const [dropTargetSectionIndex, setDropTargetSectionIndex] = useState(null);
+  const [isDraggingItinerary, setIsDraggingItinerary] = useState(false);
+  const dragStartCenterY = useRef(0);
+  const dragTouchOffsetY = useRef(0);
+  const dragTranslateY = useRef(new Animated.Value(0)).current;
+  const dragReadyPlaceId = useRef(null);
+  const isPanDragging = useRef(false);
+  const dropTargetSectionRef = useRef(null);
+  const sectionRefs = useRef({});
+  const itemRefs = useRef({});
+  const sectionLayouts = useRef({});
+  const itemLayouts = useRef({});
   const [startDate, setStartDate] = useState(() =>
     board.startDate ? clampDateToMin(new Date(board.startDate), today) : today
   );
@@ -87,6 +100,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   });
   const [activeDateField, setActiveDateField] = useState(null);
   const [linkInput, setLinkInput] = useState('');
+  const isPublic = Boolean(board.isPublic);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
 
   itinerary.forEach((place) => {
@@ -107,6 +121,147 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
       ...patch
     });
   };
+  const persistItinerary = (nextItinerary) => {
+    onUpdateBoard?.({
+      placesList: nextItinerary,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+  };
+
+  const measureItineraryLayouts = () => {
+    Object.entries(sectionRefs.current).forEach(([index, node]) => {
+      node?.measureInWindow?.((_x, y, _width, height) => {
+        sectionLayouts.current[index] = { y, height };
+      });
+    });
+    Object.entries(itemRefs.current).forEach(([id, node]) => {
+      node?.measureInWindow?.((_x, y, _width, height) => {
+        itemLayouts.current[id] = { ...(itemLayouts.current[id] ?? {}), id, y, height };
+      });
+    });
+  };
+
+  const getTargetSectionIndex = (screenY) => {
+    const layouts = Object.entries(sectionLayouts.current);
+    if (!layouts.length) return 0;
+
+    const containing = layouts.find(([, layout]) => screenY >= layout.y && screenY <= layout.y + layout.height);
+    if (containing) return Number(containing[0]);
+
+    return layouts.reduce((nearest, [index, layout]) => {
+      const center = layout.y + layout.height / 2;
+      const distance = Math.abs(screenY - center);
+      return distance < nearest.distance ? { index: Number(index), distance } : nearest;
+    }, { index: 0, distance: Number.POSITIVE_INFINITY }).index;
+  };
+
+  const getTargetInsertIndex = (sectionIndex, screenY, draggingId) => {
+    const rows = Object.values(itemLayouts.current)
+      .filter((layout) => layout.sectionIndex === sectionIndex && layout.id !== draggingId)
+      .sort((a, b) => a.index - b.index);
+
+    if (!rows.length) return 0;
+
+    const firstAfter = rows.findIndex((row) => screenY < row.y + row.height / 2);
+    return firstAfter === -1 ? rows.length : firstAfter;
+  };
+
+  const buildMovedItinerary = (current, placeId, sectionIndex, insertIndex) => {
+    const dragged = current.find((place) => place.id === placeId);
+    if (!dragged) return current;
+
+    const nextSections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
+    current
+      .filter((place) => place.id !== placeId)
+      .forEach((place) => {
+        const target = getPlaceSectionIndex(place, nextSections.length);
+        const normalizedTarget = target instanceof Date
+          ? Math.max(0, nextSections.findIndex((section) => section.key === getDateKey(target)))
+          : target;
+        nextSections[normalizedTarget >= 0 ? normalizedTarget : 0].places.push(place);
+      });
+
+    const updatedPlace = { ...dragged, dayIndex: sectionIndex, day: sectionIndex + 1, date: nextSections[sectionIndex]?.date?.toISOString() };
+    nextSections[sectionIndex].places.splice(insertIndex, 0, updatedPlace);
+    return nextSections.flatMap((section) => section.places);
+  };
+
+  const movePlaceToPosition = (placeId, sectionIndex, insertIndex) => {
+    const nextItinerary = buildMovedItinerary(itinerary, placeId, sectionIndex, insertIndex);
+    if (nextItinerary === itinerary) return;
+    setItinerary(nextItinerary);
+    persistItinerary(nextItinerary);
+  };
+
+  const setDragPositionFromScreenY = (screenY) => {
+    if (!screenY) return;
+    const nextTranslateY = screenY - dragTouchOffsetY.current - dragStartCenterY.current;
+    dragTranslateY.setValue(nextTranslateY);
+  };
+
+  const beginHoldingPlace = (placeId) => {
+    measureItineraryLayouts();
+    const layout = itemLayouts.current[placeId];
+    const initialSectionIndex = layout?.sectionIndex ?? 0;
+    dragReadyPlaceId.current = placeId;
+    dragStartCenterY.current = layout ? layout.y + layout.height / 2 : 0;
+    dragTouchOffsetY.current = 0;
+    dropTargetSectionRef.current = initialSectionIndex;
+    dragTranslateY.setValue(0);
+    setDraggedPlaceId(placeId);
+    setDropTargetSectionIndex(initialSectionIndex);
+    setIsDraggingItinerary(true);
+  };
+
+  const updateDropTargetSection = (sectionIndex) => {
+    if (dropTargetSectionRef.current === sectionIndex) return;
+    dropTargetSectionRef.current = sectionIndex;
+    setDropTargetSectionIndex(sectionIndex);
+  };
+
+  const resetDraggingState = () => {
+    dragReadyPlaceId.current = null;
+    isPanDragging.current = false;
+    dropTargetSectionRef.current = null;
+    dragTouchOffsetY.current = 0;
+    dragTranslateY.setValue(0);
+    setDraggedPlaceId(null);
+    setDropTargetSectionIndex(null);
+    setIsDraggingItinerary(false);
+  };
+
+  const createPlacePanHandlers = (placeId) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_event, gesture) => dragReadyPlaceId.current === placeId && Math.abs(gesture.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_event, gesture) => dragReadyPlaceId.current === placeId && Math.abs(gesture.dy) > 2,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: (event) => {
+        isPanDragging.current = true;
+        measureItineraryLayouts();
+        if (dragReadyPlaceId.current !== placeId) {
+          beginHoldingPlace(placeId);
+        }
+        dragTouchOffsetY.current = (event.nativeEvent.pageY || dragStartCenterY.current) - dragStartCenterY.current;
+        dragTranslateY.stopAnimation();
+        dragTranslateY.setValue(0);
+      },
+      onPanResponderMove: (_event, gesture) => {
+        const targetY = gesture.moveY || dragStartCenterY.current + gesture.dy;
+        setDragPositionFromScreenY(targetY);
+        updateDropTargetSection(getTargetSectionIndex(targetY));
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        const targetY = gesture.moveY || dragStartCenterY.current + gesture.dy;
+        const sectionIndex = getTargetSectionIndex(targetY);
+        const insertIndex = getTargetInsertIndex(sectionIndex, targetY, placeId);
+        movePlaceToPosition(placeId, sectionIndex, insertIndex);
+        resetDraggingState();
+      },
+      onPanResponderTerminate: resetDraggingState
+    }).panHandlers;
 
   const extractPlacesFromUrl = async (url) => {
     if (!url) return [];
@@ -128,14 +283,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const handleAddLink = async () => {
     const places = await extractPlacesFromUrl(linkInput.trim());
     if (places.length) {
-      setItinerary((current) => {
-        const next = [...current, ...places];
-        onUpdateBoard?.({
-          placesList: next,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        });
-        return next;
+      const next = [...itinerary, ...places];
+      setItinerary(next);
+      onUpdateBoard?.({
+        placesList: next,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
       });
     }
     setLinkInput('');
@@ -146,9 +299,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   };
 
   const handleStartDateChange = (_event, selectedDate) => {
-    if (Platform.OS === 'android') {
-      setActiveDateField(null);
-    }
     if (!selectedDate) {
       return;
     }
@@ -159,6 +309,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
       setEndDate(nextEnd);
     }
     persistBoard({ startDate: nextStart.toISOString(), endDate: nextEnd.toISOString() });
+    setActiveDateField('end');
   };
 
   const handleEndDateChange = (_event, selectedDate) => {
@@ -172,6 +323,11 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     const nextEnd = clampDateToMin(selectedDate, minEnd);
     setEndDate(nextEnd);
     persistBoard({ startDate: startDate.toISOString(), endDate: nextEnd.toISOString() });
+    setActiveDateField(null);
+  };
+
+  const updatePrivacy = (nextIsPublic) => {
+    onUpdateBoard?.({ isPublic: nextIsPublic });
   };
 
   return (
@@ -183,6 +339,24 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         <Text style={styles.detailTitle} numberOfLines={2}>
           {board.title}
         </Text>
+      </View>
+
+      <View style={styles.privacyToggleRow}>
+        {[
+          { label: 'Public', value: true },
+          { label: 'Private', value: false }
+        ].map((option) => {
+          const active = isPublic === option.value;
+          return (
+            <TouchableOpacity
+              key={option.label}
+              style={[styles.privacyToggleButton, active && styles.privacyToggleButtonActive]}
+              onPress={() => updatePrivacy(option.value)}
+            >
+              <Text style={[styles.privacyToggleText, active && styles.privacyToggleTextActive]}>{option.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <View style={styles.datesTopRow}>
@@ -231,9 +405,25 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 
       <View style={styles.detailBody}>
         <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
-        <ScrollView style={styles.itineraryList} contentContainerStyle={styles.itineraryListContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.itineraryList}
+          contentContainerStyle={styles.itineraryListContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!isDraggingItinerary}
+        >
           {itinerarySections.map((section, index) => (
-            <View key={section.key} style={styles.itineraryDaySection}>
+            <View
+              key={section.key}
+              ref={(node) => {
+                if (node) sectionRefs.current[index] = node;
+              }}
+              style={[styles.itineraryDaySection, dropTargetSectionIndex === index && styles.itineraryDaySectionActive]}
+              onLayout={() => {
+                sectionRefs.current[index]?.measureInWindow?.((_x, y, _width, height) => {
+                  sectionLayouts.current[index] = { y, height };
+                });
+              }}
+            >
               <View style={styles.itineraryDayRail}>
                 <View style={styles.itineraryDayDot} />
                 {index < itinerarySections.length - 1 && <View style={styles.itineraryDayLine} />}
@@ -241,12 +431,52 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               <View style={styles.itineraryDayContent}>
                 <Text style={styles.itineraryDayTitle}>{section.title}</Text>
                 {section.places.length === 0 && <Text style={styles.itineraryEmpty}>No plans yet.</Text>}
-                {section.places.map((p) => (
-                  <View key={p.id} style={styles.itineraryRow}>
-                    <Text style={styles.itineraryName}>{p.name}</Text>
-                    {p.note && <Text style={styles.itineraryNote}>{p.note}</Text>}
-                  </View>
-                ))}
+                {section.places.map((p, placeIndex) => {
+                  const isDragged = draggedPlaceId === p.id;
+                  return (
+                    <Animated.View
+                      key={p.id}
+                      ref={(node) => {
+                        if (node) itemRefs.current[p.id] = node;
+                      }}
+                      style={[
+                        styles.itineraryRow,
+                        isDragged && styles.itineraryRowDragging,
+                        isDragged && { transform: [{ translateY: dragTranslateY }] }
+                      ]}
+                      onLayout={() => {
+                        itemRefs.current[p.id]?.measureInWindow?.((_x, y, _width, height) => {
+                          itemLayouts.current[p.id] = {
+                            id: p.id,
+                            sectionIndex: index,
+                            index: placeIndex,
+                            y,
+                            height
+                          };
+                        });
+                        itemLayouts.current[p.id] = {
+                          ...(itemLayouts.current[p.id] ?? {}),
+                          sectionIndex: index,
+                          index: placeIndex
+                        };
+                      }}
+                      {...createPlacePanHandlers(p.id)}
+                    >
+                      <Pressable
+                        delayLongPress={220}
+                        onLongPress={() => beginHoldingPlace(p.id)}
+                        onPressOut={() => {
+                          if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
+                            resetDraggingState();
+                          }
+                        }}
+                      >
+                        <Text style={styles.itineraryName}>{p.name}</Text>
+                        {p.note && <Text style={styles.itineraryNote}>{p.note}</Text>}
+                      </Pressable>
+                    </Animated.View>
+                  );
+                })}
               </View>
             </View>
           ))}
@@ -309,6 +539,33 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#2A0A2B',
     textAlign: 'right'
+  },
+  privacyToggleRow: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 3,
+    marginTop: -8,
+    marginBottom: 14
+  },
+  privacyToggleButton: {
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 13
+  },
+  privacyToggleButtonActive: {
+    backgroundColor: '#F6E4F8'
+  },
+  privacyToggleText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  privacyToggleTextActive: {
+    color: '#7D3DBA'
   },
   datesTopRow: {
     flexDirection: 'row',
@@ -379,7 +636,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   itineraryListContent: {
-    paddingBottom: 8
+    paddingBottom: 8,
+    overflow: 'visible'
   },
   itineraryEmpty: {
     color: '#94A3B8',
@@ -388,7 +646,12 @@ const styles = StyleSheet.create({
   },
   itineraryDaySection: {
     flexDirection: 'row',
-    alignItems: 'stretch'
+    alignItems: 'stretch',
+    borderRadius: 14,
+    overflow: 'visible'
+  },
+  itineraryDaySectionActive: {
+    backgroundColor: '#FDF4FF'
   },
   itineraryDayRail: {
     width: 24,
@@ -409,7 +672,8 @@ const styles = StyleSheet.create({
   },
   itineraryDayContent: {
     flex: 1,
-    paddingBottom: 18
+    paddingBottom: 18,
+    overflow: 'visible'
   },
   itineraryDayTitle: {
     marginBottom: 10,
@@ -421,6 +685,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3E7F3'
+  },
+  itineraryRowDragging: {
+    backgroundColor: '#F6E4F8',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DD77F2',
+    borderBottomColor: '#DD77F2',
+    paddingHorizontal: 10,
+    opacity: 0.96,
+    zIndex: 10,
+    elevation: 6,
+    shadowColor: '#C26CF8',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 }
   },
   itineraryName: {
     fontWeight: '700',
