@@ -4,9 +4,17 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { RecommendationCard } from '../components/RecommendationCard';
 import { PlaceDetailScreen } from '../components/PlaceDetailModal';
 import { formatDateRange, generateRecommendationsForRefresh } from '../../data/recommendations';
+import { PublicProfileView } from './ProfileScreen';
 
 const DAY_RANGE_MIN = 1;
 const DAY_RANGE_MAX = 30;
+const PUBLIC_PROFILE_IMAGES = [
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80'
+];
 
 function groupRecommendationsByCategory(recommendations) {
   return recommendations.reduce((sections, rec) => {
@@ -126,6 +134,30 @@ function getPublicPlaceSectionIndex(place, placeIndex, sectionCount) {
   return Math.min(placeIndex, sectionCount - 1);
 }
 
+function getPublicProfileData(ownerName, trips, isFollowing = false) {
+  const profileSeed = ownerName.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const uniqueTags = Array.from(new Set(
+    trips.flatMap((trip) => [trip.travelerType, trip.pace, trip.budget, trip.accessibility].filter(Boolean))
+  )).slice(0, 5);
+  const baseFollowers = 4200 + (profileSeed % 9000);
+
+  return {
+    image: PUBLIC_PROFILE_IMAGES[profileSeed % PUBLIC_PROFILE_IMAGES.length],
+    handle: `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`,
+    bio: `Public itineraries for ${trips.map((trip) => trip.location.split(',')[0]).slice(0, 2).join(', ')} and the kind of trips you send straight to friends.`,
+    followers: baseFollowers + (isFollowing ? 1 : 0),
+    following: 140 + (profileSeed % 360),
+    likes: trips.reduce((sum, trip) => sum + (trip.placesList?.length ?? 0), 0) + trips.length * 7,
+    travelTags: uniqueTags.length > 0 ? uniqueTags : ['Foodie', 'City walks', 'Weekend escapes']
+  };
+}
+
+function getPublicTripLikeCount(trip, isLiked = false) {
+  const seed = trip.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const baseLikes = 120 + (seed % 780);
+  return baseLikes + (isLiked ? 1 : 0);
+}
+
 function getFilterDateValue(filters, field) {
   const parsed = parseFilterDate(filters[field]);
   if (parsed) return parsed;
@@ -154,7 +186,16 @@ function matchesPublicTripFilters(trip, filters) {
   return true;
 }
 
-export function ExploreScreen({ boards, publicTrips, onAddPublicTrip }) {
+export function ExploreScreen({
+  boards,
+  publicTrips,
+  likedPublicTripIds,
+  followedProfileNames,
+  onAddPublicTrip,
+  onToggleLikePublicTrip,
+  onToggleFollowProfile,
+  onMessageProfile
+}) {
   const [isFilterPageOpen, setIsFilterPageOpen] = useState(false);
   const [filters, setFilters] = useState(FILTER_DEFAULTS);
   const [selectedPublicTrip, setSelectedPublicTrip] = useState(null);
@@ -249,9 +290,12 @@ export function ExploreScreen({ boards, publicTrips, onAddPublicTrip }) {
       <PublicTripDetail
         trip={selectedPublicTrip}
         alreadyAdded={addedPublicTripIds.has(selectedPublicTrip.id)}
+        isLiked={likedPublicTripIds.includes(selectedPublicTrip.id)}
+        likeCount={getPublicTripLikeCount(selectedPublicTrip, likedPublicTripIds.includes(selectedPublicTrip.id))}
         onBack={() => setSelectedPublicTrip(null)}
         onOpenProfile={() => openPublicProfile(selectedPublicTrip.ownerName, selectedPublicTrip)}
         onAddPublicTrip={onAddPublicTrip}
+        onToggleLike={() => onToggleLikePublicTrip(selectedPublicTrip.id)}
       />
     );
   }
@@ -262,10 +306,11 @@ export function ExploreScreen({ boards, publicTrips, onAddPublicTrip }) {
       <PublicProfile
         ownerName={selectedOwnerName}
         trips={ownerTrips}
-        addedPublicTripIds={addedPublicTripIds}
+        isFollowing={followedProfileNames.includes(selectedOwnerName)}
         onBack={closePublicProfile}
         onOpenTrip={openPublicTrip}
-        onAddPublicTrip={onAddPublicTrip}
+        onToggleFollow={() => onToggleFollowProfile(selectedOwnerName)}
+        onMessagePress={() => onMessageProfile(selectedOwnerName)}
       />
     );
   }
@@ -504,7 +549,7 @@ function CountryMultiSelect({
         value={searchValue}
         onChangeText={onSearchChange}
         onFocus={onFocusSearch}
-        placeholderTextColor="#A1A1AA"
+        placeholderTextColor="#B1A294"
       />
 
       {selectedCountries.length > 0 && (
@@ -620,7 +665,16 @@ function DaysRangeSlider({ minValue, maxValue, valueMin, valueMax, onChange }) {
   );
 }
 
-function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPublicTrip }) {
+function PublicTripDetail({
+  trip,
+  alreadyAdded,
+  isLiked,
+  likeCount,
+  onBack,
+  onOpenProfile,
+  onAddPublicTrip,
+  onToggleLike
+}) {
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const itinerarySections = getTripDateSections(trip.startDate, trip.endDate);
   (trip.placesList ?? []).forEach((place, index) => {
@@ -652,21 +706,34 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
-        <View style={styles.exploreSubHeaderText}>
-          <Text style={styles.exploreSubTitle}>{trip.title}</Text>
+        <View style={[styles.exploreSubHeaderText, styles.publicDetailHeaderText]}>
+          <Text style={[styles.exploreSubTitle, styles.publicDetailHeaderTitle]}>{trip.title}</Text>
         </View>
       </View>
 
       <Image source={{ uri: trip.image }} style={styles.publicDetailImage} />
-      <TouchableOpacity onPress={onOpenProfile} style={styles.publicProfileInline}>
-        <View style={styles.publicProfileAvatar}>
-          <Text style={styles.publicProfileAvatarText}>{trip.ownerName.slice(0, 1)}</Text>
-        </View>
-        <View>
-          <Text style={styles.publicProfileName}>{trip.ownerName}</Text>
-          <Text style={styles.publicProfileSubtext}>View public profile</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={styles.publicDetailActionRow}>
+        <TouchableOpacity onPress={onOpenProfile} style={[styles.publicProfileInline, styles.publicProfileInlineCompact]}>
+          <View style={styles.publicProfileAvatar}>
+            <Text style={styles.publicProfileAvatarText}>{trip.ownerName.slice(0, 1)}</Text>
+          </View>
+          <View style={styles.publicProfileTextWrap}>
+            <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
+            <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onToggleLike}
+          style={styles.publicHeartButton}
+        >
+          <Text style={[styles.publicHeartButtonText, isLiked && styles.publicHeartButtonTextActive]}>
+            {isLiked ? '♥' : '♡'}
+          </Text>
+          <Text style={[styles.publicHeartCount, isLiked && styles.publicHeartCountActive]}>
+            {likeCount}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.publicDetailMeta}>
         {trip.location} · {formatDateRange(trip)}
@@ -710,8 +777,8 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
   );
 }
 
-function PublicProfile({ ownerName, trips, addedPublicTripIds, onBack, onOpenTrip, onAddPublicTrip }) {
-  const placeCount = trips.reduce((sum, trip) => sum + (trip.placesList?.length ?? 0), 0);
+function PublicProfile({ ownerName, trips, isFollowing, onBack, onOpenTrip, onToggleFollow, onMessagePress }) {
+  const profile = getPublicProfileData(ownerName, trips, isFollowing);
 
   return (
     <View>
@@ -719,28 +786,24 @@ function PublicProfile({ ownerName, trips, addedPublicTripIds, onBack, onOpenTri
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
-        <View style={styles.exploreSubHeaderText}>
-          <Text style={styles.exploreSubTitle}>{ownerName}</Text>
-          <Text style={styles.exploreSubMeta}>{trips.length} public trips · {placeCount} saved places</Text>
-        </View>
       </View>
-
-      <View style={styles.publicProfileHeader}>
-        <View style={styles.publicProfileAvatarLarge}>
-          <Text style={styles.publicProfileAvatarLargeText}>{ownerName.slice(0, 1)}</Text>
-        </View>
-        <Text style={styles.publicProfileHeaderName}>{ownerName}</Text>
-        <Text style={styles.publicProfileBio}>Public trips shared with the Atlas community.</Text>
-      </View>
-
-      {trips.map((trip) => (
-        <PublicTripCard
-          key={trip.id}
-          trip={trip}
-          onOpenTrip={() => onOpenTrip(trip)}
-          onOpenProfile={() => {}}
-        />
-      ))}
+      <PublicProfileView
+        name={ownerName}
+        handle={profile.handle}
+        bio={profile.bio}
+        image={profile.image}
+        followers={profile.followers}
+        following={profile.following}
+        likes={profile.likes}
+        travelTags={profile.travelTags}
+        publicBoards={trips}
+        onOpenBoard={onOpenTrip}
+        showFollowButton
+        showMessageButton
+        isFollowing={isFollowing}
+        onToggleFollow={onToggleFollow}
+        onMessagePress={onMessagePress}
+      />
     </View>
   );
 }
@@ -806,27 +869,27 @@ const styles = StyleSheet.create({
     gap: 12
   },
   explorePageTitle: {
-    color: '#2A0A2B',
+    color: '#4B3A32',
     fontSize: 32,
     lineHeight: 38,
     fontWeight: '900'
   },
   filterButton: {
     borderRadius: 14,
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     paddingVertical: 11,
     paddingHorizontal: 16
   },
   filterButtonText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontWeight: '800',
     fontSize: 13
   },
   filterPanel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 14,
     marginBottom: 16
   },
@@ -834,7 +897,7 @@ const styles = StyleSheet.create({
     marginTop: 12
   },
   filterLabel: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 11,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -847,19 +910,19 @@ const styles = StyleSheet.create({
   },
   filterDateButton: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingHorizontal: 12,
     paddingVertical: 10
   },
   filterDateButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#94A3B8'
+    backgroundColor: '#FFF8F0',
+    borderColor: '#A8998A'
   },
   filterDateButtonLabel: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -867,20 +930,20 @@ const styles = StyleSheet.create({
     marginBottom: 3
   },
   filterDateButtonText: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 13,
     fontWeight: '800'
   },
   filterDatePlaceholder: {
-    color: '#A1A1AA',
+    color: '#B1A294',
     fontWeight: '500'
   },
   filterCalendarWrap: {
     width: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E2D3BF',
+    backgroundColor: '#FFF8F0',
     overflow: 'hidden',
     marginTop: 10
   },
@@ -897,34 +960,34 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   selectedCountryBubble: {
-    backgroundColor: '#F6E4F8',
+    backgroundColor: '#F2D8D8',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#DD77F2',
+    borderColor: '#E6A6B3',
     paddingHorizontal: 11,
     paddingVertical: 7
   },
   selectedCountryBubbleText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 12,
     fontWeight: '800'
   },
   countryDropdownPanel: {
     marginTop: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 10
   },
   countrySearchInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0F172A',
+    color: '#4B3A32',
     marginBottom: 0
   },
   countryOptionList: {
@@ -935,34 +998,34 @@ const styles = StyleSheet.create({
   countryOption: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E2D3BF',
+    backgroundColor: '#F1E7DA',
     paddingHorizontal: 10,
     paddingVertical: 7
   },
   countryOptionSelected: {
-    backgroundColor: '#F6E4F8',
-    borderColor: '#DD77F2'
+    backgroundColor: '#F2D8D8',
+    borderColor: '#E6A6B3'
   },
   countryOptionText: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 12,
     fontWeight: '700'
   },
   countryOptionTextSelected: {
-    color: '#7D3DBA'
+    color: '#A97C50'
   },
   daysRangeContainer: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10
   },
   daysRangeValue: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 14,
     fontWeight: '800',
     marginBottom: 18
@@ -975,14 +1038,14 @@ const styles = StyleSheet.create({
   daysRangeTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#E2E8F0'
+    backgroundColor: '#E2D3BF'
   },
   daysRangeFill: {
     position: 'absolute',
     top: 12,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#DD77F2'
+    backgroundColor: '#E6A6B3'
   },
   daysRangeThumb: {
     position: 'absolute',
@@ -990,9 +1053,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 999,
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     borderWidth: 3,
-    borderColor: '#FFFFFF'
+    borderColor: '#FFF8F0'
   },
   daysRangeThumbMin: {
     zIndex: 2
@@ -1007,7 +1070,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   daysRangeEndLabel: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 11,
     fontWeight: '700'
   },
@@ -1021,23 +1084,23 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   filterChipActive: {
-    backgroundColor: '#F6E4F8',
-    borderColor: '#DD77F2'
+    backgroundColor: '#F2D8D8',
+    borderColor: '#E6A6B3'
   },
   filterChipText: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 12,
     fontWeight: '700'
   },
   filterChipTextActive: {
-    color: '#7D3DBA'
+    color: '#A97C50'
   },
   clearFiltersButton: {
     marginTop: 14,
@@ -1045,7 +1108,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   clearFiltersText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '800'
   },
   publicTripMasonry: {
@@ -1063,7 +1126,7 @@ const styles = StyleSheet.create({
   publicTripImage: {
     width: '100%',
     borderRadius: 18,
-    backgroundColor: '#F8FAFC'
+    backgroundColor: '#F1E7DA'
   },
   publicTripBody: {
     paddingTop: 8,
@@ -1081,17 +1144,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#4B3A32',
     textAlign: 'left'
   },
   publicTripMore: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 16,
     fontWeight: '800',
     lineHeight: 16
   },
   publicTripOwner: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 11,
     fontWeight: '700'
   },
@@ -1100,7 +1163,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   publicTripMeta: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 12,
     lineHeight: 16,
     marginTop: 2
@@ -1112,41 +1175,41 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   publicTripTag: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingHorizontal: 9,
     paddingVertical: 6
   },
   publicTripTagText: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 11,
     fontWeight: '800'
   },
   addPublicTripButton: {
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center'
   },
   addPublicTripButtonDone: {
-    backgroundColor: '#94A3B8'
+    backgroundColor: '#A8998A'
   },
   addPublicTripButtonText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontWeight: '800'
   },
   emptyPublicTrips: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 18,
     alignItems: 'center'
   },
   emptyPublicTripsText: {
-    color: '#64748B',
+    color: '#7F7063',
     fontWeight: '700'
   },
   publicDetailScreen: {
@@ -1158,55 +1221,95 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 14
   },
+  publicDetailActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14
+  },
   publicProfileInline: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 12,
-    marginBottom: 14
+  },
+  publicProfileInlineCompact: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 10,
+    minHeight: 66
   },
   publicProfileAvatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#F6E4F8',
+    backgroundColor: '#F2D8D8',
     alignItems: 'center',
     justifyContent: 'center'
   },
+  publicProfileTextWrap: {
+    flex: 1,
+    minWidth: 0
+  },
   publicProfileAvatarText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 18,
     fontWeight: '800'
   },
   publicProfileName: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 15,
     fontWeight: '800'
   },
   publicProfileSubtext: {
     marginTop: 2,
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 12,
     fontWeight: '700'
   },
+  publicHeartButton: {
+    width: 66,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  publicHeartButtonText: {
+    color: '#A8998A',
+    fontSize: 30,
+    lineHeight: 32,
+    fontWeight: '800'
+  },
+  publicHeartButtonTextActive: {
+    color: '#E6A6B3'
+  },
+  publicHeartCount: {
+    marginTop: 2,
+    color: '#A8998A',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  publicHeartCountActive: {
+    color: '#E6A6B3'
+  },
   publicDetailMeta: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10
   },
   publicDetailDescription: {
-    color: '#334155',
+    color: '#6B5A4C',
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 12
   },
   publicDetailSectionTitle: {
-    color: '#2A0A2B',
+    color: '#4B3A32',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 10
@@ -1223,13 +1326,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     marginTop: 6
   },
   publicItineraryDayLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#F3E7F3',
+    backgroundColor: '#EEDFD7',
     marginTop: 4
   },
   publicItineraryDayContent: {
@@ -1238,28 +1341,28 @@ const styles = StyleSheet.create({
   },
   publicItineraryDayTitle: {
     marginBottom: 10,
-    color: '#2A0A2B',
+    color: '#4B3A32',
     fontSize: 15,
     fontWeight: '800'
   },
   publicItineraryEmpty: {
-    color: '#94A3B8',
+    color: '#A8998A',
     marginBottom: 10,
     fontSize: 13
   },
   publicPlaceRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E7F3'
+    borderBottomColor: '#EEDFD7'
   },
   publicPlaceName: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 14,
     fontWeight: '800'
   },
   publicPlaceNote: {
     marginTop: 4,
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 12,
     lineHeight: 17
   },
@@ -1267,10 +1370,10 @@ const styles = StyleSheet.create({
     marginTop: 8
   },
   publicProfileHeader: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 20,
     alignItems: 'center',
     marginBottom: 16
@@ -1279,24 +1382,24 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#F6E4F8',
+    backgroundColor: '#F2D8D8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12
   },
   publicProfileAvatarLargeText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 30,
     fontWeight: '800'
   },
   publicProfileHeaderName: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 22,
     fontWeight: '800'
   },
   publicProfileBio: {
     marginTop: 6,
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 14,
     textAlign: 'center'
   },
@@ -1313,14 +1416,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#F6E4F8'
+    backgroundColor: '#F2D8D8'
   },
   backButtonText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   exploreSubHeaderText: {
     flex: 1
+  },
+  publicDetailHeaderText: {
+    alignItems: 'flex-end'
   },
   filterSubHeaderText: {
     alignItems: 'flex-end'
@@ -1328,12 +1434,15 @@ const styles = StyleSheet.create({
   exploreSubTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#0F172A'
+    color: '#4B3A32'
+  },
+  publicDetailHeaderTitle: {
+    textAlign: 'right'
   },
   exploreSubMeta: {
     marginTop: 4,
     fontSize: 13,
-    color: '#64748B'
+    color: '#7F7063'
   },
   recommendationSection: {
     marginBottom: 18
@@ -1347,18 +1456,18 @@ const styles = StyleSheet.create({
   recommendationSectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#2A0A2B'
+    color: '#4B3A32'
   },
   sectionRefreshButton: {
     borderRadius: 999,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingVertical: 7,
     paddingHorizontal: 12
   },
   sectionRefreshButtonText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 12,
     fontWeight: '800'
   }

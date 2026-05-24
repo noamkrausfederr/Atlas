@@ -64,8 +64,8 @@ const styles = StyleSheet.create({
     marginRight: 16,
     borderRadius: 28,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#FBC4D2',
+    backgroundColor: '#FFF8F0',
+    shadowColor: '#E8C5B2',
     shadowOpacity: 0.7,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -91,16 +91,16 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#2A0A2B',
+    color: '#4B3A32',
     marginBottom: 4
   },
   cardSubtitle: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#7D3DBA'
+    color: '#A97C50'
   },
   cardDates: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 11,
     lineHeight: 17,
     fontWeight: '800',
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     minWidth: 88
   },
   cardPrivacy: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '800',

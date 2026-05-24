@@ -54,16 +54,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0'
+    borderColor: '#E2D3BF'
   },
   mapPreviewOverlayText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   mapPreviewOverlaySubtext: {
     marginTop: 2,
     fontSize: 12,
-    color: '#64748B'
+    color: '#7F7063'
   }
 });

@@ -13,6 +13,7 @@ import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 import { BoardCard } from './src/components/BoardCard';
 import { TripDetailScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
+import { InboxScreen } from './src/screens/InboxScreen';
 import { RecommendationDetailScreen } from './src/screens/RecommendationDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
@@ -25,6 +26,10 @@ function InnerApp() {
   const [tripStack, setTripStack] = useState(null);
   const [activeTab, setActiveTab] = useState('Trips');
   const [exploreStack, setExploreStack] = useState(null);
+  const [likedPublicTripIds, setLikedPublicTripIds] = useState([]);
+  const [followedProfileNames, setFollowedProfileNames] = useState([]);
+  const [selectedInboxProfileName, setSelectedInboxProfileName] = useState(null);
+  const [isInboxThreadOpen, setIsInboxThreadOpen] = useState(false);
   const [addedRecIds, setAddedRecIds] = useState({});
   const [tripRecommendationRefreshes, setTripRecommendationRefreshes] = useState({});
   const [isCreateBoardVisible, setIsCreateBoardVisible] = useState(false);
@@ -212,6 +217,7 @@ function InnerApp() {
   
   const upcomingBoards = getUpcomingTrips(boards);
   const pastTrips = getPastTrips(boards);
+  const likedPublicTrips = hydratedPublicTrips.filter((trip) => likedPublicTripIds.includes(trip.id));
 
   const updateBoard = (boardId, patch) => {
     setBoards((current) => current.map((board) => (board.id === boardId ? { ...board, ...patch } : board)));
@@ -229,6 +235,17 @@ function InnerApp() {
 
   const openTab = (tab) => {
     setActiveTab(tab);
+    setSelectedBoard(null);
+    setTripStack(null);
+    setExploreStack(null);
+    if (tab === 'Inbox') {
+      setIsInboxThreadOpen(false);
+    }
+  };
+  const openInboxThread = (ownerName = null) => {
+    setSelectedInboxProfileName(ownerName);
+    setIsInboxThreadOpen(Boolean(ownerName));
+    setActiveTab('Inbox');
     setSelectedBoard(null);
     setTripStack(null);
     setExploreStack(null);
@@ -325,6 +342,16 @@ function InnerApp() {
     setTripStack(null);
     setExploreStack(null);
   };
+  const toggleLikedPublicTrip = (tripId) => {
+    setLikedPublicTripIds((current) => (
+      current.includes(tripId) ? current.filter((id) => id !== tripId) : [...current, tripId]
+    ));
+  };
+  const toggleFollowedProfile = (ownerName) => {
+    setFollowedProfileNames((current) => (
+      current.includes(ownerName) ? current.filter((name) => name !== ownerName) : [...current, ownerName]
+    ));
+  };
 
   const handleCreateBoard = async () => {
     const title = draftBoard.title.trim();
@@ -389,7 +416,7 @@ function InnerApp() {
               returnKeyType="done"
               onChangeText={(value) => setDraftBoard((current) => ({ ...current, title: value }))}
               onSubmitEditing={Keyboard.dismiss}
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#B1A294"
             />
             <Text style={styles.modalLabel}>Location</Text>
             <TextInput
@@ -407,13 +434,13 @@ function InnerApp() {
                 Keyboard.dismiss();
                 setIsLocationFocused(false);
               }}
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#B1A294"
             />
             {isLocationFocused && (draftBoard.location.trim().length >= 2 || cityOptions.length > 0) && (
               <View style={styles.cityDropdown}>
                 {isCitySearchLoading && (
                   <View style={styles.cityDropdownStatus}>
-                    <ActivityIndicator size="small" color="#7D3DBA" />
+                    <ActivityIndicator size="small" color="#A97C50" />
                     <Text style={styles.cityDropdownStatusText}>Searching cities</Text>
                   </View>
                 )}
@@ -511,7 +538,18 @@ function InnerApp() {
   );
 
   const renderExploreContent = () => {
-    return <ExploreScreen boards={boards} publicTrips={hydratedPublicTrips} onAddPublicTrip={addPublicTripToBoards} />;
+    return (
+      <ExploreScreen
+        boards={boards}
+        publicTrips={hydratedPublicTrips}
+        likedPublicTripIds={likedPublicTripIds}
+        followedProfileNames={followedProfileNames}
+        onAddPublicTrip={addPublicTripToBoards}
+        onToggleLikePublicTrip={toggleLikedPublicTrip}
+        onToggleFollowProfile={toggleFollowedProfile}
+        onMessageProfile={openInboxThread}
+      />
+    );
   };
 
   const renderSelectedBoardContent = () => {
@@ -573,7 +611,30 @@ function InnerApp() {
     }
 
     if (activeTab === 'Profile') {
-      return <ProfileScreen boards={boards} pastTrips={pastTrips} onOpenBoard={openBoard} onCreateBoard={openNewBoard} />;
+      return (
+        <ProfileScreen
+          boards={boards}
+          likedTrips={likedPublicTrips}
+          followingCount={382 + followedProfileNames.length}
+          onOpenBoard={openBoard}
+        />
+      );
+    }
+
+    if (activeTab === 'Inbox') {
+      return (
+        <InboxScreen
+          publicTrips={hydratedPublicTrips}
+          followedProfileNames={followedProfileNames}
+          selectedProfileName={selectedInboxProfileName}
+          isThreadOpen={isInboxThreadOpen}
+          onSelectThread={(ownerName) => {
+            setSelectedInboxProfileName(ownerName);
+            setIsInboxThreadOpen(true);
+          }}
+          onCloseThread={() => setIsInboxThreadOpen(false)}
+        />
+      );
     }
 
     return (
@@ -592,7 +653,6 @@ function InnerApp() {
             <Text style={styles.sectionLabel}>Upcoming</Text>
             <Text style={styles.sectionTitle}>My upcoming trips</Text>
           </View>
-          <Text style={styles.sectionAction}>{upcomingBoards.length} planned</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
           {upcomingBoards.map((board) => (
@@ -605,7 +665,6 @@ function InnerApp() {
             <Text style={styles.sectionLabel}>Archive</Text>
             <Text style={styles.sectionTitle}>Past trips</Text>
           </View>
-          <Text style={styles.sectionAction}>{pastTrips.length} completed</Text>
         </View>
         {pastTrips.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
@@ -618,12 +677,6 @@ function InnerApp() {
             <Text style={styles.emptyTripsText}>No past trips yet.</Text>
           </View>
         )}
-
-        <View style={styles.createTripRow}>
-          <TouchableOpacity style={styles.createTripButton} onPress={openNewBoard}>
-            <Text style={styles.createTripButtonText}>Create new trip</Text>
-          </TouchableOpacity>
-        </View>
       </>
     );
   };
@@ -646,15 +699,33 @@ function InnerApp() {
         )}
         {renderCreateBoardModal()}
         <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-          {['Trips', 'Explore', 'Profile'].map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={[styles.navButton, activeTab === item && styles.navButtonActive]}
-              onPress={() => openTab(item)}
-            >
-              <Text style={[styles.navText, activeTab === item && styles.navTextActive]}>{item}</Text>
-            </TouchableOpacity>
-          ))}
+          <TouchableOpacity
+            style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
+            onPress={() => openTab('Trips')}
+          >
+            <Text style={[styles.navText, activeTab === 'Trips' && styles.navTextActive]}>Trips</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
+            onPress={() => openTab('Explore')}
+          >
+            <Text style={[styles.navText, activeTab === 'Explore' && styles.navTextActive]}>Explore</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
+            <Text style={styles.createTripNavButtonText}>+</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
+            onPress={() => openTab('Inbox')}
+          >
+            <Text style={[styles.navText, activeTab === 'Inbox' && styles.navTextActive]}>Inbox</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
+            onPress={() => openTab('Profile')}
+          >
+            <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>Profile</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -672,7 +743,7 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FEF5F8'
+    backgroundColor: '#F6EFE5'
   },
   container: {
     padding: 20,
@@ -683,10 +754,10 @@ const styles = StyleSheet.create({
     position: 'relative'
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 32,
     padding: 24,
-    shadowColor: '#F9D5E5',
+    shadowColor: '#E7C7B2',
     shadowOpacity: 0.8,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
@@ -697,7 +768,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: '#C26CF8',
+    color: '#C89B6D',
     fontWeight: '700',
     marginBottom: 10
   },
@@ -705,23 +776,23 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 36,
     fontWeight: '800',
-    color: '#2A0A2B',
+    color: '#4B3A32',
     marginBottom: 12
   },
   heroDescription: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#6F3E56',
+    color: '#7A6658',
     marginBottom: 18
   },
   heroButton: {
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center'
   },
   heroButtonText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontWeight: '700',
     fontSize: 15
   },
@@ -740,54 +811,51 @@ const styles = StyleSheet.create({
   logoWrap: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E5E7EB'
+    borderColor: '#E2D3BF'
   },
   logoText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#2A0A2B'
+    color: '#4B3A32'
   },
   logoDot: {
-    color: '#C26CF8'
+    color: '#C89B6D'
   },
   horizontalCards: {
     marginBottom: 12
   },
   emptyTrips: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 18,
     marginBottom: 12
   },
   emptyTripsText: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontWeight: '700',
     textAlign: 'center'
   },
-  createTripRow: {
-    marginTop: 0,
-    marginBottom: 12,
-    alignItems: 'center'
-  },
   createTripButton: {
-    width: '100%',
-    backgroundColor: '#DD77F2',
-    borderRadius: 28,
-    paddingVertical: 16,
-    alignItems: 'center'
+    width: 44,
+    height: 44,
+    backgroundColor: '#E6A6B3',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   createTripButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15
+    color: '#FFF8F0',
+    fontWeight: '800',
+    fontSize: 24,
+    lineHeight: 26
   },
   sectionLabel: {
-    color: '#C26CF8',
+    color: '#C89B6D',
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -796,22 +864,22 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#2A0A2B',
+    color: '#4B3A32',
     marginTop: 4
   },
   sectionAction: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   horizontalCards: {
     marginBottom: 24
   },
   mapCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 28,
     padding: 20,
     marginBottom: 24,
-    shadowColor: '#F3D5F0',
+    shadowColor: '#EBCAB8',
     shadowOpacity: 0.8,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -823,28 +891,28 @@ const styles = StyleSheet.create({
     marginBottom: 14
   },
   mapLabel: {
-    color: '#C26CF8',
+    color: '#C89B6D',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1
   },
   mapBadge: {
-    color: '#6F3E56',
+    color: '#7A6658',
     fontWeight: '700'
   },
   mapPlaceholder: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 20,
     height: 200,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0'
+    borderColor: '#E2D3BF'
   },
   mapPlaceholderText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20
@@ -856,14 +924,14 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 8,
     alignItems: 'center'
   },
   statLabel: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -873,7 +941,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   bottomNav: {
     position: 'absolute',
@@ -885,28 +953,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#EDE3D6',
     zIndex: 20,
     elevation: 10
   },
   navButton: {
     flex: 1,
     height: 44,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     justifyContent: 'center',
     alignItems: 'center'
   },
   navButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#CBD5E1'
+    backgroundColor: '#FFF8F0',
+    borderColor: '#D6C6B2'
+  },
+  createTripNavButton: {
+    width: 52,
+    height: 52,
+    marginTop: -4,
+    backgroundColor: '#E6A6B3',
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#E7C7B2',
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8
+  },
+  createTripNavButtonText: {
+    color: '#FFF8F0',
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '800'
   },
   navText: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 11,
     fontWeight: '500',
     textTransform: 'uppercase',
@@ -916,7 +1004,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center'
   },
   navTextActive: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontWeight: '600'
   },
   modalOverlay: {
@@ -926,7 +1014,7 @@ const styles = StyleSheet.create({
     padding: 20
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 28,
     padding: 22,
     maxHeight: '92%',
@@ -939,7 +1027,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1D1633',
+    color: '#4B3A32',
     marginBottom: 18
   },
   modalForm: {
@@ -949,39 +1037,39 @@ const styles = StyleSheet.create({
     paddingBottom: 8
   },
   modalLabel: {
-    color: '#6F3E56',
+    color: '#7A6658',
     fontSize: 13,
     marginBottom: 8,
     fontWeight: '600'
   },
   modalInput: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     marginBottom: 14,
-    color: '#1F2937',
+    color: '#4B3A32',
     borderWidth: 1,
-    borderColor: '#E2E8F0'
+    borderColor: '#E2D3BF'
   },
   modalDateButton: {
     justifyContent: 'center'
   },
   modalDateText: {
-    color: '#1F2937',
+    color: '#4B3A32',
     fontSize: 14,
     fontWeight: '600'
   },
   modalDatePlaceholder: {
-    color: '#A1A1AA',
+    color: '#B1A294',
     fontWeight: '400'
   },
   modalCalendarWrap: {
     width: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E2D3BF',
+    backgroundColor: '#FFF8F0',
     overflow: 'hidden',
     marginTop: -6,
     marginBottom: 14
@@ -995,10 +1083,10 @@ const styles = StyleSheet.create({
   cityDropdown: {
     marginTop: -6,
     marginBottom: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     overflow: 'hidden'
   },
   cityDropdownStatus: {
@@ -1009,7 +1097,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   cityDropdownStatusText: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 13,
     fontWeight: '600'
   },
@@ -1017,15 +1105,15 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: '#EDE3D6'
   },
   cityOptionText: {
-    color: '#1F2937',
+    color: '#4B3A32',
     fontSize: 14,
     fontWeight: '600'
   },
   cityDropdownEmpty: {
-    color: '#64748B',
+    color: '#7F7063',
     fontSize: 13,
     paddingVertical: 12,
     paddingHorizontal: 14
@@ -1046,20 +1134,20 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCancelButton: {
-    backgroundColor: '#F3E5F6'
+    backgroundColor: '#F0D6D6'
   },
   modalCancelText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   modalSaveButton: {
-    backgroundColor: '#9C27B0'
+    backgroundColor: '#C48A96'
   },
   modalSaveButtonDisabled: {
     opacity: 0.72
   },
   modalSaveText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontWeight: '700'
   },
   detailContainer: {

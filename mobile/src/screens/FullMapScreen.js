@@ -34,10 +34,10 @@ export function FullMapScreen({ pins, onBack }) {
 const styles = StyleSheet.create({
   fullMapScreen: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     overflow: 'hidden'
   },
   fullMapHeader: {
@@ -46,16 +46,16 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9'
+    borderBottomColor: '#EDE3D6'
   },
   backButton: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#F6E4F8'
+    backgroundColor: '#F2D8D8'
   },
   backButtonText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   fullMapHeaderText: {
@@ -64,12 +64,12 @@ const styles = StyleSheet.create({
   fullMapTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   fullMapMeta: {
     marginTop: 2,
     fontSize: 13,
-    color: '#64748B'
+    color: '#7F7063'
   },
   fullMap: {
     flex: 1,

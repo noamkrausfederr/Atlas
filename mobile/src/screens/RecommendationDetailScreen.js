@@ -70,10 +70,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#F6E4F8'
+    backgroundColor: '#F2D8D8'
   },
   backButtonText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   recDetailBadgeRow: {
@@ -88,13 +88,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#94A3B8'
+    color: '#A8998A'
   },
   recDay: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
+    color: '#4B3A32',
+    backgroundColor: '#F1E7DA',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   recDetailTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#4B3A32',
     marginBottom: 10
   },
   recDetailStats: {
@@ -115,42 +115,42 @@ const styles = StyleSheet.create({
   recDetailPrice: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   recDetailRating: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B'
+    color: '#7F7063'
   },
   recDetailAddress: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#475569',
+    color: '#6B5A4C',
     marginBottom: 12
   },
   recDetailDescription: {
     fontSize: 15,
     lineHeight: 22,
-    color: '#334155',
+    color: '#6B5A4C',
     marginBottom: 10
   },
   recDetailReason: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#64748B',
+    color: '#7F7063',
     marginBottom: 18
   },
   recReviewsHeading: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#4B3A32',
     marginBottom: 10
   },
   reviewCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 12,
     marginBottom: 8
   },
@@ -162,29 +162,29 @@ const styles = StyleSheet.create({
   reviewAuthor: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   reviewStars: {
     fontSize: 12,
-    color: '#F59E0B'
+    color: '#D6A45B'
   },
   reviewText: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#475569'
+    color: '#6B5A4C'
   },
   addItineraryButton: {
     marginTop: 16,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#4B3A32',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center'
   },
   addItineraryButtonDone: {
-    backgroundColor: '#64748B'
+    backgroundColor: '#7F7063'
   },
   addItineraryButtonText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontSize: 15,
     fontWeight: '700'
   }

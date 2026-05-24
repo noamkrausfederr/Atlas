@@ -21,10 +21,10 @@ export function RecommendationCard({ rec, onPress }) {
 
 const styles = StyleSheet.create({
   recCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     padding: 14,
     marginBottom: 10
   },
@@ -39,13 +39,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: '#94A3B8'
+    color: '#A8998A'
   },
   recDay: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
+    color: '#4B3A32',
+    backgroundColor: '#F1E7DA',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
@@ -54,13 +54,13 @@ const styles = StyleSheet.create({
   recTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: '#4B3A32',
     marginBottom: 6
   },
   recReason: {
     fontSize: 13,
     lineHeight: 19,
-    color: '#64748B'
+    color: '#7F7063'
   },
   recCardMeta: {
     flexDirection: 'row',
@@ -70,11 +70,11 @@ const styles = StyleSheet.create({
   recPrice: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0F172A'
+    color: '#4B3A32'
   },
   recRating: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B'
+    color: '#7F7063'
   }
 });

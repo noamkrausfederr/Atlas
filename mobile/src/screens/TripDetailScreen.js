@@ -534,10 +534,10 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 const styles = StyleSheet.create({
   detailScreen: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF8F0',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     overflow: 'hidden'
   },
   detailScrollContent: {
@@ -555,20 +555,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: '#F6E4F8'
+    backgroundColor: '#F2D8D8'
   },
   backButtonText: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '700'
   },
   detailTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#2A0A2B',
+    color: '#4B3A32',
     textAlign: 'right'
   },
   detailLocation: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 3,
@@ -587,8 +587,8 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E2D3BF',
+    backgroundColor: '#F1E7DA',
     padding: 3,
     marginTop: 10,
     overflow: 'hidden'
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     bottom: 3,
     width: 64,
     borderRadius: 999,
-    backgroundColor: '#F6E4F8'
+    backgroundColor: '#F2D8D8'
   },
   privacySwitchThumbPublic: {
     left: 3
@@ -610,13 +610,13 @@ const styles = StyleSheet.create({
   privacySwitchOption: {
     flex: 1,
     zIndex: 1,
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 11,
     textAlign: 'center',
     fontWeight: '800'
   },
   privacySwitchOptionActive: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontWeight: '800'
   },
   detailImage: {
@@ -636,26 +636,26 @@ const styles = StyleSheet.create({
   },
   dateBox: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     marginRight: 8
   },
   dateBoxLast: {
     marginRight: 0
   },
   dateBoxActive: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#FFFFFF'
+    borderColor: '#A8998A',
+    backgroundColor: '#FFF8F0'
   },
   inlineCalendarWrap: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E2D3BF',
+    backgroundColor: '#FFF8F0',
     overflow: 'hidden',
     marginBottom: 12
   },
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     marginVertical: Platform.OS === 'ios' ? -12 : 0
   },
   statLabel: {
-    color: '#94A3B8',
+    color: '#A8998A',
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   datesValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#2A0A2B'
+    color: '#4B3A32'
   },
   detailBody: {
     minHeight: 0
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#2A0A2B',
+    color: '#4B3A32',
     marginTop: 4
   },
   itineraryHeading: {
@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
     overflow: 'visible'
   },
   itineraryEmpty: {
-    color: '#94A3B8',
+    color: '#A8998A',
     marginBottom: 10,
     fontSize: 13
   },
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
     overflow: 'visible'
   },
   itineraryDaySectionActive: {
-    backgroundColor: '#FDF4FF'
+    backgroundColor: '#FAEEE7'
   },
   itineraryDayRail: {
     width: 24,
@@ -714,13 +714,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     marginTop: 6
   },
   itineraryDayLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#F3E7F3',
+    backgroundColor: '#EEDFD7',
     marginTop: 4
   },
   itineraryDayContent: {
@@ -730,41 +730,41 @@ const styles = StyleSheet.create({
   },
   itineraryDayTitle: {
     marginBottom: 10,
-    color: '#2A0A2B',
+    color: '#4B3A32',
     fontSize: 15,
     fontWeight: '800'
   },
   itineraryRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E7F3'
+    borderBottomColor: '#EEDFD7'
   },
   itineraryRowDragging: {
-    backgroundColor: '#F6E4F8',
+    backgroundColor: '#F2D8D8',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DD77F2',
-    borderBottomColor: '#DD77F2',
+    borderColor: '#E6A6B3',
+    borderBottomColor: '#E6A6B3',
     paddingHorizontal: 10,
     opacity: 0.96,
     zIndex: 10,
     elevation: 6,
-    shadowColor: '#C26CF8',
+    shadowColor: '#C89B6D',
     shadowOpacity: 0.28,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 }
   },
   itineraryName: {
     fontWeight: '700',
-    color: '#2A0A2B'
+    color: '#4B3A32'
   },
   itineraryNote: {
-    color: '#7D3DBA',
+    color: '#A97C50',
     fontSize: 12
   },
   addLinkFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#EDE3D6',
     paddingTop: 12,
     paddingBottom: 0,
     marginHorizontal: -20,
@@ -784,11 +784,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginRight: 12,
     borderWidth: 1,
-    borderColor: '#F3E7F3',
+    borderColor: '#EEDFD7',
     fontSize: 14
   },
   detailActionButton: {
-    backgroundColor: '#DD77F2',
+    backgroundColor: '#E6A6B3',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 18,
@@ -797,19 +797,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   detailActionText: {
-    color: '#FFFFFF',
+    color: '#FFF8F0',
     fontWeight: '700'
   },
   recommendationsButton: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F1E7DA',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2D3BF',
     paddingVertical: 13,
     alignItems: 'center'
   },
   recommendationsButtonText: {
-    color: '#0F172A',
+    color: '#4B3A32',
     fontSize: 14,
     fontWeight: '800'
   }

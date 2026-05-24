@@ -1,273 +1,332 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useState } from 'react';
-import { BoardCard } from '../components/BoardCard';
-import { countSavedPlaces } from '../../data/tripUtils';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-export function ProfileScreen({ boards, pastTrips, onOpenBoard }) {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const pinCount = countSavedPlaces(boards);
+const DEFAULT_PROFILE_IMAGE =
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=500&q=80';
 
-  if (isSettingsOpen) {
-    return (
-      <View style={styles.settingsScreen}>
-        <View style={styles.settingsHeader}>
-          <TouchableOpacity style={styles.settingsBackButton} onPress={() => setIsSettingsOpen(false)}>
-            <Text style={styles.settingsBackText}>Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.settingsTitle}>Settings</Text>
-        </View>
+const DEFAULT_TRAVEL_TAGS = ['Foodie', 'Solo', 'Boutique stays', 'City walks', 'Cafe hopping'];
 
-        <View style={styles.settingsBody}>
-          <Text style={styles.settingsSectionTitle}>Account</Text>
-          <View style={styles.settingsRow}>
-            <Text style={styles.settingsRowLabel}>Sofia Walker</Text>
-            <Text style={styles.settingsRowValue}>Travel curator</Text>
-          </View>
-        </View>
+function formatSocialCount(value) {
+  if (typeof value === 'string') return value;
+  if (value >= 10000) return `${(value / 1000).toFixed(1)}K`;
+  if (value >= 1000) return `${Math.round(value / 100) / 10}K`;
+  return String(value);
+}
 
-        <TouchableOpacity style={[styles.detailActionButton, styles.profileLogoutButton]}>
-          <Text style={[styles.detailActionText, styles.profileLogoutText]}>Sign out</Text>
-        </TouchableOpacity>
+function PublicTripGridCard({ board, onPress }) {
+  return (
+    <TouchableOpacity style={styles.tripCard} activeOpacity={0.88} onPress={() => onPress(board)}>
+      <Image source={{ uri: board.image }} style={styles.tripCardImage} />
+      <View style={styles.tripCardBody}>
+        <Text style={styles.tripCardTitle} numberOfLines={2}>{board.title}</Text>
+        <Text style={styles.tripCardLocation} numberOfLines={1}>{board.location || board.subtitle}</Text>
       </View>
-    );
-  }
+    </TouchableOpacity>
+  );
+}
 
+export function PublicProfileView({
+  name,
+  handle,
+  bio,
+  image = DEFAULT_PROFILE_IMAGE,
+  followers,
+  following,
+  likes,
+  travelTags = DEFAULT_TRAVEL_TAGS,
+  publicBoards,
+  onOpenBoard,
+  showFollowButton = true,
+  showMessageButton = false,
+  isFollowing = false,
+  onToggleFollow,
+  onMessagePress
+}) {
   return (
     <View>
-      <TouchableOpacity style={styles.settingsButton} onPress={() => setIsSettingsOpen(true)}>
-        <Text style={styles.settingsButtonText}>Settings</Text>
-      </TouchableOpacity>
-
-      <View style={styles.profileCard}>
-        <View style={styles.avatarPlaceholder} />
-        <Text style={styles.profileName}>Sofia Walker</Text>
-        <Text style={styles.profileRole}>Travel curator</Text>
-        <Text style={styles.profileBio}>Dreamy boards, curated places, and a map made for your next escape.</Text>
-      </View>
-
-      <View style={styles.profileStatsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Boards</Text>
-          <Text style={styles.statValue}>{boards.length}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Pins</Text>
-          <Text style={styles.statValue}>{pinCount}</Text>
-        </View>
-      </View>
-
-      <View style={styles.pastTripsSection}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>Archive</Text>
-            <Text style={styles.sectionTitle}>Past trips</Text>
+      <View style={styles.profileHero}>
+        <Image source={{ uri: image }} style={styles.profilePhoto} />
+        <Text style={styles.profileName}>{name}</Text>
+        <Text style={styles.profileHandle}>{handle}</Text>
+        <Text style={styles.profileBio}>{bio}</Text>
+        {showFollowButton ? (
+          <View style={styles.profileActionRow}>
+            <TouchableOpacity
+              style={[styles.followButton, isFollowing && styles.followButtonActive]}
+              activeOpacity={0.9}
+              onPress={onToggleFollow}
+            >
+              <Text style={[styles.followButtonText, isFollowing && styles.followButtonTextActive]}>
+                {isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+            {showMessageButton ? (
+              <TouchableOpacity style={styles.headerMessageButton} activeOpacity={0.9} onPress={onMessagePress}>
+                <Text style={styles.headerMessageButtonText}>Message</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
-          <Text style={styles.sectionAction}>{pastTrips.length} completed</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{formatSocialCount(followers)}</Text>
+          <Text style={styles.statLabel}>Followers</Text>
         </View>
-        {pastTrips.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
-            {pastTrips.map((board) => (
-              <BoardCard key={board.id} board={board} onPress={onOpenBoard} />
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{formatSocialCount(following)}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{formatSocialCount(likes)}</Text>
+          <Text style={styles.statLabel}>Likes</Text>
+        </View>
+      </View>
+
+      <View style={styles.tagSection}>
+        <Text style={styles.sectionTitle}>Travel style</Text>
+        <View style={styles.tagRow}>
+          {travelTags.map((tag) => (
+            <View key={tag} style={styles.tagChip}>
+              <Text style={styles.tagChipText}>{tag}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.tripsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Public trips</Text>
+          <Text style={styles.sectionMeta}>{publicBoards.length}</Text>
+        </View>
+
+        {publicBoards.length > 0 ? (
+          <View style={styles.tripGrid}>
+            {publicBoards.map((board) => (
+              <PublicTripGridCard key={board.id} board={board} onPress={onOpenBoard} />
             ))}
-          </ScrollView>
+          </View>
         ) : (
-          <View style={styles.emptyPastTrips}>
-            <Text style={styles.emptyPastTripsText}>No past trips yet.</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No public trips yet.</Text>
           </View>
         )}
-        </View>
-
+      </View>
     </View>
   );
 }
 
+export function ProfileScreen({ boards, likedTrips, followingCount, onOpenBoard }) {
+  const publicBoards = boards.filter((board) => board.isPublic !== false);
+
+  return (
+    <PublicProfileView
+      name="Sofia Walker"
+      handle="@sofiawalks"
+      bio="Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat."
+      followers="12.4K"
+      following={followingCount}
+      likes={likedTrips.length}
+      travelTags={DEFAULT_TRAVEL_TAGS}
+      publicBoards={publicBoards}
+      onOpenBoard={onOpenBoard}
+      showFollowButton={false}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  settingsButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginBottom: 12
-  },
-  settingsButtonText: {
-    color: '#7D3DBA',
-    fontSize: 12,
-    fontWeight: '800'
-  },
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#F9D5E5',
-    shadowOpacity: 0.8,
-    shadowRadius: 24,
+  profileHero: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 30,
+    paddingVertical: 26,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 18,
+    shadowColor: '#E7C7B2',
+    shadowOpacity: 0.65,
+    shadowRadius: 22,
     shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-    alignItems: 'center'
+    elevation: 8
   },
-  avatarPlaceholder: {
-    width: 82,
-    height: 82,
-    borderRadius: 42,
-    backgroundColor: '#F4D8EE',
-    marginBottom: 18
+  profilePhoto: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    marginBottom: 14,
+    backgroundColor: '#D9E7D1'
   },
   profileName: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    color: '#2A0A2B',
-    marginBottom: 6
+    color: '#4B3A32'
   },
-  profileRole: {
-    color: '#7D3DBA',
+  profileHandle: {
+    marginTop: 4,
     fontSize: 14,
-    marginBottom: 14
+    fontWeight: '700',
+    color: '#A97C50'
   },
   profileBio: {
-    textAlign: 'center',
-    color: '#6F3E56',
+    marginTop: 14,
+    fontSize: 15,
     lineHeight: 22,
-    fontSize: 15
+    textAlign: 'center',
+    color: '#7A6658'
   },
-  profileStatsRow: {
+  followButton: {
+    backgroundColor: '#E6A6B3',
+    borderRadius: 999,
+    minHeight: 48,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    justifyContent: 'center'
+  },
+  followButtonText: {
+    color: '#FFF8F0',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  profileActionRow: {
+    marginTop: 18,
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10
+  },
+  followButtonActive: {
+    backgroundColor: '#EBDCCF'
+  },
+  followButtonTextActive: {
+    color: '#A97C50'
+  },
+  headerMessageButton: {
+    backgroundColor: '#F1E7DA',
+    borderRadius: 999,
+    minHeight: 48,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    justifyContent: 'center'
+  },
+  headerMessageButtonText: {
+    color: '#A97C50',
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginBottom: 18
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center'
-  },
-  statLabel: {
-    color: '#94A3B8',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontWeight: '500'
+    backgroundColor: '#FFF8F0',
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9DCCF'
   },
   statValue: {
-    marginTop: 2,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A'
+    color: '#4B3A32',
+    fontSize: 18,
+    fontWeight: '800'
   },
-  pastTripsSection: {
-    marginBottom: 20
+  statLabel: {
+    marginTop: 5,
+    color: '#8D7E71',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1
+  },
+  tagSection: {
+    marginBottom: 22
   },
   sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  sectionLabel: {
-    color: '#C26CF8',
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '700'
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#2A0A2B',
-    marginTop: 4
-  },
-  sectionAction: {
-    color: '#7D3DBA',
-    fontWeight: '700'
-  },
-  horizontalCards: {
-    marginBottom: 24
-  },
-  emptyPastTrips: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    alignItems: 'center'
-  },
-  emptyPastTripsText: {
-    color: '#94A3B8',
-    fontWeight: '700'
-  },
-  settingsScreen: {
-    minHeight: '100%',
-    paddingBottom: 120
-  },
-  settingsHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18
-  },
-  settingsBackButton: {
-    backgroundColor: '#F6E4F8',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8
-  },
-  settingsBackText: {
-    color: '#7D3DBA',
-    fontWeight: '800'
-  },
-  settingsTitle: {
-    color: '#2A0A2B',
-    fontSize: 22,
-    fontWeight: '800'
-  },
-  settingsBody: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    marginBottom: 'auto'
-  },
-  settingsSectionTitle: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
     marginBottom: 12
   },
-  settingsRow: {
-    gap: 4
+  sectionTitle: {
+    color: '#4B3A32',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 10
   },
-  settingsRowLabel: {
-    color: '#0F172A',
+  sectionMeta: {
+    color: '#A97C50',
     fontSize: 15,
     fontWeight: '800'
   },
-  settingsRowValue: {
-    color: '#7D3DBA',
-    fontSize: 13,
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  tagChip: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E4D6C8',
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  tagChipText: {
+    color: '#7A6658',
+    fontSize: 12,
     fontWeight: '700'
   },
-  detailActionButton: {
-    backgroundColor: '#DD77F2',
-    borderRadius: 28,
-    paddingVertical: 16,
+  tripsSection: {
+    marginBottom: 8
+  },
+  tripGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  tripCard: {
+    width: '48%',
+    backgroundColor: '#FFF8F0',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E8DBCD'
+  },
+  tripCardImage: {
+    width: '100%',
+    height: 146,
+    backgroundColor: '#F1E7DA'
+  },
+  tripCardBody: {
+    padding: 12
+  },
+  tripCardTitle: {
+    color: '#4B3A32',
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+    marginBottom: 4
+  },
+  tripCardLocation: {
+    color: '#A97C50',
+    fontSize: 12,
+    lineHeight: 16
+  },
+  emptyState: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    padding: 18,
     alignItems: 'center'
   },
-  detailActionText: {
-    color: '#FFFFFF',
+  emptyStateText: {
+    color: '#A8998A',
     fontWeight: '700'
-  },
-  profileLogoutButton: {
-    backgroundColor: '#F9EEF8'
-  },
-  profileLogoutText: {
-    color: '#7D3DBA'
   }
 });
