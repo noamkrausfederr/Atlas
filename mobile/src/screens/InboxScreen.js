@@ -1,45 +1,34 @@
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useMemo } from 'react';
+import {
+  Image,
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
 
-function buildInboxThreads(publicTrips, followedProfileNames) {
-  const owners = Array.from(new Set(publicTrips.map((trip) => trip.ownerName)));
-  const prioritized = [
-    ...followedProfileNames.filter((name) => owners.includes(name)),
-    ...owners.filter((name) => !followedProfileNames.includes(name))
-  ];
-
-  return prioritized.slice(0, 8).map((ownerName, index) => ({
-    ownerName,
-    handle: `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`,
-    preview: followedProfileNames.includes(ownerName)
-      ? 'Thanks for following. Happy to swap trip ideas anytime.'
-      : 'Open a conversation about shared itineraries and favorite spots.',
-    time: index === 0 ? 'Now' : `${index + 1}h`
-  }));
+function formatHandle(ownerName) {
+  return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
 }
 
-function buildChatMessages(ownerName) {
-  const firstPlace = ownerName.split(' ')[0];
-  return [
-    {
-      id: `${ownerName}-1`,
-      author: ownerName,
-      incoming: true,
-      text: `Hey! Thanks for reaching out. I keep a running list of favorite spots for each trip.`
-    },
-    {
-      id: `${ownerName}-2`,
-      author: 'You',
-      incoming: false,
-      text: `Your itineraries are so good. I wanted to ask what you’d prioritize first.`
-    },
-    {
-      id: `${ownerName}-3`,
-      author: ownerName,
-      incoming: true,
-      text: `${firstPlace} mornings are always my favorite. Start with the neighborhood walk, then pick one food stop and one anchor activity.`
-    }
-  ];
+function formatRelativeTime(value) {
+  if (!value) return '';
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return '';
+
+  const diffMinutes = Math.max(Math.round((Date.now() - timestamp) / 60000), 0);
+  if (diffMinutes < 1) return 'Now';
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays}d`;
 }
 
 function ThreadList({ threads, selectedProfileName, onSelectThread }) {
@@ -67,10 +56,19 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                 <View style={styles.threadBody}>
                   <View style={styles.threadTopRow}>
                     <Text style={styles.threadName}>{thread.ownerName}</Text>
-                    <Text style={styles.threadTime}>{thread.time}</Text>
+                    <View style={styles.threadMeta}>
+                      <Text style={styles.threadTime}>{formatRelativeTime(thread.lastMessageAt)}</Text>
+                      {thread.unreadCount > 0 ? (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>{thread.unreadCount}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                   <Text style={styles.threadHandle}>{thread.handle}</Text>
-                  <Text style={styles.threadPreview} numberOfLines={2}>{thread.preview}</Text>
+                  <Text style={styles.threadPreview} numberOfLines={1} ellipsizeMode="tail">
+                    {thread.lastMessageText}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -79,30 +77,67 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
       ) : (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateTitle}>No messages yet</Text>
-          <Text style={styles.emptyStateText}>Follow creators and start conversations from their public profiles.</Text>
+          <Text style={styles.emptyStateText}>Start a conversation from a public profile.</Text>
         </View>
       )}
     </>
   );
 }
 
-function ChatScreen({ thread, onBack }) {
-  const messages = useMemo(() => buildChatMessages(thread.ownerName), [thread.ownerName]);
+function ChatScreen({ profile, messages, onBack, unreadCount, onSendMessage }) {
+  const [draftMessage, setDraftMessage] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const handleKeyboardShow = (event) => {
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    };
+
+    const handleKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSubscription = Keyboard.addListener(hideEvent, handleKeyboardHide);
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const sendMessage = () => {
+    const nextText = draftMessage.trim();
+    if (!nextText) return;
+
+    onSendMessage(profile.ownerName, nextText);
+    setDraftMessage('');
+  };
 
   return (
-    <View>
+    <View style={styles.chatScreen}>
       <View style={styles.chatHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonText}>Back</Text>
+        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.85}>
+          <Text style={styles.backButtonArrow}>‹</Text>
+          <Text style={styles.backButtonText}>{unreadCount}</Text>
         </TouchableOpacity>
+        {profile.image ? <Image source={{ uri: profile.image }} style={styles.chatProfilePhoto} /> : null}
         <View style={styles.chatHeaderText}>
-          <Text style={styles.chatTitle}>{thread.ownerName}</Text>
-          <Text style={styles.chatHandle}>{thread.handle}</Text>
+          <Text style={styles.chatTitle}>{profile.ownerName}</Text>
+          <Text style={styles.chatHandle}>{profile.handle}</Text>
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatMessages}>
-        {messages.map((message) => (
+      <ScrollView
+        style={styles.chatScroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.chatMessages}
+      >
+        {messages.length > 0 ? messages.map((message) => (
           <View
             key={message.id}
             style={[styles.chatBubbleRow, message.incoming ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}
@@ -113,16 +148,27 @@ function ChatScreen({ thread, onBack }) {
               </Text>
             </View>
           </View>
-        ))}
+        )) : (
+          <View style={styles.emptyChatState}>
+            <Text style={styles.emptyChatText}>Say hi to start the chat.</Text>
+          </View>
+        )}
       </ScrollView>
 
-      <View style={styles.chatComposer}>
+      <View
+        style={[
+          styles.chatComposer,
+          { bottom: keyboardHeight > 0 ? keyboardHeight + 8 : 0 }
+        ]}
+      >
         <TextInput
-          placeholder={`Message ${thread.ownerName}...`}
+          placeholder={`Message ${profile.ownerName}...`}
           placeholderTextColor="#B1A294"
+          value={draftMessage}
+          onChangeText={setDraftMessage}
           style={styles.chatInput}
         />
-        <TouchableOpacity style={styles.sendButton} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.sendButton} activeOpacity={0.9} onPress={sendMessage}>
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
@@ -131,30 +177,60 @@ function ChatScreen({ thread, onBack }) {
 }
 
 export function InboxScreen({
-  publicTrips,
-  followedProfileNames,
+  profileDirectory,
+  threads,
   selectedProfileName,
   isThreadOpen,
   onSelectThread,
-  onCloseThread
+  onCloseThread,
+  onSendMessage
 }) {
-  const threads = buildInboxThreads(publicTrips, followedProfileNames);
-  const activeThread = threads.find((thread) => thread.ownerName === selectedProfileName) ?? null;
+  const threadList = useMemo(
+    () => Object.values(threads)
+      .filter((thread) => (thread.messages?.length ?? 0) > 0)
+      .sort((left, right) => new Date(right.lastMessageAt) - new Date(left.lastMessageAt)),
+    [threads]
+  );
 
-  if (isThreadOpen && activeThread) {
-    return <ChatScreen thread={activeThread} onBack={onCloseThread} />;
+  const activeThread = selectedProfileName ? threads[selectedProfileName] ?? null : null;
+  const activeProfile = selectedProfileName
+    ? profileDirectory[selectedProfileName] ?? {
+      ownerName: selectedProfileName,
+      handle: formatHandle(selectedProfileName),
+      image: null
+    }
+    : null;
+  const unreadCount = threadList
+    .filter((thread) => thread.ownerName !== selectedProfileName && thread.unreadCount > 0)
+    .length;
+
+  if (isThreadOpen && activeProfile) {
+    return (
+      <ChatScreen
+        profile={activeProfile}
+        messages={activeThread?.messages ?? []}
+        unreadCount={unreadCount}
+        onBack={onCloseThread}
+        onSendMessage={onSendMessage}
+      />
+    );
   }
 
   return (
-    <ThreadList
-      threads={threads}
-      selectedProfileName={selectedProfileName}
-      onSelectThread={onSelectThread}
-    />
+    <View style={styles.inboxScreen}>
+      <ThreadList
+        threads={threadList}
+        selectedProfileName={selectedProfileName}
+        onSelectThread={onSelectThread}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  inboxScreen: {
+    flex: 1
+  },
   header: {
     marginBottom: 18
   },
@@ -177,16 +253,14 @@ const styles = StyleSheet.create({
   threadCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FAEEE7',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 14
+    borderColor: '#E8C9D0',
+    padding: 14,
+    minHeight: 92
   },
-  threadCardActive: {
-    borderColor: '#E6A6B3',
-    backgroundColor: '#FAEEE7'
-  },
+  threadCardActive: {},
   threadAvatar: {
     width: 46,
     height: 46,
@@ -206,19 +280,39 @@ const styles = StyleSheet.create({
   },
   threadTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 2
   },
   threadName: {
     color: '#4B3A32',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '800',
+    flex: 1,
+    paddingRight: 8
+  },
+  threadMeta: {
+    alignItems: 'flex-end',
+    gap: 4
   },
   threadTime: {
     color: '#A8998A',
     fontSize: 11,
     fontWeight: '700'
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#E6A6B3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6
+  },
+  unreadBadgeText: {
+    color: '#FFF8F0',
+    fontSize: 11,
+    fontWeight: '800'
   },
   threadHandle: {
     color: '#A97C50',
@@ -257,20 +351,45 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 18
   },
+  chatScreen: {
+    flex: 1
+  },
+  chatScroll: {
+    flex: 1
+  },
   backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: '#F1E7DA',
     borderRadius: 999,
+    minWidth: 70,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#E2D3BF'
   },
+  backButtonArrow: {
+    color: '#4B3A32',
+    fontSize: 26,
+    lineHeight: 26,
+    fontWeight: '500',
+    marginTop: -1
+  },
   backButtonText: {
-    color: '#A97C50',
-    fontWeight: '800'
+    color: '#4B3A32',
+    fontSize: 17,
+    fontWeight: '700'
   },
   chatHeaderText: {
     flex: 1
+  },
+  chatProfilePhoto: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#D9E7D1'
   },
   chatTitle: {
     color: '#4B3A32',
@@ -285,7 +404,16 @@ const styles = StyleSheet.create({
   },
   chatMessages: {
     gap: 12,
-    paddingBottom: 20
+    paddingBottom: 96
+  },
+  emptyChatState: {
+    alignItems: 'center',
+    paddingTop: 28
+  },
+  emptyChatText: {
+    color: '#A8998A',
+    fontSize: 14,
+    fontWeight: '700'
   },
   chatBubbleRow: {
     flexDirection: 'row'
@@ -321,10 +449,14 @@ const styles = StyleSheet.create({
     color: '#FFF8F0'
   },
   chatComposer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 8
+    paddingTop: 8,
+    backgroundColor: '#F6EFE5'
   },
   chatInput: {
     flex: 1,

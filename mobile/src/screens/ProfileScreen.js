@@ -47,6 +47,20 @@ export function PublicProfileView({
         <Image source={{ uri: image }} style={styles.profilePhoto} />
         <Text style={styles.profileName}>{name}</Text>
         <Text style={styles.profileHandle}>{handle}</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatSocialCount(followers)}</Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatSocialCount(following)}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatSocialCount(likes)}</Text>
+            <Text style={styles.statLabel}>Likes</Text>
+          </View>
+        </View>
         <Text style={styles.profileBio}>{bio}</Text>
         {showFollowButton ? (
           <View style={styles.profileActionRow}>
@@ -68,23 +82,8 @@ export function PublicProfileView({
         ) : null}
       </View>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{formatSocialCount(followers)}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{formatSocialCount(following)}</Text>
-          <Text style={styles.statLabel}>Following</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{formatSocialCount(likes)}</Text>
-          <Text style={styles.statLabel}>Likes</Text>
-        </View>
-      </View>
-
       <View style={styles.tagSection}>
-        <Text style={styles.sectionTitle}>Travel style</Text>
+        <Text style={[styles.sectionTitle, styles.tagSectionTitle]}>Travel style</Text>
         <View style={styles.tagRow}>
           {travelTags.map((tag) => (
             <View key={tag} style={styles.tagChip}>
@@ -97,7 +96,9 @@ export function PublicProfileView({
       <View style={styles.tripsSection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Public trips</Text>
-          <Text style={styles.sectionMeta}>{publicBoards.length}</Text>
+          <Text style={styles.sectionMeta}>
+            {publicBoards.length} {publicBoards.length === 1 ? 'trip' : 'trips'}
+          </Text>
         </View>
 
         {publicBoards.length > 0 ? (
@@ -117,7 +118,7 @@ export function PublicProfileView({
 }
 
 export function ProfileScreen({ boards, likedTrips, followingCount, onOpenBoard }) {
-  const publicBoards = boards.filter((board) => board.isPublic !== false);
+  const publicBoards = boards.filter((board) => board.isPublic === true);
 
   return (
     <PublicProfileView
@@ -168,9 +169,9 @@ const styles = StyleSheet.create({
     color: '#A97C50'
   },
   profileBio: {
-    marginTop: 14,
-    fontSize: 15,
-    lineHeight: 22,
+    marginTop: 16,
+    fontSize: 14,
+    lineHeight: 21,
     textAlign: 'center',
     color: '#7A6658'
   },
@@ -216,28 +217,25 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18
+    gap: 4,
+    marginTop: 14,
+    marginBottom: 0
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFF8F0',
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E9DCCF'
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: 'center'
   },
   statValue: {
     color: '#4B3A32',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800'
   },
   statLabel: {
-    marginTop: 5,
+    marginTop: 4,
     color: '#8D7E71',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1
@@ -254,7 +252,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: '#4B3A32',
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '800'
+  },
+  tagSectionTitle: {
     marginBottom: 10
   },
   sectionMeta: {

@@ -394,7 +394,6 @@ function PublicTripCard({ trip, onOpenTrip, onOpenProfile, variantIndex = 0 }) {
         <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
           <View style={styles.publicTripTitleRow}>
             <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
-            <Text style={styles.publicTripMore}>...</Text>
           </View>
           <Text style={styles.publicTripMeta} numberOfLines={2}>{trip.location}</Text>
         </TouchableOpacity>

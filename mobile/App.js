@@ -17,6 +17,71 @@ import { InboxScreen } from './src/screens/InboxScreen';
 import { RecommendationDetailScreen } from './src/screens/RecommendationDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
+const INBOX_PROFILE_IMAGES = [
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80'
+];
+
+function formatInboxHandle(ownerName) {
+  return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+}
+
+function getInboxProfileImage(ownerName) {
+  const seed = ownerName.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return INBOX_PROFILE_IMAGES[seed % INBOX_PROFILE_IMAGES.length];
+}
+
+function buildSeedInboxThreads() {
+  const now = Date.now();
+  const minute = 60 * 1000;
+
+  const createThread = (ownerName, unreadCount, messages) => {
+    const normalizedMessages = messages.map((message, index) => ({
+      id: `${ownerName}-${index + 1}`,
+      author: message.incoming ? ownerName : 'You',
+      incoming: message.incoming,
+      text: message.text,
+      createdAt: new Date(now - message.minutesAgo * minute).toISOString(),
+      read: !message.incoming || index < messages.length - unreadCount
+    }));
+    const lastMessage = normalizedMessages[normalizedMessages.length - 1];
+
+    return [
+      ownerName,
+      {
+        ownerName,
+        handle: formatInboxHandle(ownerName),
+        messages: normalizedMessages,
+        unreadCount,
+        lastMessageText: lastMessage.text,
+        lastMessageAt: lastMessage.createdAt
+      }
+    ];
+  };
+
+  return Object.fromEntries([
+    createThread('Maya R.', 2, [
+      { incoming: true, text: 'I finally posted the London food map.', minutesAgo: 180 },
+      { incoming: false, text: 'Need it immediately. Which market should I start with?', minutesAgo: 164 },
+      { incoming: true, text: 'Borough first, then walk toward Neal’s Yard if you still have energy.', minutesAgo: 22 },
+      { incoming: true, text: 'Also save room for dinner in Soho.', minutesAgo: 6 }
+    ]),
+    createThread('Nina K.', 0, [
+      { incoming: false, text: 'Your Tokyo cafés list is unreal.', minutesAgo: 250 },
+      { incoming: true, text: 'Ahh thank you. I can send my quiet study spots too.', minutesAgo: 238 },
+      { incoming: false, text: 'Yes please, especially around Shibuya.', minutesAgo: 210 }
+    ]),
+    createThread('Daniel C.', 1, [
+      { incoming: true, text: 'If you do the Lisbon tram route early, the photos come out so much better.', minutesAgo: 95 },
+      { incoming: false, text: 'That is exactly the kind of tip I needed.', minutesAgo: 74 },
+      { incoming: true, text: 'I’ll send you the breakfast stop I paired with it.', minutesAgo: 9 }
+    ])
+  ]);
+}
+
 function InnerApp() {
   const createBoardFormRef = useRef(null);
   const createBoardLocationInputRef = useRef(null);
@@ -26,10 +91,13 @@ function InnerApp() {
   const [tripStack, setTripStack] = useState(null);
   const [activeTab, setActiveTab] = useState('Trips');
   const [exploreStack, setExploreStack] = useState(null);
+  const [exploreResetKey, setExploreResetKey] = useState(0);
   const [likedPublicTripIds, setLikedPublicTripIds] = useState([]);
   const [followedProfileNames, setFollowedProfileNames] = useState([]);
   const [selectedInboxProfileName, setSelectedInboxProfileName] = useState(null);
   const [isInboxThreadOpen, setIsInboxThreadOpen] = useState(false);
+  const [inboxThreads, setInboxThreads] = useState(() => buildSeedInboxThreads());
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [addedRecIds, setAddedRecIds] = useState({});
   const [tripRecommendationRefreshes, setTripRecommendationRefreshes] = useState({});
   const [isCreateBoardVisible, setIsCreateBoardVisible] = useState(false);
@@ -114,6 +182,18 @@ function InnerApp() {
       advanceDateField();
     }
   };
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const query = draftBoard.location.trim();
@@ -214,10 +294,22 @@ function InnerApp() {
   
   const insets = useSafeAreaInsets();
   const tabBarHeight = 8 + 44 + Math.max(insets.bottom, 6) + 8;
+  const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
+  const shouldHideBottomNav = isInboxChatOpen && isKeyboardVisible;
   
   const upcomingBoards = getUpcomingTrips(boards);
   const pastTrips = getPastTrips(boards);
   const likedPublicTrips = hydratedPublicTrips.filter((trip) => likedPublicTripIds.includes(trip.id));
+  const inboxProfileDirectory = hydratedPublicTrips.reduce((profiles, trip) => {
+    if (!profiles[trip.ownerName]) {
+      profiles[trip.ownerName] = {
+        ownerName: trip.ownerName,
+        handle: formatInboxHandle(trip.ownerName),
+        image: getInboxProfileImage(trip.ownerName)
+      };
+    }
+    return profiles;
+  }, {});
 
   const updateBoard = (boardId, patch) => {
     setBoards((current) => current.map((board) => (board.id === boardId ? { ...board, ...patch } : board)));
@@ -238,10 +330,36 @@ function InnerApp() {
     setSelectedBoard(null);
     setTripStack(null);
     setExploreStack(null);
+    if (tab === 'Explore') {
+      setExploreResetKey((current) => current + 1);
+    }
     if (tab === 'Inbox') {
       setIsInboxThreadOpen(false);
     }
   };
+
+  const markInboxThreadRead = (ownerName) => {
+    if (!ownerName) return;
+
+    setInboxThreads((current) => {
+      const thread = current[ownerName];
+      if (!thread || thread.unreadCount === 0) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [ownerName]: {
+          ...thread,
+          unreadCount: 0,
+          messages: thread.messages.map((message) => (
+            message.incoming ? { ...message, read: true } : message
+          ))
+        }
+      };
+    });
+  };
+
   const openInboxThread = (ownerName = null) => {
     setSelectedInboxProfileName(ownerName);
     setIsInboxThreadOpen(Boolean(ownerName));
@@ -249,6 +367,43 @@ function InnerApp() {
     setSelectedBoard(null);
     setTripStack(null);
     setExploreStack(null);
+    markInboxThreadRead(ownerName);
+  };
+
+  const sendInboxMessage = (ownerName, text) => {
+    if (!ownerName || !text.trim()) {
+      return;
+    }
+
+    const nextMessage = {
+      id: `${ownerName}-${Date.now()}`,
+      author: 'You',
+      incoming: false,
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+      read: true
+    };
+
+    setInboxThreads((current) => {
+      const existingThread = current[ownerName];
+      const profile = inboxProfileDirectory[ownerName] ?? {
+        ownerName,
+        handle: formatInboxHandle(ownerName),
+        image: getInboxProfileImage(ownerName)
+      };
+
+      return {
+        ...current,
+        [ownerName]: {
+          ownerName,
+          handle: profile.handle,
+          messages: [...(existingThread?.messages ?? []), nextMessage],
+          unreadCount: existingThread?.unreadCount ?? 0,
+          lastMessageText: nextMessage.text,
+          lastMessageAt: nextMessage.createdAt
+        }
+      };
+    });
   };
 
   const getRecommendationDayIndex = (rec) => {
@@ -540,6 +695,7 @@ function InnerApp() {
   const renderExploreContent = () => {
     return (
       <ExploreScreen
+        key={exploreResetKey}
         boards={boards}
         publicTrips={hydratedPublicTrips}
         likedPublicTripIds={likedPublicTripIds}
@@ -624,15 +780,17 @@ function InnerApp() {
     if (activeTab === 'Inbox') {
       return (
         <InboxScreen
-          publicTrips={hydratedPublicTrips}
-          followedProfileNames={followedProfileNames}
+          profileDirectory={inboxProfileDirectory}
+          threads={inboxThreads}
           selectedProfileName={selectedInboxProfileName}
           isThreadOpen={isInboxThreadOpen}
           onSelectThread={(ownerName) => {
             setSelectedInboxProfileName(ownerName);
             setIsInboxThreadOpen(true);
+            markInboxThreadRead(ownerName);
           }}
           onCloseThread={() => setIsInboxThreadOpen(false)}
+          onSendMessage={sendInboxMessage}
         />
       );
     }
@@ -689,6 +847,10 @@ function InnerApp() {
           <View style={[styles.detailContainer, { paddingBottom: tabBarHeight }]}>
             {renderSelectedBoardContent()}
           </View>
+        ) : activeTab === 'Inbox' ? (
+          <View style={[styles.detailContainer, { paddingBottom: shouldHideBottomNav ? 0 : tabBarHeight }]}>
+            {renderContent()}
+          </View>
         ) : (
           <ScrollView
             contentContainerStyle={[styles.container, exploreStack && styles.exploreStackContainer]}
@@ -698,35 +860,37 @@ function InnerApp() {
           </ScrollView>
         )}
         {renderCreateBoardModal()}
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-          <TouchableOpacity
-            style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
-            onPress={() => openTab('Trips')}
-          >
-            <Text style={[styles.navText, activeTab === 'Trips' && styles.navTextActive]}>Trips</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
-            onPress={() => openTab('Explore')}
-          >
-            <Text style={[styles.navText, activeTab === 'Explore' && styles.navTextActive]}>Explore</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
-            <Text style={styles.createTripNavButtonText}>+</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
-            onPress={() => openTab('Inbox')}
-          >
-            <Text style={[styles.navText, activeTab === 'Inbox' && styles.navTextActive]}>Inbox</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
-            onPress={() => openTab('Profile')}
-          >
-            <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>Profile</Text>
-          </TouchableOpacity>
-        </View>
+        {!shouldHideBottomNav && (
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+            <TouchableOpacity
+              style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
+              onPress={() => openTab('Trips')}
+            >
+              <Text style={[styles.navText, activeTab === 'Trips' && styles.navTextActive]}>Trips</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
+              onPress={() => openTab('Explore')}
+            >
+              <Text style={[styles.navText, activeTab === 'Explore' && styles.navTextActive]}>Explore</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
+              <Text style={styles.createTripNavButtonText}>+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
+              onPress={() => openTab('Inbox')}
+            >
+              <Text style={[styles.navText, activeTab === 'Inbox' && styles.navTextActive]}>Inbox</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
+              onPress={() => openTab('Profile')}
+            >
+              <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>Profile</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -949,7 +1113,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
@@ -962,21 +1126,14 @@ const styles = StyleSheet.create({
   navButton: {
     flex: 1,
     height: 44,
-    backgroundColor: '#F1E7DA',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
     justifyContent: 'center',
     alignItems: 'center'
   },
-  navButtonActive: {
-    backgroundColor: '#FFF8F0',
-    borderColor: '#D6C6B2'
-  },
+  navButtonActive: {},
   createTripNavButton: {
     width: 52,
     height: 52,
-    marginTop: -4,
+    marginTop: 2,
     backgroundColor: '#E6A6B3',
     borderRadius: 999,
     justifyContent: 'center',
