@@ -1,9 +1,9 @@
 import { Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RecommendationCard } from '../components/RecommendationCard';
+import { PlaceDetailScreen } from '../components/PlaceDetailModal';
 import { formatDateRange, generateRecommendationsForRefresh } from '../../data/recommendations';
-import { publicTrips } from '../../data/trips';
 
 const DAY_RANGE_MIN = 1;
 const DAY_RANGE_MAX = 30;
@@ -88,8 +88,8 @@ function getOrdinalSuffix(day) {
 }
 
 function formatItineraryDate(date) {
-  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' }).toLowerCase();
-  const month = date.toLocaleDateString(undefined, { month: 'long' }).toLowerCase();
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' });
+  const month = date.toLocaleDateString(undefined, { month: 'long' });
   const day = date.getDate();
   return `${weekday}, ${day}${getOrdinalSuffix(day)} ${month}`;
 }
@@ -154,18 +154,29 @@ function matchesPublicTripFilters(trip, filters) {
   return true;
 }
 
-export function ExploreScreen({ boards, onAddPublicTrip }) {
+export function ExploreScreen({ boards, publicTrips, onAddPublicTrip }) {
   const [isFilterPageOpen, setIsFilterPageOpen] = useState(false);
   const [filters, setFilters] = useState(FILTER_DEFAULTS);
   const [selectedPublicTrip, setSelectedPublicTrip] = useState(null);
   const [selectedOwnerName, setSelectedOwnerName] = useState(null);
+  const [profileReturnTrip, setProfileReturnTrip] = useState(null);
   const [activeFilterDateField, setActiveFilterDateField] = useState(null);
   const [showCountryOptions, setShowCountryOptions] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
-  const paceOptions = useMemo(() => uniqueValues(publicTrips, 'pace'), []);
-  const travelerTypeOptions = useMemo(() => uniqueValues(publicTrips, 'travelerType'), []);
-  const accessibilityOptions = useMemo(() => uniqueValues(publicTrips, 'accessibility'), []);
-  const budgetOptions = useMemo(() => uniqueValues(publicTrips, 'budget'), []);
+
+  useEffect(() => {
+    setSelectedPublicTrip((current) => (
+      current ? publicTrips.find((trip) => trip.id === current.id) ?? current : current
+    ));
+    setProfileReturnTrip((current) => (
+      current ? publicTrips.find((trip) => trip.id === current.id) ?? current : current
+    ));
+  }, [publicTrips]);
+
+  const paceOptions = useMemo(() => uniqueValues(publicTrips, 'pace'), [publicTrips]);
+  const travelerTypeOptions = useMemo(() => uniqueValues(publicTrips, 'travelerType'), [publicTrips]);
+  const accessibilityOptions = useMemo(() => uniqueValues(publicTrips, 'accessibility'), [publicTrips]);
+  const budgetOptions = useMemo(() => uniqueValues(publicTrips, 'budget'), [publicTrips]);
   const filteredTrips = publicTrips.filter((trip) => matchesPublicTripFilters(trip, filters));
   const addedPublicTripIds = new Set(boards.map((board) => board.sourcePublicTripId).filter(Boolean));
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
@@ -218,10 +229,19 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
   const openPublicTrip = (trip) => {
     setSelectedPublicTrip(trip);
     setSelectedOwnerName(null);
+    setProfileReturnTrip(null);
   };
-  const openPublicProfile = (ownerName) => {
+  const openPublicProfile = (ownerName, returnTrip = null) => {
     setSelectedOwnerName(ownerName);
     setSelectedPublicTrip(null);
+    setProfileReturnTrip(returnTrip);
+  };
+  const closePublicProfile = () => {
+    if (profileReturnTrip) {
+      setSelectedPublicTrip(profileReturnTrip);
+    }
+    setSelectedOwnerName(null);
+    setProfileReturnTrip(null);
   };
 
   if (selectedPublicTrip) {
@@ -230,7 +250,7 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
         trip={selectedPublicTrip}
         alreadyAdded={addedPublicTripIds.has(selectedPublicTrip.id)}
         onBack={() => setSelectedPublicTrip(null)}
-        onOpenProfile={() => openPublicProfile(selectedPublicTrip.ownerName)}
+        onOpenProfile={() => openPublicProfile(selectedPublicTrip.ownerName, selectedPublicTrip)}
         onAddPublicTrip={onAddPublicTrip}
       />
     );
@@ -243,7 +263,7 @@ export function ExploreScreen({ boards, onAddPublicTrip }) {
         ownerName={selectedOwnerName}
         trips={ownerTrips}
         addedPublicTripIds={addedPublicTripIds}
-        onBack={() => setSelectedOwnerName(null)}
+        onBack={closePublicProfile}
         onOpenTrip={openPublicTrip}
         onAddPublicTrip={onAddPublicTrip}
       />
@@ -601,6 +621,7 @@ function DaysRangeSlider({ minValue, maxValue, valueMin, valueMax, onChange }) {
 }
 
 function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPublicTrip }) {
+  const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const itinerarySections = getTripDateSections(trip.startDate, trip.endDate);
   (trip.placesList ?? []).forEach((place, index) => {
     const target = getPublicPlaceSectionIndex(place, index, itinerarySections.length);
@@ -611,6 +632,19 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
     }
     itinerarySections[target].places.push(place);
   });
+
+  if (selectedPlaceDetail) {
+    return (
+      <PlaceDetailScreen
+        place={selectedPlaceDetail.place}
+        tripTitle={trip.title}
+        location={trip.location}
+        dateLabel={selectedPlaceDetail.dateLabel}
+        fallbackImage={trip.image}
+        onBack={() => setSelectedPlaceDetail(null)}
+      />
+    );
+  }
 
   return (
     <View style={styles.publicDetailScreen}>
@@ -651,10 +685,15 @@ function PublicTripDetail({ trip, alreadyAdded, onBack, onOpenProfile, onAddPubl
             <Text style={styles.publicItineraryDayTitle}>{section.title}</Text>
             {section.places.length === 0 && <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>}
             {section.places.map((place) => (
-              <View key={place.id} style={styles.publicPlaceRow}>
+              <TouchableOpacity
+                key={place.id}
+                style={styles.publicPlaceRow}
+                activeOpacity={0.82}
+                onPress={() => setSelectedPlaceDetail({ place, dateLabel: section.title })}
+              >
                 <Text style={styles.publicPlaceName}>{place.name}</Text>
                 {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
@@ -1034,14 +1073,16 @@ const styles = StyleSheet.create({
   publicTripTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: 6
   },
   publicTripTitle: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
-    color: '#0F172A'
+    color: '#0F172A',
+    textAlign: 'left'
   },
   publicTripMore: {
     color: '#0F172A',

@@ -1,12 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, TextInput, Platform } from 'react-native';
-import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, TextInput, Platform } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-import { sampleBoards } from './data/trips';
+import { publicTrips as publicTripMetadata, sampleBoards } from './data/trips';
 import { getPastTrips, getUpcomingTrips } from './data/tripUtils';
 import { getRecommendationById } from './data/recommendations';
+import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 
 // Components & Screens
 import { BoardCard } from './src/components/BoardCard';
@@ -16,7 +17,10 @@ import { RecommendationDetailScreen } from './src/screens/RecommendationDetailSc
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
 function InnerApp() {
+  const createBoardFormRef = useRef(null);
+  const createBoardLocationInputRef = useRef(null);
   const [boards, setBoards] = useState(sampleBoards);
+  const [hydratedPublicTrips, setHydratedPublicTrips] = useState(publicTripMetadata);
   const [selectedBoard, setSelectedBoard] = useState(null);
   const [tripStack, setTripStack] = useState(null);
   const [activeTab, setActiveTab] = useState('Trips');
@@ -28,6 +32,7 @@ function InnerApp() {
   const [isCitySearchLoading, setIsCitySearchLoading] = useState(false);
   const [citySearchError, setCitySearchError] = useState('');
   const [isLocationFocused, setIsLocationFocused] = useState(false);
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false);
   const [activeDraftDateField, setActiveDraftDateField] = useState(null);
   const [draftBoard, setDraftBoard] = useState({
     title: '',
@@ -57,7 +62,22 @@ function InnerApp() {
     return fallback || new Date();
   };
 
+  const scrollCreateBoardFormToEnd = () => {
+    setTimeout(() => {
+      createBoardFormRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+  };
+
   const handleDraftDateChange = (field, _event, selectedDate) => {
+    const advanceDateField = () => {
+      if (field === 'startDate') {
+        setActiveDraftDateField('endDate');
+        scrollCreateBoardFormToEnd();
+      } else {
+        setActiveDraftDateField(null);
+      }
+    };
+
     if (Platform.OS === 'android') {
       setActiveDraftDateField(null);
     }
@@ -82,36 +102,12 @@ function InnerApp() {
       const safeEnd = start && nextDate < start ? start : nextDate;
       return { ...current, endDate: formatDateForInput(safeEnd) };
     });
-  };
 
-  const getBoardImageUrl = (location) => {
-    const cityImages = {
-      amsterdam: 'https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?auto=format&fit=crop&w=800&q=80',
-      barcelona: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?auto=format&fit=crop&w=800&q=80',
-      berlin: 'https://images.unsplash.com/photo-1560969184-10fe8719e047?auto=format&fit=crop&w=800&q=80',
-      kyoto: 'https://images.unsplash.com/photo-1445820136801-051b6a111f34?auto=format&fit=crop&w=800&q=80',
-      london: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=800&q=80',
-      madrid: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=800&q=80',
-      'new york': 'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?auto=format&fit=crop&w=800&q=80',
-      paris: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80',
-      rome: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=800&q=80',
-      'san francisco': 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=800&q=80',
-      tokyo: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=800&q=80',
-      venice: 'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=800&q=80'
-    };
-    const normalizedLocation = location
-      .replace(/[^a-z0-9\s-]/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-    const cityKey = Object.keys(cityImages).find((city) => normalizedLocation.includes(city));
-
-    if (cityKey) {
-      return cityImages[cityKey];
+    if (Platform.OS === 'android' && field === 'startDate') {
+      setTimeout(advanceDateField, 0);
+    } else {
+      advanceDateField();
     }
-
-    const photoQuery = encodeURIComponent(`${location} city travel`);
-    return `https://loremflickr.com/800/600/${photoQuery}`;
   };
 
   useEffect(() => {
@@ -177,6 +173,39 @@ function InnerApp() {
       clearTimeout(timeoutId);
     };
   }, [draftBoard.location, isCreateBoardVisible, isLocationFocused]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    Promise.all([
+      hydrateTripImages(sampleBoards),
+      hydrateTripImages(publicTripMetadata)
+    ]).then(([hydratedBoards, nextPublicTrips]) => {
+      if (!isActive) return;
+
+      const imageUrls = [...hydratedBoards, ...nextPublicTrips].map((trip) => trip.image).filter(Boolean);
+      imageUrls.forEach((imageUrl) => Image.prefetch(imageUrl));
+
+      const hydratedImagesById = hydratedBoards.reduce((images, board) => {
+        images[board.id] = board.image;
+        return images;
+      }, {});
+
+      setHydratedPublicTrips(nextPublicTrips);
+      setBoards((current) =>
+        current.map((board) => (
+          hydratedImagesById[board.id] ? { ...board, image: hydratedImagesById[board.id] } : board
+        ))
+      );
+      setSelectedBoard((current) => (
+        current && hydratedImagesById[current.id] ? { ...current, image: hydratedImagesById[current.id] } : current
+      ));
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
   
   const insets = useSafeAreaInsets();
   const tabBarHeight = 8 + 44 + Math.max(insets.bottom, 6) + 8;
@@ -234,7 +263,16 @@ function InnerApp() {
       id: `p-${Date.now()}`,
       name: rec.title,
       note: `Added from Recommendations · ${rec.category} · ${rec.price}`,
-      dayIndex: getRecommendationDayIndex(rec)
+      dayIndex: getRecommendationDayIndex(rec),
+      category: rec.category,
+      price: rec.price,
+      rating: rec.rating,
+      reviewCount: rec.reviewCount,
+      address: rec.address,
+      description: rec.description,
+      reason: rec.reason,
+      reviews: rec.reviews,
+      image: rec.image
     };
     updateBoard(boardId, { placesList: [...(board.placesList ?? []), newPlace] });
     setAddedRecIds((current) => ({ ...current, [rec.id]: true }));
@@ -288,41 +326,47 @@ function InnerApp() {
     setExploreStack(null);
   };
 
-  const handleCreateBoard = () => {
+  const handleCreateBoard = async () => {
     const title = draftBoard.title.trim();
     const location = draftBoard.location.trim();
-    if (!title) {
+    if (!title || isCreatingBoard) {
       return;
     }
+    setIsCreatingBoard(true);
 
-    const start = parseDateInput(draftBoard.startDate) || new Date();
-    start.setHours(0, 0, 0, 0);
+    try {
+      const start = parseDateInput(draftBoard.startDate) || new Date();
+      start.setHours(0, 0, 0, 0);
 
-    const endValue = parseDateInput(draftBoard.endDate);
-    const endDate = endValue ? new Date(endValue) : new Date(start);
-    if (endDate < start) {
-      endDate.setTime(start.getTime());
+      const endValue = parseDateInput(draftBoard.endDate);
+      const endDate = endValue ? new Date(endValue) : new Date(start);
+      if (endDate < start) {
+        endDate.setTime(start.getTime());
+      }
+      const image = await getBoardImageUrl(location || title);
+
+      const newBoard = {
+        id: `board-${Date.now()}`,
+        title,
+        subtitle: location || 'New trip',
+        location,
+        image,
+        places: 0,
+        days: Math.max(1, Math.round((endDate - start) / (1000 * 60 * 60 * 24)) + 1),
+        startDate: start.toISOString(),
+        endDate: endDate.toISOString(),
+        isPublic: false,
+        placesList: []
+      };
+
+      setBoards((current) => [newBoard, ...current]);
+      setSelectedBoard(newBoard);
+      setCityOptions([]);
+      setIsLocationFocused(false);
+      closeNewBoard();
+    } finally {
+      setIsCreatingBoard(false);
     }
-
-    const newBoard = {
-      id: `board-${Date.now()}`,
-      title,
-      subtitle: location || 'New trip',
-      location,
-      image: getBoardImageUrl(location || title),
-      places: 0,
-      days: Math.max(1, Math.round((endDate - start) / (1000 * 60 * 60 * 24)) + 1),
-      startDate: start.toISOString(),
-      endDate: endDate.toISOString(),
-      isPublic: false,
-      placesList: []
-    };
-
-    setBoards((current) => [newBoard, ...current]);
-    setSelectedBoard(newBoard);
-    setCityOptions([]);
-    setIsLocationFocused(false);
-    closeNewBoard();
   };
 
   const renderCreateBoardModal = () => (
@@ -330,24 +374,38 @@ function InnerApp() {
       <View style={styles.modalOverlay}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>Create new trip</Text>
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.modalForm}>
+          <ScrollView
+            ref={createBoardFormRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={styles.modalForm}
+            contentContainerStyle={styles.modalFormContent}
+          >
             <Text style={styles.modalLabel}>Trip title</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Venice Streets"
+              placeholder="e.g. Venice food weekend"
               value={draftBoard.title}
+              returnKeyType="done"
               onChangeText={(value) => setDraftBoard((current) => ({ ...current, title: value }))}
+              onSubmitEditing={Keyboard.dismiss}
               placeholderTextColor="#A1A1AA"
             />
             <Text style={styles.modalLabel}>Location</Text>
             <TextInput
+              ref={createBoardLocationInputRef}
               style={styles.modalInput}
-              placeholder="London"
+              placeholder="e.g. London, United Kingdom"
               value={draftBoard.location}
+              returnKeyType="done"
               onFocus={() => setIsLocationFocused(true)}
               onChangeText={(value) => {
                 setIsLocationFocused(true);
                 setDraftBoard((current) => ({ ...current, location: value }));
+              }}
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                setIsLocationFocused(false);
               }}
               placeholderTextColor="#A1A1AA"
             />
@@ -365,6 +423,7 @@ function InnerApp() {
                       key={option.id}
                       style={styles.cityOption}
                       onPress={() => {
+                        Keyboard.dismiss();
                         setDraftBoard((current) => ({ ...current, location: option.label }));
                         setCityOptions([]);
                         setIsLocationFocused(false);
@@ -406,7 +465,15 @@ function InnerApp() {
             <Text style={styles.modalLabel}>End date</Text>
             <TouchableOpacity
               style={[styles.modalInput, styles.modalDateButton]}
-              onPress={() => setActiveDraftDateField((current) => (current === 'endDate' ? null : 'endDate'))}
+              onPress={() => {
+                setActiveDraftDateField((current) => {
+                  const next = current === 'endDate' ? null : 'endDate';
+                  if (next === 'endDate') {
+                    scrollCreateBoardFormToEnd();
+                  }
+                  return next;
+                });
+              }}
               activeOpacity={0.78}
             >
               <Text style={[styles.modalDateText, !draftBoard.endDate && styles.modalDatePlaceholder]}>
@@ -430,8 +497,12 @@ function InnerApp() {
             <TouchableOpacity style={[styles.modalButton, styles.modalCancelButton]} onPress={closeNewBoard}>
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalButton, styles.modalSaveButton]} onPress={handleCreateBoard}>
-              <Text style={styles.modalSaveText}>Save trip</Text>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalSaveButton, isCreatingBoard && styles.modalSaveButtonDisabled]}
+              onPress={handleCreateBoard}
+              disabled={isCreatingBoard}
+            >
+              <Text style={styles.modalSaveText}>{isCreatingBoard ? 'Finding photo...' : 'Save trip'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -440,7 +511,7 @@ function InnerApp() {
   );
 
   const renderExploreContent = () => {
-    return <ExploreScreen boards={boards} onAddPublicTrip={addPublicTripToBoards} />;
+    return <ExploreScreen boards={boards} publicTrips={hydratedPublicTrips} onAddPublicTrip={addPublicTripToBoards} />;
   };
 
   const renderSelectedBoardContent = () => {
@@ -508,10 +579,6 @@ function InnerApp() {
     return (
       <>
         <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>Upcoming trips</Text>
-            <Text style={styles.sectionTitle}>Your journey preview</Text>
-          </View>
           <View style={styles.logoWrap}>
             <Text style={styles.logoText}>
               Atlas
@@ -520,11 +587,37 @@ function InnerApp() {
           </View>
         </View>
 
-        <View style={styles.verticalCards}>
-          {upcomingBoards.map((board) => (
-            <BoardCard key={board.id} board={board} onPress={openBoard} style={styles.fullBoardCard} />
-          ))}
+        <View style={styles.tripSectionHeader}>
+          <View>
+            <Text style={styles.sectionLabel}>Upcoming</Text>
+            <Text style={styles.sectionTitle}>My upcoming trips</Text>
+          </View>
+          <Text style={styles.sectionAction}>{upcomingBoards.length} planned</Text>
         </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
+          {upcomingBoards.map((board) => (
+            <BoardCard key={board.id} board={board} onPress={openBoard} />
+          ))}
+        </ScrollView>
+
+        <View style={styles.tripSectionHeader}>
+          <View>
+            <Text style={styles.sectionLabel}>Archive</Text>
+            <Text style={styles.sectionTitle}>Past trips</Text>
+          </View>
+          <Text style={styles.sectionAction}>{pastTrips.length} completed</Text>
+        </View>
+        {pastTrips.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
+            {pastTrips.map((board) => (
+              <BoardCard key={board.id} board={board} onPress={openBoard} />
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyTrips}>
+            <Text style={styles.emptyTripsText}>No past trips yet.</Text>
+          </View>
+        )}
 
         <View style={styles.createTripRow}>
           <TouchableOpacity style={styles.createTripButton} onPress={openNewBoard}>
@@ -638,28 +731,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16
   },
+  tripSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16
+  },
   logoWrap: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#E5E7EB'
   },
   logoText: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '800',
     color: '#2A0A2B'
   },
   logoDot: {
     color: '#C26CF8'
   },
-  verticalCards: {
-    marginBottom: 4
-  },
-  fullBoardCard: {
-    width: '100%',
+  horizontalCards: {
     marginBottom: 12
+  },
+  emptyTrips: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 18,
+    marginBottom: 12
+  },
+  emptyTripsText: {
+    color: '#94A3B8',
+    fontWeight: '700',
+    textAlign: 'center'
   },
   createTripRow: {
     marginTop: 0,
@@ -686,7 +794,7 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#2A0A2B',
     marginTop: 4
@@ -837,6 +945,9 @@ const styles = StyleSheet.create({
   modalForm: {
     marginBottom: 16
   },
+  modalFormContent: {
+    paddingBottom: 8
+  },
   modalLabel: {
     color: '#6F3E56',
     fontSize: 13,
@@ -943,6 +1054,9 @@ const styles = StyleSheet.create({
   },
   modalSaveButton: {
     backgroundColor: '#9C27B0'
+  },
+  modalSaveButtonDisabled: {
+    opacity: 0.72
   },
   modalSaveText: {
     color: '#FFFFFF',

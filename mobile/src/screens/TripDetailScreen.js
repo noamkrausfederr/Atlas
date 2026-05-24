@@ -1,6 +1,7 @@
-import { Animated, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { PlaceDetailScreen } from '../components/PlaceDetailModal';
 
 function startOfToday() {
   const d = new Date();
@@ -31,8 +32,8 @@ function getOrdinalSuffix(day) {
 }
 
 function formatItineraryDate(date) {
-  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' }).toLowerCase();
-  const month = date.toLocaleDateString(undefined, { month: 'long' }).toLowerCase();
+  const weekday = date.toLocaleDateString(undefined, { weekday: 'long' });
+  const month = date.toLocaleDateString(undefined, { month: 'long' });
   const day = date.getDate();
   return `${weekday}, ${day}${getOrdinalSuffix(day)} ${month}`;
 }
@@ -82,6 +83,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const dragTouchOffsetY = useRef(0);
   const dragTranslateY = useRef(new Animated.Value(0)).current;
   const dragReadyPlaceId = useRef(null);
+  const suppressPlacePressRef = useRef(false);
   const isPanDragging = useRef(false);
   const dropTargetSectionRef = useRef(null);
   const sectionRefs = useRef({});
@@ -100,6 +102,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   });
   const [activeDateField, setActiveDateField] = useState(null);
   const [linkInput, setLinkInput] = useState('');
+  const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const isPublic = Boolean(board.isPublic);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
 
@@ -201,6 +204,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   };
 
   const beginHoldingPlace = (placeId) => {
+    suppressPlacePressRef.current = true;
     measureItineraryLayouts();
     const layout = itemLayouts.current[placeId];
     const initialSectionIndex = layout?.sectionIndex ?? 0;
@@ -229,6 +233,9 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     setDraggedPlaceId(null);
     setDropTargetSectionIndex(null);
     setIsDraggingItinerary(false);
+    setTimeout(() => {
+      suppressPlacePressRef.current = false;
+    }, 0);
   };
 
   const createPlacePanHandlers = (placeId) =>
@@ -267,16 +274,16 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     if (!url) return [];
     if (url.includes('tiktok.com')) {
       return [
-        { id: `p-${Date.now()}-1`, name: `${board.title} - Highlight 1`, note: 'From TikTok', dayIndex: 0 },
-        { id: `p-${Date.now()}-2`, name: `${board.title} - Highlight 2`, note: 'From TikTok', dayIndex: 0 }
+        { id: `p-${Date.now()}-1`, name: `${board.title} - Highlight 1`, note: 'From TikTok', sourceUrl: url, dayIndex: 0 },
+        { id: `p-${Date.now()}-2`, name: `${board.title} - Highlight 2`, note: 'From TikTok', sourceUrl: url, dayIndex: 0 }
       ];
     }
     try {
       const parts = new URL(url).pathname.split('/').filter(Boolean);
       const token = parts.slice(-1)[0] || url;
-      return [{ id: `p-${Date.now()}`, name: decodeURIComponent(token), note: 'From link', dayIndex: 0 }];
+      return [{ id: `p-${Date.now()}`, name: decodeURIComponent(token), note: 'From link', sourceUrl: url, dayIndex: 0 }];
     } catch (e) {
-      return [{ id: `p-${Date.now()}`, name: url, note: 'From link', dayIndex: 0 }];
+      return [{ id: `p-${Date.now()}`, name: url, note: 'From link', sourceUrl: url, dayIndex: 0 }];
     }
   };
 
@@ -330,87 +337,100 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     onUpdateBoard?.({ isPublic: nextIsPublic });
   };
 
+  if (selectedPlaceDetail) {
+    return (
+      <PlaceDetailScreen
+        place={selectedPlaceDetail.place}
+        tripTitle={board.title}
+        location={board.location || board.subtitle}
+        dateLabel={selectedPlaceDetail.dateLabel}
+        fallbackImage={board.image}
+        onBack={() => setSelectedPlaceDetail(null)}
+      />
+    );
+  }
+
   return (
     <View style={styles.detailScreen}>
-      <View style={styles.detailHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.detailTitle} numberOfLines={2}>
-          {board.title}
-        </Text>
-      </View>
-
-      <View style={styles.privacyToggleRow}>
-        {[
-          { label: 'Public', value: true },
-          { label: 'Private', value: false }
-        ].map((option) => {
-          const active = isPublic === option.value;
-          return (
+      <ScrollView
+        contentContainerStyle={styles.detailScrollContent}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!isDraggingItinerary}
+      >
+        <View style={styles.detailHeader}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+          <View style={styles.detailTitleGroup}>
+            <Text style={styles.detailTitle} numberOfLines={2}>
+              {board.title}
+            </Text>
+            {board.location ? (
+              <Text style={styles.detailLocation} numberOfLines={1}>
+                {board.location}
+              </Text>
+            ) : null}
             <TouchableOpacity
-              key={option.label}
-              style={[styles.privacyToggleButton, active && styles.privacyToggleButtonActive]}
-              onPress={() => updatePrivacy(option.value)}
+              style={styles.privacySwitch}
+              activeOpacity={0.8}
+              onPress={() => updatePrivacy(!isPublic)}
             >
-              <Text style={[styles.privacyToggleText, active && styles.privacyToggleTextActive]}>{option.label}</Text>
+              <View style={[styles.privacySwitchThumb, isPublic ? styles.privacySwitchThumbPublic : styles.privacySwitchThumbPrivate]} />
+              <Text style={[styles.privacySwitchOption, isPublic && styles.privacySwitchOptionActive]}>Public</Text>
+              <Text style={[styles.privacySwitchOption, !isPublic && styles.privacySwitchOptionActive]}>Private</Text>
             </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <View style={styles.datesTopRow}>
-        <TouchableOpacity
-          style={[styles.dateBox, activeDateField === 'start' && styles.dateBoxActive]}
-          onPress={() => toggleDateField('start')}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.statLabel}>Start</Text>
-          <Text style={styles.datesValue}>{startDate.toDateString()}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.dateBox, styles.dateBoxLast, activeDateField === 'end' && styles.dateBoxActive]}
-          onPress={() => toggleDateField('end')}
-          activeOpacity={0.75}
-        >
-          <Text style={styles.statLabel}>End</Text>
-          <Text style={styles.datesValue}>{endDate.toDateString()}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeDateField === 'start' && (
-        <View style={styles.inlineCalendarWrap}>
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            minimumDate={today}
-            onChange={handleStartDateChange}
-            style={styles.inlineCalendar}
-          />
+          </View>
         </View>
-      )}
-      {activeDateField === 'end' && (
-        <View style={styles.inlineCalendarWrap}>
-          <DateTimePicker
-            value={endDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            minimumDate={startDate > today ? startDate : today}
-            onChange={handleEndDateChange}
-            style={styles.inlineCalendar}
-          />
-        </View>
-      )}
 
-      <View style={styles.detailBody}>
-        <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
-        <ScrollView
-          style={styles.itineraryList}
-          contentContainerStyle={styles.itineraryListContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={!isDraggingItinerary}
-        >
+        {board.image ? <Image source={{ uri: board.image }} style={styles.detailImage} /> : null}
+
+        <View style={styles.datesTopRow}>
+          <TouchableOpacity
+            style={[styles.dateBox, activeDateField === 'start' && styles.dateBoxActive]}
+            onPress={() => toggleDateField('start')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.statLabel}>Start</Text>
+            <Text style={styles.datesValue}>{startDate.toDateString()}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.dateBox, styles.dateBoxLast, activeDateField === 'end' && styles.dateBoxActive]}
+            onPress={() => toggleDateField('end')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.statLabel}>End</Text>
+            <Text style={styles.datesValue}>{endDate.toDateString()}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeDateField === 'start' && (
+          <View style={styles.inlineCalendarWrap}>
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              minimumDate={today}
+              onChange={handleStartDateChange}
+              style={styles.inlineCalendar}
+            />
+          </View>
+        )}
+        {activeDateField === 'end' && (
+          <View style={styles.inlineCalendarWrap}>
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              minimumDate={startDate > today ? startDate : today}
+              onChange={handleEndDateChange}
+              style={styles.inlineCalendar}
+            />
+          </View>
+        )}
+
+        <View style={styles.detailBody}>
+          <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
+          <View style={styles.itineraryList}>
           {itinerarySections.map((section, index) => (
             <View
               key={section.key}
@@ -465,6 +485,11 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                       <Pressable
                         delayLongPress={220}
                         onLongPress={() => beginHoldingPlace(p.id)}
+                        onPress={() => {
+                          if (!suppressPlacePressRef.current) {
+                            setSelectedPlaceDetail({ place: p, dateLabel: section.title });
+                          }
+                        }}
                         onPressOut={() => {
                           if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
                             resetDraggingState();
@@ -480,27 +505,28 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               </View>
             </View>
           ))}
-        </ScrollView>
-      </View>
+          </View>
+        </View>
 
-      <View style={styles.addLinkFooter}>
-        <View style={styles.addLinkRow}>
-          <TextInput
-            placeholder="Add recommendation link (TikTok, YouTube...)"
-            value={linkInput}
-            onChangeText={setLinkInput}
-            style={styles.linkInput}
-            keyboardType="url"
-            autoCapitalize="none"
-          />
-          <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink}>
-            <Text style={styles.detailActionText}>Add</Text>
+        <View style={styles.addLinkFooter}>
+          <View style={styles.addLinkRow}>
+            <TextInput
+              placeholder="Add recommendation link (TikTok, YouTube...)"
+              value={linkInput}
+              onChangeText={setLinkInput}
+              style={styles.linkInput}
+              keyboardType="url"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink}>
+              <Text style={styles.detailActionText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={styles.recommendationsButton} onPress={onOpenRecommendations}>
+            <Text style={styles.recommendationsButtonText}>Personal Recommendations</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.recommendationsButton} onPress={onOpenRecommendations}>
-          <Text style={styles.recommendationsButtonText}>Personal Recommendations</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -512,9 +538,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    overflow: 'hidden'
+  },
+  detailScrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    overflow: 'hidden'
+    paddingBottom: 20
   },
   detailHeader: {
     flexDirection: 'row',
@@ -533,39 +562,68 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   detailTitle: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     color: '#2A0A2B',
     textAlign: 'right'
   },
-  privacyToggleRow: {
-    alignSelf: 'flex-end',
+  detailLocation: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 3,
+    textAlign: 'right'
+  },
+  detailTitleGroup: {
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'flex-end',
+    marginRight: -4
+  },
+  privacySwitch: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    width: 136,
+    height: 34,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
     padding: 3,
-    marginTop: -8,
-    marginBottom: 14
+    marginTop: 10,
+    overflow: 'hidden'
   },
-  privacyToggleButton: {
+  privacySwitchThumb: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    width: 64,
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 13
-  },
-  privacyToggleButtonActive: {
     backgroundColor: '#F6E4F8'
   },
-  privacyToggleText: {
+  privacySwitchThumbPublic: {
+    left: 3
+  },
+  privacySwitchThumbPrivate: {
+    right: 3
+  },
+  privacySwitchOption: {
+    flex: 1,
+    zIndex: 1,
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 11,
+    textAlign: 'center',
     fontWeight: '800'
   },
-  privacyToggleTextActive: {
-    color: '#7D3DBA'
+  privacySwitchOptionActive: {
+    color: '#7D3DBA',
+    fontWeight: '800'
+  },
+  detailImage: {
+    width: '100%',
+    height: 210,
+    borderRadius: 18,
+    marginBottom: 14
   },
   datesTopRow: {
     flexDirection: 'row',
@@ -620,7 +678,6 @@ const styles = StyleSheet.create({
     color: '#2A0A2B'
   },
   detailBody: {
-    flex: 1,
     minHeight: 0
   },
   sectionTitle: {
@@ -633,10 +690,6 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   itineraryList: {
-    flex: 1
-  },
-  itineraryListContent: {
-    paddingBottom: 8,
     overflow: 'visible'
   },
   itineraryEmpty: {
@@ -713,7 +766,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 0,
     marginHorizontal: -20,
     paddingHorizontal: 20
   },
