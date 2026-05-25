@@ -8,6 +8,9 @@ export function RecommendationCard({ rec, onPress }) {
       <Text style={styles.recReason} numberOfLines={2}>
         {rec.reason}
       </Text>
+      {rec.distanceFromAccommodation ? (
+        <Text style={styles.recDistance}>{rec.distanceFromAccommodation} from your stay</Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -39,5 +42,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#7F7063'
+  },
+  recDistance: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#A8998A',
+    marginTop: 6
   },
 });

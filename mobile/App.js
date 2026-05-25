@@ -664,12 +664,10 @@ function InnerApp() {
     if (tripStack?.screen === 'recommendations') {
       const board = boards.find((item) => item.id === selectedBoard.id) ?? selectedBoard;
       return (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <ExploreMoreScreen
-            board={board}
-            onBack={() => setTripStack(null)}
-          />
-        </ScrollView>
+        <ExploreMoreScreen
+          board={board}
+          onBack={() => setTripStack(null)}
+        />
       );
     }
 

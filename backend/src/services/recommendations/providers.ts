@@ -1,4 +1,3 @@
-import { buildMockPlaces } from './mockCatalog.js';
 import { hasProviderKey, isRecommendationProviderAllowed } from '../../config/env.js';
 import {
   NormalizedPlace,
@@ -56,13 +55,18 @@ function namesLookEquivalent(left: string, right: string) {
 }
 
 function inferCategoryFromTypes(types: string[] = []): TravelCategory {
-  if (types.some((type) => type.includes('museum'))) return 'museum';
+  if (types.some((type) => type.includes('museum') || type.includes('gallery'))) return 'museum';
   if (types.some((type) => type.includes('park') || type.includes('garden'))) return 'park';
-  if (types.some((type) => type.includes('bar') || type.includes('pub'))) return 'bar';
-  if (types.some((type) => type.includes('cafe') || type.includes('coffee'))) return 'cafe';
-  if (types.some((type) => type.includes('restaurant') || type.includes('food'))) return 'restaurant';
-  if (types.some((type) => type.includes('shopping') || type.includes('store') || type.includes('shop'))) return 'shopping';
   if (types.some((type) => type.includes('lodging') || type.includes('hotel') || type.includes('accommodation'))) return 'hotel';
+  if (types.some((type) => type.includes('shopping') || type.includes('store') || type.includes('shop') || type.includes('mall') || type.includes('market'))) return 'shopping';
+  // Check for explicit standalone food/drink types before broader food-adjacent strings
+  if (types.some((type) => /^bar$|^bars$|^pub$/.test(type) || type.includes('pub'))) return 'bar';
+  if (types.some((type) => /^cafe$|^cafes$|^coffee$/.test(type) || type.includes('coffee_shop'))) return 'cafe';
+  if (types.some((type) => /^restaurant$|^restaurants$/.test(type))) return 'restaurant';
+  // Broader food/drink inference only when no landmark type matched above
+  if (types.some((type) => type === 'catering.bar' || type === 'catering.pub')) return 'bar';
+  if (types.some((type) => type === 'catering.cafe' || type === 'catering.coffee_shop')) return 'cafe';
+  if (types.some((type) => type === 'catering.restaurant' || type === 'catering.fast_food')) return 'restaurant';
   return 'attraction';
 }
 
@@ -70,15 +74,21 @@ function inferCategoryFromWikipedia(title: string, categories: string[] = []): T
   return inferCategoryFromTypes([title.toLowerCase(), ...categories.map((category) => category.toLowerCase())]);
 }
 
+const FETCH_TIMEOUT_MS = 8000;
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url, init);
+    const response = await fetch(url, { ...init, signal: controller.signal });
     if (!response.ok) {
       return null;
     }
     return (await response.json()) as T;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -86,7 +96,7 @@ function buildFoursquareHeaders() {
   return {
     accept: 'application/json',
     Authorization: process.env.FOURSQUARE_API_KEY as string,
-    'X-Places-Api-Version': '1970-01-01'
+    'X-Places-Api-Version': '20231010'
   };
 }
 
@@ -210,6 +220,23 @@ function buildTicketmasterAddress(venue?: {
     .join(', ');
 }
 
+const EVENT_GENERIC_TERMS = new Set([
+  'concert', 'concerts', 'show', 'shows', 'theatre', 'theater',
+  'performance', 'performances', 'event', 'events', 'gig', 'gigs',
+  'festival', 'festivals', 'live', 'ticket', 'tickets', 'music',
+  'musical', 'musicals', 'opera', 'ballet', 'comedy'
+]);
+
+function extractTicketmasterKeyword(query?: string): string | undefined {
+  if (!query) return undefined;
+  const tokens = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length >= 2 && !EVENT_GENERIC_TERMS.has(token));
+  return tokens.length ? tokens.join(' ') : undefined;
+}
+
 function mapCategoryToTicketmasterClassifications(category: TravelCategory) {
   switch (category) {
     case 'restaurant':
@@ -229,6 +256,10 @@ function mapCategoryToTicketmasterClassifications(category: TravelCategory) {
   }
 }
 
+function toTicketmasterDateTime(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function formatTicketmasterDateBoundary(dateValue: string | undefined, boundary: 'start' | 'end') {
   if (!dateValue) {
     return undefined;
@@ -236,19 +267,19 @@ function formatTicketmasterDateBoundary(dateValue: string | undefined, boundary:
 
   const normalized = dateValue.includes('T')
     ? dateValue
-    : `${dateValue}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}Z`;
+    : `${dateValue}T${boundary === 'start' ? '00:00:00' : '23:59:59'}Z`;
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return undefined;
   }
 
   if (!dateValue.includes('T')) {
-    return parsed.toISOString();
+    return toTicketmasterDateTime(parsed);
   }
 
   return boundary === 'start'
-    ? new Date(parsed.setUTCHours(0, 0, 0, 0)).toISOString()
-    : new Date(parsed.setUTCHours(23, 59, 59, 999)).toISOString();
+    ? toTicketmasterDateTime(new Date(parsed.setUTCHours(0, 0, 0, 0)))
+    : toTicketmasterDateTime(new Date(parsed.setUTCHours(23, 59, 59, 0)));
 }
 
 function isTicketmasterEventInTripRange(
@@ -292,17 +323,6 @@ function isTicketmasterEventInTripRange(
   return true;
 }
 
-class MockProvider implements RecommendationProvider {
-  name = 'mock' as const;
-
-  enabled() {
-    return true;
-  }
-
-  async fetchPlaces(context: ProviderContext): Promise<NormalizedPlace[]> {
-    return buildMockPlaces(context.destination, context.categories).slice(0, context.limit);
-  }
-}
 
 class WikipediaProvider implements RecommendationProvider {
   name = 'wikipedia' as const;
@@ -930,16 +950,21 @@ class TicketmasterProvider implements RecommendationProvider {
       new Set(requestedCategories.flatMap((category) => mapCategoryToTicketmasterClassifications(category)))
     );
 
+    const eventKeyword = extractTicketmasterKeyword(context.query);
+
     const payloads = await Promise.all(
       classifications.map((classificationName) => {
         const searchUrl = new URL('https://app.ticketmaster.com/discovery/v2/events.json');
         searchUrl.searchParams.set('apikey', process.env.TICKETMASTER_API_KEY as string);
         searchUrl.searchParams.set('classificationName', classificationName);
+        if (eventKeyword) {
+          searchUrl.searchParams.set('keyword', eventKeyword);
+        }
         searchUrl.searchParams.set('size', String(Math.min(context.limit * 2, 20)));
         searchUrl.searchParams.set('sort', 'date,asc');
         searchUrl.searchParams.set('locale', '*');
         searchUrl.searchParams.set('unit', 'km');
-        searchUrl.searchParams.set('radius', String(Math.min(Math.max(Math.round(context.radiusMeters / 1000), 5), 100)));
+        searchUrl.searchParams.set('radius', '50');
         const startDateTime = formatTicketmasterDateBoundary(context.startDate, 'start');
         const endDateTime = formatTicketmasterDateBoundary(context.endDate, 'end');
         if (startDateTime) {
@@ -956,7 +981,8 @@ class TicketmasterProvider implements RecommendationProvider {
         if (context.latitude != null && context.longitude != null) {
           searchUrl.searchParams.set('latlong', `${context.latitude},${context.longitude}`);
         } else {
-          searchUrl.searchParams.set('keyword', context.destination);
+          const cityName = context.destination.split(',')[0].trim();
+          searchUrl.searchParams.set('city', cityName);
         }
 
         return fetchJson<{
@@ -1478,7 +1504,7 @@ function mapCategoryToOpenTripMapKind(category: TravelCategory) {
     case 'shopping':
       return 'shops';
     case 'hotel':
-      return 'accomodations';
+      return 'accommodations';
     case 'experience':
     case 'attraction':
     default:
@@ -1582,7 +1608,6 @@ export function buildProviders(): RecommendationProvider[] {
     new OpenTripMapProvider(),
     new GooglePlacesProvider(),
     new TripadvisorProvider(),
-    new YelpProvider(),
-    new MockProvider()
+    new YelpProvider()
   ];
 }

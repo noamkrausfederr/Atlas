@@ -11,6 +11,7 @@ export type TravelCategory =
 
 export interface RecommendationRequest {
   destination: string;
+  query?: string;
   startDate?: string;
   endDate?: string;
   latitude?: number;
@@ -76,6 +77,7 @@ export interface RecommendationResponse {
 
 export interface ProviderContext {
   destination: string;
+  query?: string;
   startDate?: string;
   endDate?: string;
   latitude?: number;

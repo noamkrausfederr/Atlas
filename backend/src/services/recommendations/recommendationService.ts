@@ -11,6 +11,7 @@ import {
 } from './types.js';
 
 const DEFAULT_CATEGORIES: TravelCategory[] = ['restaurant', 'cafe', 'attraction'];
+const EVENT_QUERY_PATTERN = /\b(concert|concerts|show|shows|theatre|theater|performance|performances|event|events|gig|gigs|festival|festivals|opera|ballet|comedy|live music|musical|musicals)\b/i;
 const recommendationCache = new MemoryCache<RecommendationResponse>(1000 * 60 * 15);
 const FOOD_AND_DRINK_CATEGORIES = new Set<TravelCategory>(['restaurant', 'cafe', 'bar']);
 const LANDMARK_STOP_WORDS = new Set([
@@ -62,6 +63,45 @@ const LANDMARK_STOP_WORDS = new Set([
   'paul',
   'ii'
 ]);
+const HISTORICAL_FACT_TERMS = [
+  'bombing attempt',
+  'bombing',
+  'terrorist attack',
+  'attack',
+  'assassination',
+  'massacre',
+  'riot',
+  'revolt',
+  'uprising',
+  'battle',
+  'war',
+  'fire',
+  'collapse',
+  'accident',
+  'disaster',
+  'incident',
+  'siege',
+  'execution'
+];
+const NON_ACTIONABLE_SUBFEATURE_TERMS = [
+  'spire',
+  'transept',
+  'facade',
+  'façade',
+  'roof space',
+  'cross-section',
+  'foundation stone',
+  'bell tower'
+];
+const NON_ACTIONABLE_ATTRACTION_TAGS = [
+  'artwork',
+  'sculpture',
+  'memorial',
+  'historic_architecture',
+  'monuments_and_memorials'
+];
+const ACTIONABLE_ATTRACTION_TAG_PATTERN =
+  /(museum|gallery|shopping|mall|market|park|garden|theatre|theater|cinema|venue|tour|cruise|boat|castle|palace|cathedral|church|tower|zoo|aquarium|amusement|theme_park)/i;
 
 function categoryMatchesRequest(placeCategory: TravelCategory, requestedCategories: TravelCategory[] = []) {
   if (requestedCategories.includes(placeCategory)) {
@@ -72,6 +112,10 @@ function categoryMatchesRequest(placeCategory: TravelCategory, requestedCategori
     (placeCategory === 'experience' && requestedCategories.includes('attraction')) ||
     (placeCategory === 'attraction' && requestedCategories.includes('experience'))
   );
+}
+
+function tokenizeQuery(value?: string) {
+  return Array.from(tokenizeForSimilarity(value));
 }
 
 function scorePlace(place: NormalizedPlace, request: RecommendationRequest) {
@@ -104,6 +148,13 @@ function scorePlace(place: NormalizedPlace, request: RecommendationRequest) {
     score += 4;
   }
 
+  const queryTokens = tokenizeQuery(request.query);
+  if (queryTokens.length) {
+    const searchableText = [place.name, place.description, place.address, ...place.tags].filter(Boolean).join(' ').toLowerCase();
+    const queryMatches = queryTokens.filter((token) => searchableText.includes(token)).length;
+    score += queryMatches * 12;
+  }
+
   return score;
 }
 
@@ -124,18 +175,69 @@ function cleanRecommendationSummary(place: NormalizedPlace) {
   return description;
 }
 
-function buildReason(place: NormalizedPlace, request: RecommendationRequest) {
-  const vibeLine = request.vibeTags?.length
-    ? `Matches ${request.vibeTags.slice(0, 2).join(' and ')} vibes.`
-    : 'Fits the destination rhythm well.';
-  const socialProof = place.rating && place.reviewCount
-    ? `Strong signal from ${place.reviewCount} reviews with a ${place.rating.toFixed(1)} rating.`
-    : 'Worth validating with live provider details.';
-
-  return `${cleanRecommendationSummary(place)}. ${vibeLine} ${socialProof}`;
+function buildReason(place: NormalizedPlace, _request: RecommendationRequest) {
+  return cleanRecommendationSummary(place);
 }
 
-function rankPlaces(places: NormalizedPlace[], request: RecommendationRequest): RankedRecommendation[] {
+function textIncludesAnyTerm(value: string, terms: string[]) {
+  const normalized = value.normalize('NFKD').replace(/[^\w\s-]/g, ' ').toLowerCase();
+  return terms.some((term) => normalized.includes(term));
+}
+
+function isHistoricalFactLike(place: NormalizedPlace) {
+  const joinedText = [place.name, place.description, ...place.tags].filter(Boolean).join(' ');
+  if (!joinedText) {
+    return false;
+  }
+
+  if (textIncludesAnyTerm(joinedText, HISTORICAL_FACT_TERMS)) {
+    return true;
+  }
+
+  return /\bon\s+\d{1,2}\s+[A-Z][a-z]+\s+\d{4}\b/.test(place.description ?? '');
+}
+
+function isActionableAttraction(place: NormalizedPlace) {
+  if (place.category !== 'attraction') {
+    return true;
+  }
+
+  const joinedText = [place.name, place.description, ...place.tags].filter(Boolean).join(' ');
+  if (textIncludesAnyTerm(joinedText, NON_ACTIONABLE_SUBFEATURE_TERMS)) {
+    return false;
+  }
+
+  if (place.tags.some((tag) => NON_ACTIONABLE_ATTRACTION_TAGS.some((blocked) => tag.toLowerCase().includes(blocked)))) {
+    return false;
+  }
+
+  const hasRealLocationSignal = Boolean(place.address || place.websiteUrl || (place.lat != null && place.lng != null));
+  const hasVenueLikeTag = place.tags.some((tag) => ACTIONABLE_ATTRACTION_TAG_PATTERN.test(tag));
+
+  return hasRealLocationSignal && hasVenueLikeTag;
+}
+
+function isTicketmasterPlace(place: NormalizedPlace) {
+  return place.sourceAttributions.some((source) => source.provider === 'ticketmaster');
+}
+
+function isActionableRecommendation(place: NormalizedPlace) {
+  if (isTicketmasterPlace(place)) {
+    return true;
+  }
+
+  if (isHistoricalFactLike(place)) {
+    return false;
+  }
+
+  return isActionableAttraction(place);
+}
+
+function isEventSearch(request: RecommendationRequest): boolean {
+  return EVENT_QUERY_PATTERN.test(request.query ?? '');
+}
+
+export function rankPlaces(places: NormalizedPlace[], request: RecommendationRequest): RankedRecommendation[] {
   return places
     .map((place) => ({
       ...place,
@@ -207,12 +309,26 @@ function areTooSimilar(left: RankedRecommendation, right: RankedRecommendation) 
   return countOverlap(combinedLeft, combinedRight) >= 2;
 }
 
-function selectRecommendations(ranked: RankedRecommendation[], limit: number) {
-  const preferredProviders: Array<PlaceSourceAttribution['provider']> = ['geoapify', 'opentripmap', 'ticketmaster'];
+function selectRecommendations(ranked: RankedRecommendation[], limit: number, preferEvents = false) {
   const selected: RankedRecommendation[] = [];
   const selectedIds = new Set<string>();
 
+  if (preferEvents) {
+    for (const place of ranked) {
+      if (selected.length >= limit) break;
+      if (!hasProvider(place, 'ticketmaster')) continue;
+      if (selectedIds.has(place.canonicalId)) continue;
+      if (selected.some((candidate) => areTooSimilar(candidate, place))) continue;
+      selected.push(place);
+      selectedIds.add(place.canonicalId);
+    }
+    return selected;
+  }
+
+  const preferredProviders: Array<PlaceSourceAttribution['provider']> = ['geoapify', 'opentripmap', 'ticketmaster'];
+
   for (const provider of preferredProviders) {
+    if (selected.length >= limit) break;
     const match = ranked.find(
       (place) =>
         !selectedIds.has(place.canonicalId) &&
@@ -222,19 +338,14 @@ function selectRecommendations(ranked: RankedRecommendation[], limit: number) {
     if (!match) continue;
     selected.push(match);
     selectedIds.add(match.canonicalId);
-    if (selected.length >= limit) {
-      return selected;
-    }
   }
 
   for (const place of ranked) {
+    if (selected.length >= limit) break;
     if (selectedIds.has(place.canonicalId)) continue;
     if (selected.some((candidate) => areTooSimilar(candidate, place))) continue;
     selected.push(place);
     selectedIds.add(place.canonicalId);
-    if (selected.length >= limit) {
-      break;
-    }
   }
 
   return selected;
@@ -245,6 +356,7 @@ export async function getRecommendations(request: RecommendationRequest): Promis
   const excludeCanonicalIds = Array.from(new Set((request.excludeCanonicalIds ?? []).filter(Boolean))).sort();
   const cacheKey = JSON.stringify({
     destination: request.destination.trim().toLowerCase(),
+    query: request.query?.trim().toLowerCase(),
     startDate: request.startDate,
     endDate: request.endDate,
     latitude: request.latitude,
@@ -267,41 +379,42 @@ export async function getRecommendations(request: RecommendationRequest): Promis
 
   const providers = buildProviders();
   const categories = request.categories?.length ? request.categories : DEFAULT_CATEGORIES;
-  const providerFetchLimit = Math.min(Math.max(limit + excludeCanonicalIds.length, limit), 40);
+  const providerFetchLimit = Math.min(limit + excludeCanonicalIds.length, 40);
   const resolvedCoordinates =
     request.latitude != null && request.longitude != null
       ? { latitude: request.latitude, longitude: request.longitude }
       : await geocodeDestination(request.destination);
   const providerContext = {
     destination: request.destination,
+    query: request.query,
     startDate: request.startDate,
     endDate: request.endDate,
     latitude: resolvedCoordinates?.latitude,
     longitude: resolvedCoordinates?.longitude,
-    radiusMeters: request.radiusMeters ?? 2000,
+    radiusMeters: request.radiusMeters ?? (isEventSearch(request) ? 50000 : 2000),
     categories,
     limit: providerFetchLimit
   };
 
-  const enabledNonMockProviders = providers.filter((provider) => provider.name !== 'mock' && provider.enabled());
+  const eventSearch = isEventSearch(request);
   const fetched = await Promise.all(
-    (enabledNonMockProviders.length ? enabledNonMockProviders : providers.filter((provider) => provider.name === 'mock'))
+    providers
+      .filter((provider) => provider.enabled())
+      .filter((provider) => !eventSearch || provider.name === 'ticketmaster')
       .map((provider) => provider.fetchPlaces(providerContext))
   );
 
-  const places = dedupePlaces(fetched.flat());
+  const places = dedupePlaces(fetched.flat()).filter(isActionableRecommendation);
   const excludedIds = new Set(excludeCanonicalIds);
   const unseenPlaces = rankPlaces(places, request).filter((place) => !excludedIds.has(place.canonicalId));
-  const ranked = selectRecommendations(unseenPlaces, limit);
-  const providersUsed = ranked.length
-    ? Array.from(new Set(ranked.flatMap((place) => place.sourceAttributions.map((source) => source.provider))))
-    : ['mock' as const];
+  const ranked = selectRecommendations(unseenPlaces, limit, eventSearch);
+  const providersUsed = Array.from(new Set(ranked.flatMap((place) => place.sourceAttributions.map((source) => source.provider))));
 
   const response = {
     destination: request.destination,
     recommendations: ranked,
     providersUsed,
-    usedMockData: providersUsed.length === 1 && providersUsed[0] === 'mock'
+    usedMockData: false
   };
 
   if (!request.bypassCache) {

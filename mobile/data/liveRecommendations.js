@@ -2,8 +2,38 @@ import { NativeModules, Platform } from 'react-native';
 import { formatDateRange } from './recommendations';
 
 const recommendationCache = new Map();
+const accommodationGeoCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 10;
 const RECOMMENDATION_BATCH_SIZE = 10;
+
+async function geocodeAccommodation(address) {
+  const key = address.trim().toLowerCase();
+  if (accommodationGeoCache.has(key)) return accommodationGeoCache.get(key);
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'TripBoard/0.1' } });
+    const data = await res.json();
+    if (data?.[0]?.lat && data?.[0]?.lon) {
+      const coords = { lat: Number(data[0].lat), lng: Number(data[0].lon) };
+      accommodationGeoCache.set(key, coords);
+      return coords;
+    }
+  } catch {}
+  return null;
+}
+
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(km) {
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(1)} km`;
+}
 
 function getDevServerHost() {
   const scriptUrl = NativeModules?.SourceCode?.scriptURL;
@@ -102,26 +132,32 @@ function getApiBaseUrls() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   const devHost = getDevServerHost();
 
+  const urls = [];
+
   if (configured) {
     const normalized = configured.replace(/\/$/, '');
-    const alternate =
-      devHost && /:\/\/(localhost|127\.0\.0\.1)(?::|\/)/.test(normalized)
-        ? normalized.replace('localhost', devHost).replace('127.0.0.1', devHost)
-        : null;
-    return dedupe([normalized, alternate]);
+    urls.push(normalized);
+    
+    const fallbackPort = normalized.replace(/:\d+(\/|$)/, ':5005$1');
+    if (fallbackPort !== normalized) {
+      urls.push(fallbackPort);
+    }
+  }
+
+  if (devHost) {
+    urls.push(`http://${devHost}:5005/api`);
+    urls.push(`http://${devHost}:5000/api`);
   }
 
   if (Platform.OS === 'android') {
-    return dedupe([
-      'http://10.0.2.2:5001/api',
-      devHost ? `http://${devHost}:5001/api` : null
-    ]);
+    urls.push('http://10.0.2.2:5005/api');
+    urls.push('http://10.0.2.2:5000/api');
+  } else {
+    urls.push('http://localhost:5005/api');
+    urls.push('http://localhost:5000/api');
   }
 
-  return dedupe([
-    devHost ? `http://${devHost}:5001/api` : null,
-    'http://localhost:5001/api'
-  ]);
+  return dedupe(urls);
 }
 
 async function fetchRecommendationsPayload(requestBody) {
@@ -182,6 +218,8 @@ function formatPrice(priceLevel) {
 
 function humanizeCategory(category) {
   if (!category) return 'Place';
+  const normalized = category.trim().toLowerCase();
+  if (normalized === 'shooping') return 'Shopping';
   return category
     .split(/[_\s-]+/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -221,6 +259,42 @@ function mapBudget(value) {
 
 function getDestination(board) {
   return board.location || board.subtitle || board.title || 'Your destination';
+}
+
+function inferCategoriesFromSearch(searchQuery) {
+  const normalized = normalizeText(searchQuery);
+  if (!normalized) {
+    return ['restaurant', 'cafe', 'attraction', 'experience', 'museum', 'shopping', 'bar', 'park'];
+  }
+
+  const categories = new Set();
+
+  if (/\b(museum|museums|gallery|galleries|exhibit|exhibition)\b/.test(normalized)) {
+    categories.add('museum');
+  }
+  if (/\b(cafe|cafes|coffee|espresso|bakery|breakfast|brunch)\b/.test(normalized)) {
+    categories.add('cafe');
+  }
+  if (/\b(restaurant|restaurants|food|dinner|lunch|bistro|eat|eats|meal)\b/.test(normalized)) {
+    categories.add('restaurant');
+  }
+  if (/\b(bar|bars|cocktail|cocktails|wine|pub|nightlife)\b/.test(normalized)) {
+    categories.add('bar');
+  }
+  if (/\b(shop|shops|shopping|shooping|shoops|mall|malls|market|markets|boutique|store|stores)\b/.test(normalized)) {
+    categories.add('shopping');
+  }
+  if (/\b(park|parks|garden|gardens|picnic|nature)\b/.test(normalized)) {
+    categories.add('park');
+  }
+  if (/\b(concert|concerts|show|shows|music|theater|theatre|performance|performances|event|events)\b/.test(normalized)) {
+    categories.add('experience');
+  }
+  if (/\b(attraction|attractions|landmark|landmarks|sight|sights|things to do|activity|activities)\b/.test(normalized)) {
+    categories.add('attraction');
+  }
+
+  return Array.from(categories.size ? categories : ['attraction']);
 }
 
 function mapApiRecommendation(board, item, dayLabel) {
@@ -276,27 +350,45 @@ function mapApiRecommendation(board, item, dayLabel) {
   };
 }
 
-function buildCacheKey(board) {
-  return `${board.id}:${getDestination(board)}:${getTripDays(board)}:${board.budget || ''}:${board.subtitle || ''}:${board.startDate || ''}:${board.endDate || ''}`;
+function buildCacheKey(board, searchQuery = '') {
+  return `${board.id}:${getDestination(board)}:${getTripDays(board)}:${board.budget || ''}:${board.subtitle || ''}:${board.startDate || ''}:${board.endDate || ''}:${normalizeText(searchQuery)}`;
+}
+
+export async function autocompleteAccommodation(text, destination) {
+  if (!text || text.trim().length < 2) return [];
+  const baseUrls = getApiBaseUrls();
+  for (const baseUrl of baseUrls) {
+    try {
+      const params = new URLSearchParams({ text: text.trim() });
+      if (destination) params.set('destination', destination);
+      const res = await fetch(`${baseUrl}/geocode/autocomplete?${params}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      return data.suggestions ?? [];
+    } catch {}
+  }
+  return [];
 }
 
 export async function fetchBoardRecommendations(board, options = {}) {
-  const { loadMore = false } = options;
-  const cacheKey = buildCacheKey(board);
+  const { loadMore = false, searchQuery = '' } = options;
+  const trimmedSearchQuery = String(searchQuery || '').trim();
+  const cacheKey = buildCacheKey(board, trimmedSearchQuery);
   const cached = recommendationCache.get(cacheKey);
-  if (!loadMore && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+  if (!loadMore && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS && !cached.value.meta.usedMockData) {
     return cached.value;
   }
 
   const tripDays = getTripDays(board);
   const requestBody = {
     destination: getDestination(board),
+    query: trimmedSearchQuery,
     startDate: board.startDate,
     endDate: board.endDate,
     tripDays,
     budget: mapBudget(board.budget),
     vibeTags: buildVibeTags(board),
-    categories: ['restaurant', 'cafe', 'attraction', 'experience', 'museum', 'shopping', 'bar', 'park'],
+    categories: inferCategoriesFromSearch(trimmedSearchQuery),
     limit: RECOMMENDATION_BATCH_SIZE,
     excludeCanonicalIds: loadMore
       ? getSeenRecommendations(cached).map((recommendation) => recommendation.canonicalId).filter(Boolean)
@@ -305,12 +397,20 @@ export async function fetchBoardRecommendations(board, options = {}) {
   };
 
   try {
-    const { payload } = await fetchRecommendationsPayload(requestBody);
+    const [{ payload }, accommodationCoords] = await Promise.all([
+      fetchRecommendationsPayload(requestBody),
+      board.accommodation?.trim() ? geocodeAccommodation(board.accommodation.trim()) : Promise.resolve(null)
+    ]);
     const liveItems = payload.recommendations || [];
     const dayLabels = assignDayLabels(liveItems.length || 1, tripDays);
-    const nextRecommendations = liveItems.map((item, index) =>
-      mapApiRecommendation(board, item, dayLabels[index] ?? `Day ${Math.min(index + 1, tripDays)}`)
-    );
+    const nextRecommendations = liveItems.map((item, index) => {
+      const rec = mapApiRecommendation(board, item, dayLabels[index] ?? `Day ${Math.min(index + 1, tripDays)}`);
+      if (accommodationCoords && item.lat != null && item.lng != null) {
+        const km = distanceKm(accommodationCoords.lat, accommodationCoords.lng, item.lat, item.lng);
+        rec.distanceFromAccommodation = formatDistance(km);
+      }
+      return rec;
+    });
     const newRecommendations = loadMore
       ? filterPreviouslySeenRecommendations(nextRecommendations, getSeenRecommendations(cached))
       : nextRecommendations;
@@ -326,6 +426,7 @@ export async function fetchBoardRecommendations(board, options = {}) {
         usedMockData: Boolean(payload.usedMockData),
         providersUsed: payload.providersUsed || [],
         formatDateRange: formatDateRange(board),
+        searchQuery: trimmedSearchQuery,
         hasMore: newRecommendations.length > 0
       }
     };
@@ -342,6 +443,7 @@ export async function fetchBoardRecommendations(board, options = {}) {
         providersUsed: [],
         error: error instanceof Error ? error.message : 'Unknown recommendation error',
         formatDateRange: formatDateRange(board),
+        searchQuery: trimmedSearchQuery,
         hasMore: false
       }
     };

@@ -1,6 +1,7 @@
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RecommendationCard } from '../components/RecommendationCard';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { formatDateRange } from '../../data/recommendations';
@@ -815,8 +816,10 @@ function FilterChips({ label, options, value, onChange, compact = false }) {
 
 export function ExploreMoreScreen({ board, onBack }) {
   const [recommendations, setRecommendations] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [sourceMeta, setSourceMeta] = useState({
     usedFallback: false,
     usedMockData: false,
@@ -824,50 +827,97 @@ export function ExploreMoreScreen({ board, onBack }) {
     error: '',
     hasMore: true
   });
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const hasSearched = Boolean(activeSearchQuery);
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 8 + 44 + Math.max(insets.bottom, 6) + 8;
 
   useEffect(() => {
-    let isMounted = true;
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    const loadRecommendations = async () => {
-      setIsLoading(true);
-
-      let result = await fetchBoardRecommendations(board);
-      let remainingBatches = 8;
-
-      while (result.meta.hasMore && remainingBatches > 0) {
-        result = await fetchBoardRecommendations(board, { loadMore: true });
-        remainingBatches -= 1;
-      }
-
-      if (!isMounted) return;
-
-      setRecommendations(result.recommendations);
-      setSourceMeta(result.meta);
-      setIsLoading(false);
+    const handleKeyboardShow = (event) => {
+      setKeyboardHeight(event.endCoordinates?.height ?? 0);
     };
 
-    loadRecommendations();
+    const handleKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSubscription = Keyboard.addListener(hideEvent, handleKeyboardHide);
 
     return () => {
-      isMounted = false;
+      showSubscription.remove();
+      hideSubscription.remove();
     };
-  }, [board]);
+  }, []);
+
+  const runSearch = async () => {
+    const trimmedSearchQuery = searchInput.trim();
+    if (!trimmedSearchQuery) {
+      setActiveSearchQuery('');
+      setRecommendations([]);
+      setSourceMeta({
+        usedFallback: false,
+        usedMockData: false,
+        providersUsed: [],
+        error: '',
+        hasMore: true
+      });
+      return;
+    }
+
+    Keyboard.dismiss();
+    setSearchInput('');
+    setIsLoading(true);
+    setActiveSearchQuery(trimmedSearchQuery);
+
+    let result = await fetchBoardRecommendations(board, { searchQuery: trimmedSearchQuery });
+    let remainingBatches = 8;
+    const seenProviders = new Set((result.meta.providersUsed || []).filter((p) => p !== 'mock'));
+
+    while (result.meta.hasMore && remainingBatches > 0) {
+      result = await fetchBoardRecommendations(board, { loadMore: true, searchQuery: trimmedSearchQuery });
+      remainingBatches -= 1;
+      (result.meta.providersUsed || []).filter((p) => p !== 'mock').forEach((p) => seenProviders.add(p));
+    }
+
+    const allProviders = seenProviders.size > 0 ? Array.from(seenProviders) : ['mock'];
+    setRecommendations(result.recommendations);
+    setSourceMeta({ ...result.meta, providersUsed: allProviders, usedMockData: seenProviders.size === 0 });
+    setIsLoading(false);
+  };
+
+  const bottomMargin = Platform.OS === 'ios' && keyboardHeight > 0
+    ? keyboardHeight - tabBarHeight + 12
+    : 16;
 
   return (
-    <View style={styles.exploreSubScreen}>
+    <View style={[styles.exploreSubScreen, { flex: 1, paddingBottom: 0 }]}>
       <View style={styles.exploreSubHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
         <View style={styles.exploreSubHeaderText}>
           <Text style={styles.exploreSubTitle}>{board.title}</Text>
-          <Text style={styles.exploreSubMeta}>{formatDateRange(board)} · {recommendations.length} activities</Text>
-          {sourceMeta.providersUsed?.length ? (
-            <Text style={styles.recommendationSourceMeta}>
-              {`Live from ${sourceMeta.providersUsed.join(', ')}.`}
+          {board.location ? (
+            <Text style={[styles.exploreSubMeta, { color: '#887462', marginBottom: 2, marginTop: 2 }]}>
+              {board.location}
             </Text>
           ) : null}
-          {sourceMeta.error ? (
+          <Text style={styles.exploreSubMeta}>
+            {hasSearched ? `${formatDateRange(board)} · ${recommendations.length} activities` : formatDateRange(board)}
+          </Text>
+          {hasSearched && sourceMeta.providersUsed?.length ? (
+            <Text style={styles.recommendationSourceMeta}>
+              {`Live from ${sourceMeta.providersUsed
+                .map((p) => ({ geoapify: 'Geoapify', wikipedia: 'Wikipedia', opentripmap: 'OpenTripMap', ticketmaster: 'Ticketmaster', foursquare: 'Foursquare', google: 'Google', tripadvisor: 'Tripadvisor', yelp: 'Yelp', mock: 'mock data' }[p] ?? p))
+                .join(', ')}.`}
+            </Text>
+          ) : null}
+          {hasSearched && sourceMeta.error ? (
             <Text style={styles.recommendationErrorMeta}>
               {sourceMeta.error}
             </Text>
@@ -875,22 +925,67 @@ export function ExploreMoreScreen({ board, onBack }) {
         </View>
       </View>
 
-      {isLoading ? (
-        <View style={styles.recommendationStateCard}>
-          <ActivityIndicator color="#A97C50" />
-          <Text style={styles.recommendationStateText}>Finding live recommendations...</Text>
-        </View>
-      ) : null}
+      <ScrollView
+        style={styles.recommendationsListContainer}
+        contentContainerStyle={styles.recommendationsListContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {hasSearched ? (
+          <View style={styles.userQueryBubbleRow}>
+            <View style={styles.userQueryBubble}>
+              <Text style={styles.userQueryBubbleText}>{activeSearchQuery}</Text>
+            </View>
+          </View>
+        ) : null}
 
-      {!isLoading && !recommendations.length ? (
-        <View style={styles.recommendationStateCard}>
-          <Text style={styles.recommendationStateText}>No recommendations yet for this trip.</Text>
-        </View>
-      ) : null}
+        {isLoading ? (
+          <View style={styles.recommendationStateCard}>
+            <ActivityIndicator color="#A97C50" />
+            <Text style={styles.recommendationStateText}>Finding {activeSearchQuery.toLowerCase()}...</Text>
+          </View>
+        ) : null}
 
-      {recommendations.map((rec) => (
-        <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
-      ))}
+        {!isLoading && !hasSearched ? (
+          <View style={styles.recommendationStateCard}>
+            <Text style={styles.recommendationStateText}>
+              Start with a search like museums, cafes, shopping, or concerts.
+            </Text>
+          </View>
+        ) : null}
+
+        {!isLoading && hasSearched && !recommendations.length ? (
+          <View style={styles.recommendationStateCard}>
+            <Text style={styles.recommendationStateText}>{`No results yet for "${activeSearchQuery}".`}</Text>
+          </View>
+        ) : null}
+
+        {recommendations.map((rec) => (
+          <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
+        ))}
+      </ScrollView>
+
+      <View style={[styles.recommendationSearchComposer, { marginBottom: bottomMargin }]}>
+        <Text style={styles.recommendationSearchLabel}>What are we looking for?</Text>
+        <View style={styles.recommendationSearchRow}>
+          <TextInput
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder="Museums, cafes, shopping, concerts..."
+            placeholderTextColor="#B1A294"
+            style={styles.recommendationSearchInput}
+            returnKeyType="search"
+            onSubmitEditing={runSearch}
+          />
+          <TouchableOpacity
+            onPress={runSearch}
+            style={[styles.recommendationSearchButton, !searchInput.trim() && styles.recommendationSearchButtonDisabled]}
+            disabled={!searchInput.trim()}
+          >
+            <Text style={styles.recommendationSearchButtonText}>Search</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <PlaceDetailModal
         visible={Boolean(selectedRecommendation)}
@@ -1451,6 +1546,10 @@ const styles = StyleSheet.create({
   exploreSubScreen: {
     paddingBottom: 24
   },
+  exploreSubScreenEmpty: {
+    minHeight: 720,
+    justifyContent: 'space-between'
+  },
   exploreSubHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1525,4 +1624,83 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center'
   },
+  recommendationSearchComposer: {
+    marginTop: 18,
+    marginBottom: 16,
+    backgroundColor: '#FFF8F0',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    padding: 14
+  },
+  recommendationSearchLabel: {
+    color: '#7F7063',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 10
+  },
+  recommendationSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  recommendationSearchInput: {
+    flex: 1,
+    minHeight: 48,
+    backgroundColor: '#F1E7DA',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    paddingHorizontal: 14,
+    color: '#4B3A32',
+    fontSize: 14
+  },
+  recommendationSearchButton: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: '#E6A6B3',
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  recommendationSearchButtonDisabled: {
+    backgroundColor: '#DCC8CC'
+  },
+  recommendationSearchButtonText: {
+    color: '#FFF8F0',
+    fontSize: 13,
+    fontWeight: '800'
+  },
+  keyboardAvoidingContainer: {
+    flex: 1
+  },
+  recommendationsListContainer: {
+    flex: 1
+  },
+  recommendationsListContent: {
+    paddingBottom: 16
+  },
+  userQueryBubbleRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 16,
+    marginTop: 4
+  },
+  userQueryBubble: {
+    maxWidth: '82%',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#E6A6B3',
+    borderWidth: 1,
+    borderColor: '#DCC8CC'
+  },
+  userQueryBubbleText: {
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#FFF8F0',
+    fontWeight: '600'
+  }
 });

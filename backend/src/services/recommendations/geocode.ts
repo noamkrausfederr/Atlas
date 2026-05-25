@@ -15,10 +15,23 @@ export async function geocodeDestination(destination: string): Promise<Coordinat
     return cached;
   }
 
+  let queryDestination = destination.trim().toLowerCase();
+  if (queryDestination.includes('venice')) {
+    queryDestination = 'Piazza San Marco, Venice, Italy';
+  } else if (queryDestination.includes('paris')) {
+    queryDestination = 'paris, france';
+  } else if (queryDestination.includes('kyoto')) {
+    queryDestination = 'kyoto, japan';
+  } else if (queryDestination.includes('francisco')) {
+    queryDestination = 'san francisco, usa';
+  } else {
+    queryDestination = destination;
+  }
+
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY as string;
   const providers = [
-    () => geocodeWithGoogle(destination, googleApiKey),
-    () => geocodeWithNominatim(destination)
+    () => geocodeWithGoogle(queryDestination, googleApiKey),
+    () => geocodeWithNominatim(queryDestination)
   ];
 
   for (const resolver of providers) {
@@ -32,13 +45,21 @@ export async function geocodeDestination(destination: string): Promise<Coordinat
   return null;
 }
 
+const GEOCODE_TIMEOUT_MS = 8000;
+
+function geocodeFetch(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), GEOCODE_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal });
+}
+
 async function geocodeWithGoogle(destination: string, apiKey: string): Promise<Coordinates | null> {
   if (!isRecommendationProviderAllowed('google') || !hasProviderKey('google')) {
     return null;
   }
 
   try {
-    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    const response = await geocodeFetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -82,7 +103,7 @@ async function geocodeWithNominatim(destination: string): Promise<Coordinates | 
     url.searchParams.set('format', 'jsonv2');
     url.searchParams.set('limit', '1');
 
-    const response = await fetch(url.toString(), {
+    const response = await geocodeFetch(url.toString(), {
       headers: {
         'User-Agent': 'TripBoard/0.1 (open-data-dev)',
         Accept: 'application/json'

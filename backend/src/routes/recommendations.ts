@@ -1,10 +1,29 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { getRecommendations } from '../services/recommendations/recommendationService.js';
 import { RecommendationRequest } from '../services/recommendations/types.js';
 
 const router = Router();
 
-router.post('/', async (req, res) => {
+const rateLimitWindows = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+
+function rateLimit(req: Request, res: Response, next: NextFunction) {
+  const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() ?? req.socket.remoteAddress ?? 'unknown';
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (rateLimitWindows.get(ip) ?? []).filter((t) => t > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    rateLimitWindows.set(ip, timestamps);
+    res.status(429).json({ error: 'Too many requests, please slow down.' });
+    return;
+  }
+  timestamps.push(now);
+  rateLimitWindows.set(ip, timestamps);
+  next();
+}
+
+router.post('/', rateLimit, async (req, res) => {
   const body = req.body as Partial<RecommendationRequest>;
 
   if (!body.destination?.trim()) {
@@ -15,6 +34,7 @@ router.post('/', async (req, res) => {
   try {
     const result = await getRecommendations({
       destination: body.destination.trim(),
+      query: body.query,
       startDate: body.startDate,
       endDate: body.endDate,
       latitude: body.latitude,

@@ -1,7 +1,8 @@
-import { Animated, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
+import { autocompleteAccommodation } from '../../data/liveRecommendations';
 
 function startOfToday() {
   const d = new Date();
@@ -103,6 +104,14 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [activeDateField, setActiveDateField] = useState(null);
   const [linkInput, setLinkInput] = useState('');
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
+  const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
+  const [isAccommodationFocused, setIsAccommodationFocused] = useState(false);
+  const [accommodationSuggestions, setAccommodationSuggestions] = useState([]);
+  const [isSearchingAccommodation, setIsSearchingAccommodation] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [accommodationY, setAccommodationY] = useState(0);
+  const scrollViewRef = useRef(null);
+  const accommodationBlurTimer = useRef(null);
   const isPublic = Boolean(board.isPublic);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
 
@@ -115,6 +124,42 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     }
     itinerarySections[target].places.push(place);
   });
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const handleShow = (event) => setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    const handleHide = () => setKeyboardHeight(0);
+    const showSub = Keyboard.addListener(showEvent, handleShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleHide);
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (isAccommodationFocused && keyboardHeight > 0) {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, accommodationY - 80), animated: true });
+    }
+  }, [keyboardHeight, isAccommodationFocused, accommodationY]);
+
+  useEffect(() => {
+    if (!isAccommodationFocused || accommodation.trim().length < 2) {
+      setAccommodationSuggestions([]);
+      setIsSearchingAccommodation(false);
+      return;
+    }
+    setIsSearchingAccommodation(true);
+    const timer = setTimeout(async () => {
+      const results = await autocompleteAccommodation(accommodation.trim(), board.location ?? '');
+      setAccommodationSuggestions(
+        results.map((item) => ({
+          primaryName: item.name || item.address.split(',')[0]?.trim() || item.address,
+          fullAddress: item.address
+        }))
+      );
+      setIsSearchingAccommodation(false);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [accommodation, isAccommodationFocused, board.location]);
 
   const persistBoard = (patch) => {
     onUpdateBoard?.({
@@ -340,9 +385,14 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   return (
     <View style={styles.detailScreen}>
       <ScrollView
-        contentContainerStyle={styles.detailScrollContent}
+        ref={scrollViewRef}
+        contentContainerStyle={[
+          styles.detailScrollContent,
+          isAccommodationFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 240 }
+        ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDraggingItinerary}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.detailHeader}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -414,6 +464,65 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             />
           </View>
         )}
+
+        <View
+          style={styles.accommodationSection}
+          onLayout={(event) => setAccommodationY(event.nativeEvent.layout.y)}
+        >
+          <Text style={styles.accommodationLabel}>Staying at</Text>
+          <TextInput
+            value={accommodation}
+            onChangeText={setAccommodation}
+            onFocus={() => {
+              clearTimeout(accommodationBlurTimer.current);
+              setIsAccommodationFocused(true);
+            }}
+            onBlur={() => {
+              accommodationBlurTimer.current = setTimeout(() => setIsAccommodationFocused(false), 200);
+              persistBoard({ accommodation });
+            }}
+            onSubmitEditing={() => {
+              clearTimeout(accommodationBlurTimer.current);
+              persistBoard({ accommodation });
+              setIsAccommodationFocused(false);
+              Keyboard.dismiss();
+            }}
+            placeholder="Hotel, Airbnb, or address..."
+            placeholderTextColor="#C4B5A5"
+            style={[styles.accommodationInput, isAccommodationFocused && styles.accommodationInputFocused]}
+            returnKeyType="done"
+            autoCorrect={false}
+            autoCapitalize="words"
+          />
+          {isAccommodationFocused && (isSearchingAccommodation || accommodationSuggestions.length > 0) && (
+            <View style={styles.accommodationDropdown}>
+              {isSearchingAccommodation ? (
+                <View style={styles.accommodationDropdownLoading}>
+                  <ActivityIndicator size="small" color="#A97C50" />
+                </View>
+              ) : (
+                accommodationSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.accommodationOption, index < accommodationSuggestions.length - 1 && styles.accommodationOptionDivider]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      clearTimeout(accommodationBlurTimer.current);
+                      setAccommodation(suggestion.fullAddress);
+                      persistBoard({ accommodation: suggestion.fullAddress });
+                      setAccommodationSuggestions([]);
+                      setIsAccommodationFocused(false);
+                      Keyboard.dismiss();
+                    }}
+                  >
+                    <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
+                    <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
+        </View>
 
         <View style={styles.detailBody}>
           <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
@@ -674,6 +783,62 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4B3A32'
   },
+  accommodationSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 16
+  },
+  accommodationLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: '#A8998A',
+    marginBottom: 6
+  },
+  accommodationInput: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#4B3A32'
+  },
+  accommodationInputFocused: {
+    borderColor: '#A8998A'
+  },
+  accommodationDropdown: {
+    marginTop: 6,
+    backgroundColor: '#FFF8F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    overflow: 'hidden'
+  },
+  accommodationDropdownLoading: {
+    paddingVertical: 14,
+    alignItems: 'center'
+  },
+  accommodationOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  accommodationOptionDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1E7DA'
+  },
+  accommodationOptionPrimary: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4B3A32'
+  },
+  accommodationOptionFull: {
+    fontSize: 11,
+    color: '#A8998A',
+    marginTop: 2
+  },
   detailBody: {
     minHeight: 0
   },
@@ -684,6 +849,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   itineraryHeading: {
+    marginTop: 12,
     marginBottom: 12
   },
   itineraryList: {
