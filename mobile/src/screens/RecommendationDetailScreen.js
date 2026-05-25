@@ -1,6 +1,10 @@
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export function RecommendationDetailScreen({ board, rec, onBack, onAddToItinerary, added }) {
+  const sources = rec.sourceAttributions ?? [];
+  const ratingLabel = rec.rating ? `★ ${rec.rating} (${rec.reviewCount} reviews)` : 'Open-data listing';
+  const reviewUrl = sources.find((source) => source.url)?.url || rec.websiteUrl;
+
   return (
     <View style={styles.exploreSubScreen}>
       <Image source={{ uri: rec.image }} style={styles.recDetailHero} />
@@ -18,22 +22,35 @@ export function RecommendationDetailScreen({ board, rec, onBack, onAddToItinerar
         <Text style={styles.recDetailTitle}>{rec.title}</Text>
         <View style={styles.recDetailStats}>
           <Text style={styles.recDetailPrice}>{rec.price}</Text>
-          <Text style={styles.recDetailRating}>★ {rec.rating} ({rec.reviewCount} reviews)</Text>
+          <Text style={styles.recDetailRating}>{ratingLabel}</Text>
         </View>
         <Text style={styles.recDetailAddress}>{rec.address}</Text>
         <Text style={styles.recDetailDescription}>{rec.description}</Text>
         <Text style={styles.recDetailReason}>{rec.reason}</Text>
 
-        <Text style={styles.recReviewsHeading}>Reviews</Text>
-        {rec.reviews.map((review, index) => (
-          <View key={`${rec.id}-review-${index}`} style={styles.reviewCard}>
-            <View style={styles.reviewCardTop}>
-              <Text style={styles.reviewAuthor}>{review.author}</Text>
-              <Text style={styles.reviewStars}>{'★'.repeat(review.stars)}</Text>
-            </View>
-            <Text style={styles.reviewText}>{review.text}</Text>
-          </View>
-        ))}
+        {reviewUrl ? (
+          <TouchableOpacity style={styles.secondaryActionButton} onPress={() => Linking.openURL(reviewUrl)}>
+            <Text style={styles.secondaryActionButtonText}>Open reviews</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {sources.length ? (
+          <>
+            <Text style={styles.recReviewsHeading}>Sources</Text>
+            {sources.map((source) => (
+              <View key={`${rec.id}-${source.provider}-${source.providerId}`} style={styles.reviewCard}>
+                <View style={styles.reviewCardTop}>
+                  <Text style={styles.reviewAuthor}>{source.provider.toUpperCase()}</Text>
+                  {source.rating ? <Text style={styles.reviewStars}>★ {source.rating}</Text> : null}
+                </View>
+                <Text style={styles.reviewText}>
+                  {source.reviewCount ? `${source.reviewCount} reviews` : source.summary || 'Live listing'}
+                  {source.url ? ' · Provider page available' : ''}
+                </Text>
+              </View>
+            ))}
+          </>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.addItineraryButton, added && styles.addItineraryButtonDone]}
@@ -172,6 +189,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#6B5A4C'
+  },
+  secondaryActionButton: {
+    marginBottom: 16,
+    backgroundColor: '#F1E7DA',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    paddingVertical: 14,
+    alignItems: 'center'
+  },
+  secondaryActionButtonText: {
+    color: '#4B3A32',
+    fontSize: 15,
+    fontWeight: '700'
   },
   addItineraryButton: {
     marginTop: 16,

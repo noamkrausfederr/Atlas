@@ -50,9 +50,13 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                 activeOpacity={0.88}
                 onPress={() => onSelectThread(thread.ownerName)}
               >
-                <View style={styles.threadAvatar}>
-                  <Text style={styles.threadAvatarText}>{thread.ownerName.slice(0, 1)}</Text>
-                </View>
+                {thread.image ? (
+                  <Image source={{ uri: thread.image }} style={styles.threadAvatarImage} />
+                ) : (
+                  <View style={styles.threadAvatar}>
+                    <Text style={styles.threadAvatarText}>{thread.ownerName.slice(0, 1)}</Text>
+                  </View>
+                )}
                 <View style={styles.threadBody}>
                   <View style={styles.threadTopRow}>
                     <Text style={styles.threadName}>{thread.ownerName}</Text>
@@ -188,8 +192,12 @@ export function InboxScreen({
   const threadList = useMemo(
     () => Object.values(threads)
       .filter((thread) => (thread.messages?.length ?? 0) > 0)
+      .map((thread) => ({
+        ...thread,
+        image: profileDirectory[thread.ownerName]?.image ?? null
+      }))
       .sort((left, right) => new Date(right.lastMessageAt) - new Date(left.lastMessageAt)),
-    [threads]
+    [profileDirectory, threads]
   );
 
   const activeThread = selectedProfileName ? threads[selectedProfileName] ?? null : null;
@@ -269,6 +277,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  threadAvatarImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#D9E7D1'
+  },
   threadAvatarText: {
     color: '#A97C50',
     fontSize: 18,
@@ -292,8 +306,10 @@ const styles = StyleSheet.create({
     paddingRight: 8
   },
   threadMeta: {
+    width: 40,
     alignItems: 'flex-end',
-    gap: 4
+    gap: 4,
+    flexShrink: 0
   },
   threadTime: {
     color: '#A8998A',
@@ -301,13 +317,12 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   unreadBadge: {
-    minWidth: 22,
+    width: 28,
     height: 22,
     borderRadius: 11,
     backgroundColor: '#E6A6B3',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6
+    justifyContent: 'center'
   },
   unreadBadgeText: {
     color: '#FFF8F0',

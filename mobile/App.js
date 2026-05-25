@@ -6,7 +6,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { publicTrips as publicTripMetadata, sampleBoards } from './data/trips';
 import { getPastTrips, getUpcomingTrips } from './data/tripUtils';
-import { getRecommendationById } from './data/recommendations';
 import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 
 // Components & Screens
@@ -14,7 +13,6 @@ import { BoardCard } from './src/components/BoardCard';
 import { TripDetailScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
-import { RecommendationDetailScreen } from './src/screens/RecommendationDetailScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 
 const INBOX_PROFILE_IMAGES = [
@@ -98,8 +96,6 @@ function InnerApp() {
   const [isInboxThreadOpen, setIsInboxThreadOpen] = useState(false);
   const [inboxThreads, setInboxThreads] = useState(() => buildSeedInboxThreads());
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [addedRecIds, setAddedRecIds] = useState({});
-  const [tripRecommendationRefreshes, setTripRecommendationRefreshes] = useState({});
   const [isCreateBoardVisible, setIsCreateBoardVisible] = useState(false);
   const [cityOptions, setCityOptions] = useState([]);
   const [isCitySearchLoading, setIsCitySearchLoading] = useState(false);
@@ -406,50 +402,6 @@ function InnerApp() {
     });
   };
 
-  const getRecommendationDayIndex = (rec) => {
-    const match = rec.dayLabel?.match(/\d+/);
-    return match ? Math.max(Number(match[0]) - 1, 0) : 0;
-  };
-
-  const refreshTripRecommendationSection = (boardId, sectionTitle) => {
-    setTripRecommendationRefreshes((current) => ({
-      ...current,
-      [boardId]: {
-        ...(current[boardId] ?? {}),
-        [sectionTitle]: (current[boardId]?.[sectionTitle] ?? 1) + 1
-      }
-    }));
-  };
-
-  const addRecommendationToItinerary = (boardId, rec) => {
-    const board = boards.find((item) => item.id === boardId);
-    if (!board) {
-      return;
-    }
-    const alreadySaved = (board.placesList ?? []).some((place) => place.name === rec.title);
-    if (alreadySaved) {
-      setAddedRecIds((current) => ({ ...current, [rec.id]: true }));
-      return;
-    }
-    const newPlace = {
-      id: `p-${Date.now()}`,
-      name: rec.title,
-      note: `Added from Recommendations · ${rec.category} · ${rec.price}`,
-      dayIndex: getRecommendationDayIndex(rec),
-      category: rec.category,
-      price: rec.price,
-      rating: rec.rating,
-      reviewCount: rec.reviewCount,
-      address: rec.address,
-      description: rec.description,
-      reason: rec.reason,
-      reviews: rec.reviews,
-      image: rec.image
-    };
-    updateBoard(boardId, { placesList: [...(board.placesList ?? []), newPlace] });
-    setAddedRecIds((current) => ({ ...current, [rec.id]: true }));
-  };
-
   const resetDraftBoard = () => {
     setDraftBoard({
       title: '',
@@ -709,40 +661,13 @@ function InnerApp() {
   };
 
   const renderSelectedBoardContent = () => {
-    if (tripStack?.screen === 'recommendationDetail') {
-      const board = boards.find((item) => item.id === selectedBoard.id) ?? selectedBoard;
-      const refreshSeed = tripRecommendationRefreshes[board.id] ?? 1;
-      const rec = getRecommendationById(board, tripStack.recId, refreshSeed);
-      if (!rec) {
-        return null;
-      }
-      const alreadyInItinerary =
-        Boolean(addedRecIds[rec.id]) || (board.placesList ?? []).some((place) => place.name === rec.title);
-
-      return (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <RecommendationDetailScreen
-            board={board}
-            rec={rec}
-            added={alreadyInItinerary}
-            onBack={() => setTripStack({ screen: 'recommendations' })}
-            onAddToItinerary={() => addRecommendationToItinerary(board.id, rec)}
-          />
-        </ScrollView>
-      );
-    }
-
     if (tripStack?.screen === 'recommendations') {
       const board = boards.find((item) => item.id === selectedBoard.id) ?? selectedBoard;
-      const refreshSeed = tripRecommendationRefreshes[board.id] ?? 1;
       return (
         <ScrollView showsVerticalScrollIndicator={false}>
           <ExploreMoreScreen
             board={board}
-            refreshSeed={refreshSeed}
             onBack={() => setTripStack(null)}
-            onOpenRecommendation={(_boardId, recId) => setTripStack({ screen: 'recommendationDetail', recId })}
-            onRefreshSection={(sectionTitle) => refreshTripRecommendationSection(board.id, sectionTitle)}
           />
         </ScrollView>
       );

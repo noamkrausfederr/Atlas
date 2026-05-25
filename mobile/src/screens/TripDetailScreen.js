@@ -1,7 +1,7 @@
 import { Animated, Image, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { PlaceDetailScreen } from '../components/PlaceDetailModal';
+import { PlaceDetailModal } from '../components/PlaceDetailModal';
 
 function startOfToday() {
   const d = new Date();
@@ -337,19 +337,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     onUpdateBoard?.({ isPublic: nextIsPublic });
   };
 
-  if (selectedPlaceDetail) {
-    return (
-      <PlaceDetailScreen
-        place={selectedPlaceDetail.place}
-        tripTitle={board.title}
-        location={board.location || board.subtitle}
-        dateLabel={selectedPlaceDetail.dateLabel}
-        fallbackImage={board.image}
-        onBack={() => setSelectedPlaceDetail(null)}
-      />
-    );
-  }
-
   return (
     <View style={styles.detailScreen}>
       <ScrollView
@@ -527,6 +514,16 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <PlaceDetailModal
+        visible={Boolean(selectedPlaceDetail)}
+        place={selectedPlaceDetail?.place}
+        tripTitle={board.title}
+        location={board.location || board.subtitle}
+        dateLabel={selectedPlaceDetail?.dateLabel}
+        fallbackImage={board.image}
+        onClose={() => setSelectedPlaceDetail(null)}
+      />
     </View>
   );
 }

@@ -1,9 +1,10 @@
-import { Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { RecommendationCard } from '../components/RecommendationCard';
-import { PlaceDetailScreen } from '../components/PlaceDetailModal';
-import { formatDateRange, generateRecommendationsForRefresh } from '../../data/recommendations';
+import { PlaceDetailModal } from '../components/PlaceDetailModal';
+import { formatDateRange } from '../../data/recommendations';
+import { fetchBoardRecommendations } from '../../data/liveRecommendations';
 import { PublicProfileView } from './ProfileScreen';
 
 const DAY_RANGE_MIN = 1;
@@ -15,17 +16,6 @@ const PUBLIC_PROFILE_IMAGES = [
   'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
   'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80'
 ];
-
-function groupRecommendationsByCategory(recommendations) {
-  return recommendations.reduce((sections, rec) => {
-    const existing = sections.find((section) => section.title === rec.category);
-    if (existing) {
-      existing.items.push(rec);
-      return sections;
-    }
-    return [...sections, { title: rec.category, items: [rec] }];
-  }, []);
-}
 
 const FILTER_DEFAULTS = {
   country: [],
@@ -686,19 +676,6 @@ function PublicTripDetail({
     itinerarySections[target].places.push(place);
   });
 
-  if (selectedPlaceDetail) {
-    return (
-      <PlaceDetailScreen
-        place={selectedPlaceDetail.place}
-        tripTitle={trip.title}
-        location={trip.location}
-        dateLabel={selectedPlaceDetail.dateLabel}
-        fallbackImage={trip.image}
-        onBack={() => setSelectedPlaceDetail(null)}
-      />
-    );
-  }
-
   return (
     <View style={styles.publicDetailScreen}>
       <View style={styles.exploreSubHeader}>
@@ -772,6 +749,16 @@ function PublicTripDetail({
       >
         <Text style={styles.addPublicTripButtonText}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
       </TouchableOpacity>
+
+      <PlaceDetailModal
+        visible={Boolean(selectedPlaceDetail)}
+        place={selectedPlaceDetail?.place}
+        tripTitle={trip.title}
+        location={trip.location}
+        dateLabel={selectedPlaceDetail?.dateLabel}
+        fallbackImage={trip.image}
+        onClose={() => setSelectedPlaceDetail(null)}
+      />
     </View>
   );
 }
@@ -826,9 +813,45 @@ function FilterChips({ label, options, value, onChange, compact = false }) {
   );
 }
 
-export function ExploreMoreScreen({ board, onBack, onOpenRecommendation, refreshSeed = 1, onRefreshSection }) {
-  const recommendations = generateRecommendationsForRefresh(board, refreshSeed);
-  const sections = groupRecommendationsByCategory(recommendations);
+export function ExploreMoreScreen({ board, onBack }) {
+  const [recommendations, setRecommendations] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [sourceMeta, setSourceMeta] = useState({
+    usedFallback: false,
+    usedMockData: false,
+    providersUsed: [],
+    error: '',
+    hasMore: true
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadRecommendations = async () => {
+      setIsLoading(true);
+
+      let result = await fetchBoardRecommendations(board);
+      let remainingBatches = 8;
+
+      while (result.meta.hasMore && remainingBatches > 0) {
+        result = await fetchBoardRecommendations(board, { loadMore: true });
+        remainingBatches -= 1;
+      }
+
+      if (!isMounted) return;
+
+      setRecommendations(result.recommendations);
+      setSourceMeta(result.meta);
+      setIsLoading(false);
+    };
+
+    loadRecommendations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [board]);
 
   return (
     <View style={styles.exploreSubScreen}>
@@ -839,22 +862,45 @@ export function ExploreMoreScreen({ board, onBack, onOpenRecommendation, refresh
         <View style={styles.exploreSubHeaderText}>
           <Text style={styles.exploreSubTitle}>{board.title}</Text>
           <Text style={styles.exploreSubMeta}>{formatDateRange(board)} · {recommendations.length} activities</Text>
+          {sourceMeta.providersUsed?.length ? (
+            <Text style={styles.recommendationSourceMeta}>
+              {`Live from ${sourceMeta.providersUsed.join(', ')}.`}
+            </Text>
+          ) : null}
+          {sourceMeta.error ? (
+            <Text style={styles.recommendationErrorMeta}>
+              {sourceMeta.error}
+            </Text>
+          ) : null}
         </View>
       </View>
 
-      {sections.map((section) => (
-        <View key={section.title} style={styles.recommendationSection}>
-          <View style={styles.recommendationSectionHeader}>
-            <Text style={styles.recommendationSectionTitle}>{section.title}</Text>
-            <TouchableOpacity style={styles.sectionRefreshButton} onPress={() => onRefreshSection(section.title)}>
-              <Text style={styles.sectionRefreshButtonText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-          {section.items.map((rec) => (
-            <RecommendationCard key={rec.id} rec={rec} onPress={(item) => onOpenRecommendation(board.id, item.id, 'more')} />
-          ))}
+      {isLoading ? (
+        <View style={styles.recommendationStateCard}>
+          <ActivityIndicator color="#A97C50" />
+          <Text style={styles.recommendationStateText}>Finding live recommendations...</Text>
         </View>
+      ) : null}
+
+      {!isLoading && !recommendations.length ? (
+        <View style={styles.recommendationStateCard}>
+          <Text style={styles.recommendationStateText}>No recommendations yet for this trip.</Text>
+        </View>
+      ) : null}
+
+      {recommendations.map((rec) => (
+        <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
       ))}
+
+      <PlaceDetailModal
+        visible={Boolean(selectedRecommendation)}
+        place={selectedRecommendation}
+        tripTitle={board.title}
+        location={board.location}
+        dateLabel={selectedRecommendation?.dayLabel}
+        fallbackImage={board.image}
+        onClose={() => setSelectedRecommendation(null)}
+      />
     </View>
   );
 }
@@ -1443,31 +1489,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#7F7063'
   },
-  recommendationSection: {
-    marginBottom: 18
+  recommendationSourceMeta: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#A97C50',
+    lineHeight: 18
   },
-  recommendationSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10
+  recommendationFallbackMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#A8998A',
+    lineHeight: 18
   },
-  recommendationSectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#4B3A32'
+  recommendationErrorMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 18
   },
-  sectionRefreshButton: {
-    borderRadius: 999,
-    backgroundColor: '#F1E7DA',
+  recommendationStateCard: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2D3BF',
-    paddingVertical: 7,
-    paddingHorizontal: 12
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 16
   },
-  sectionRefreshButtonText: {
-    color: '#A97C50',
-    fontSize: 12,
-    fontWeight: '800'
-  }
+  recommendationStateText: {
+    color: '#7F7063',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center'
+  },
 });

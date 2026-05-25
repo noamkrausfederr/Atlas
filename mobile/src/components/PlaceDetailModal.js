@@ -42,14 +42,61 @@ function dayTokenMatchesToday(token, todayIndex) {
   return DAY_INDEXES[token] === todayIndex;
 }
 
+function formatStatusTime(value) {
+  if (!value) return '';
+  const [hoursRaw, minutesRaw] = value.split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
+
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const normalizedHours = hours % 12 || 12;
+  return `${normalizedHours}:${String(minutes).padStart(2, '0')} ${suffix}`;
+}
+
+function formatPriceRange(value) {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  if (/^free$/i.test(normalized)) return 'Free';
+  if (/^\$+$/.test(normalized)) return normalized;
+
+  const amountMatch = normalized.match(/(\d+(?:\.\d+)?)/);
+  if (!amountMatch) {
+    return normalized;
+  }
+
+  const amount = Number(amountMatch[1]);
+  if (Number.isNaN(amount)) {
+    return normalized;
+  }
+  if (amount <= 10) return '$';
+  if (amount <= 30) return '$$';
+  if (amount <= 60) return '$$$';
+  return '$$$$';
+}
+
+function formatWebsiteLabel(value) {
+  if (!value) return '';
+
+  return String(value)
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/$/, '');
+}
+
 function getOpenStatus(openingHours) {
-  if (!openingHours) return 'Live hours unavailable';
-  if (openingHours.trim() === '24/7') return 'Open now · 24/7';
+  if (!openingHours) {
+    return { label: 'Hours unavailable', detail: null, tone: 'muted' };
+  }
+  if (openingHours.trim() === '24/7') {
+    return { label: 'Open now', detail: '24/7', tone: 'open' };
+  }
 
   const now = new Date();
   const todayIndex = now.getDay();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const rules = openingHours.split(';').map((rule) => rule.trim()).filter(Boolean);
+  let firstMatchingRange = null;
 
   for (const rule of rules) {
     const dayMatch = rule.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?/);
@@ -61,14 +108,28 @@ function getOpenStatus(openingHours) {
     const open = parseTimeValue(timeMatch[1]);
     const close = parseTimeValue(timeMatch[2]);
     if (open === null || close === null) continue;
+    const formattedRange = `${formatStatusTime(timeMatch[1])} - ${formatStatusTime(timeMatch[2])}`;
+    if (!firstMatchingRange) {
+      firstMatchingRange = formattedRange;
+    }
 
     const isOpen = open <= close
       ? currentMinutes >= open && currentMinutes <= close
       : currentMinutes >= open || currentMinutes <= close;
-    return `${isOpen ? 'Open now' : 'Closed now'} · ${timeMatch[1]}-${timeMatch[2]}`;
+    if (!isOpen) continue;
+
+    const normalizedClose = open <= close || currentMinutes <= close ? close : close + 1440;
+    const normalizedCurrent = currentMinutes > normalizedClose ? currentMinutes - 1440 : currentMinutes;
+    const minutesUntilClose = normalizedClose - normalizedCurrent;
+
+    if (minutesUntilClose <= 60) {
+      return { label: 'Closing soon', detail: formattedRange, tone: 'warning' };
+    }
+
+    return { label: 'Open now', detail: formattedRange, tone: 'open' };
   }
 
-  return `Hours listed · ${openingHours}`;
+  return { label: 'Closed now', detail: firstMatchingRange, tone: 'closed' };
 }
 
 async function fetchLivePlaceDetails(query) {
@@ -106,36 +167,21 @@ async function fetchLivePlaceDetails(query) {
 }
 
 function getPlaceDetail(place, tripTitle, location, dateLabel, fallbackImage) {
-  const reviews = place.reviews?.length
-    ? place.reviews
-    : [
-        { author: 'Atlas pick', stars: 5, text: 'Fits the rhythm of this itinerary.' },
-        { author: 'Recent traveler', stars: 4, text: 'Easy to pair with nearby plans.' }
-      ];
-
-  const summary = place.description || place.note || place.reason || `Saved to ${tripTitle}${dateLabel ? ` for ${dateLabel}` : ''}.`;
-
   return {
     category: place.category || place.note?.split('·')[1]?.trim() || 'Itinerary',
-    price: place.price || (place.note?.includes('Free') ? 'Free' : null),
-    rating: place.rating ? `★ ${place.rating}${place.reviewCount ? ` (${place.reviewCount} reviews)` : ''}` : '★ 4.7 (42 reviews)',
+    price: place.price || null,
     address: place.address || location,
     sourceUrl: place.sourceUrl || place.url || place.link,
-    website: place.website,
+    website: place.website || place.websiteUrl,
     openingHours: place.openingHours,
-    tips: place.tips || [
-      'Save this stop near nearby plans so it is easy to revisit.',
-      'Check hours before you go and leave a little buffer for transit.'
-    ],
-    summary,
-    reviews
+    dateLabel
   };
 }
 
 function PlaceDetailContent({ place, tripTitle, location, dateLabel, fallbackImage, onBack }) {
   if (!place) return null;
 
-  const { category, price, rating, address, sourceUrl, website, openingHours, tips, summary, reviews } = getPlaceDetail(
+  const { price, address, sourceUrl, website, openingHours } = getPlaceDetail(
     place,
     tripTitle,
     location,
@@ -145,9 +191,15 @@ function PlaceDetailContent({ place, tripTitle, location, dateLabel, fallbackIma
   const [liveDetails, setLiveDetails] = useState(null);
   const detailAddress = liveDetails?.address || address;
   const detailWebsite = liveDetails?.website || website || sourceUrl;
+  const detailWebsiteLabel = formatWebsiteLabel(detailWebsite);
   const detailHours = liveDetails?.openingHours || openingHours;
   const openStatus = useMemo(() => getOpenStatus(detailHours), [detailHours]);
   const directionsQuery = encodeURIComponent(detailAddress || `${place.name || place.title} ${location}`);
+  const formattedPrice = formatPriceRange(price);
+  const openingHoursText =
+    openStatus.label === 'Hours unavailable'
+      ? null
+      : openStatus.detail || detailHours || null;
 
   useEffect(() => {
     let isActive = true;
@@ -168,60 +220,48 @@ function PlaceDetailContent({ place, tripTitle, location, dateLabel, fallbackIma
     <ScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>Close</Text>
         </TouchableOpacity>
-        <View style={styles.badges}>
-          <Text style={styles.category}>{category}</Text>
-          {dateLabel ? <Text style={styles.day}>{dateLabel}</Text> : null}
-        </View>
+        <Text style={styles.title}>{place.name || place.title}</Text>
       </View>
 
-      <Text style={styles.title}>{place.name || place.title}</Text>
-      <Text style={styles.summary}>{summary}</Text>
-      {price && (
-        <View style={styles.stats}>
-          <Text style={styles.price}>{price}</Text>
-        </View>
-      )}
-
-      <View style={styles.sectionHeadingRow}>
-        <Text style={[styles.sectionHeading, styles.sectionHeadingInRow]}>Reviews</Text>
-        {rating ? <Text style={styles.rating}>{rating}</Text> : null}
-      </View>
-      {reviews.map((review, index) => (
-        <View key={`${place.id}-review-${index}`} style={styles.reviewCard}>
-          <View style={styles.reviewTop}>
-            <Text style={styles.reviewAuthor}>{review.author}</Text>
-            <Text style={styles.reviewStars}>{'★'.repeat(review.stars)}</Text>
+      <View style={styles.detailsCard}>
+        {formattedPrice ? (
+          <View style={styles.detailBlock}>
+            <Text style={styles.detailLabel}>Price range</Text>
+            <Text style={styles.detailValue}>{formattedPrice}</Text>
           </View>
-          <Text style={styles.reviewText}>{review.text}</Text>
+        ) : null}
+
+        <View style={styles.detailBlock}>
+          <Text style={styles.detailLabel}>Website</Text>
+          {detailWebsite ? (
+            <TouchableOpacity onPress={() => Linking.openURL(detailWebsite)}>
+              <Text style={styles.inlineLink}>{detailWebsiteLabel}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.detailSubValue}>Website unavailable</Text>
+          )}
         </View>
-      ))}
 
-      <View style={styles.tipsCard}>
-        <Text style={styles.tipsHeading}>Insider tips</Text>
-        {tips.map((tip, index) => (
-          <Text key={`${place.id}-tip-${index}`} style={styles.tipText}>• {tip}</Text>
-        ))}
+        <View style={styles.detailBlock}>
+          <Text style={styles.detailLabel}>Address</Text>
+          {detailAddress ? <Text style={styles.detailValue}>{detailAddress}</Text> : <Text style={styles.detailSubValue}>Location unavailable</Text>}
+          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${directionsQuery}`)}>
+            <Text style={styles.inlineLink}>Get directions</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.detailBlock, styles.detailBlockLast]}>
+          <Text style={styles.detailLabel}>Opening hours</Text>
+          <View style={[styles.statusPill, styles[`statusPill${openStatus.tone.charAt(0).toUpperCase()}${openStatus.tone.slice(1)}`]]}>
+            <Text style={[styles.statusPillText, styles[`statusPillText${openStatus.tone.charAt(0).toUpperCase()}${openStatus.tone.slice(1)}`]]}>
+              {openStatus.label}
+            </Text>
+          </View>
+          {openingHoursText ? <Text style={styles.detailValue}>{openingHoursText}</Text> : null}
+        </View>
       </View>
-
-      <Text style={[styles.sectionHeading, styles.detailsHeading]}>Details</Text>
-      {detailAddress ? <Text style={styles.detailLine}>📍 {detailAddress}</Text> : null}
-      <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${directionsQuery}`)}>
-        <Text style={styles.detailLink}>Get directions</Text>
-      </TouchableOpacity>
-      <Text style={styles.detailLine}>{openStatus}</Text>
-      {detailHours ? <Text style={styles.detailSubline}>Opening hours: {detailHours}</Text> : null}
-      {detailWebsite ? (
-        <TouchableOpacity onPress={() => Linking.openURL(detailWebsite)}>
-          <Text style={styles.detailLink}>Open website</Text>
-        </TouchableOpacity>
-      ) : null}
-      {sourceUrl && sourceUrl !== detailWebsite ? (
-        <TouchableOpacity onPress={() => Linking.openURL(sourceUrl)}>
-          <Text style={styles.detailLink}>Open original page</Text>
-        </TouchableOpacity>
-      ) : null}
     </ScrollView>
   );
 }
@@ -245,7 +285,7 @@ export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabe
   if (!place) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           <PlaceDetailContent
@@ -269,19 +309,29 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 8, 15, 0.45)',
+    backgroundColor: 'rgba(10, 8, 15, 0.38)',
     justifyContent: 'center',
-    padding: 20
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 28
   },
   card: {
-    maxHeight: '86%',
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '72%',
     backgroundColor: '#FFF8F0',
-    borderRadius: 24,
-    padding: 16
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    shadowColor: '#000000',
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     marginBottom: 14
   },
@@ -295,150 +345,90 @@ const styles = StyleSheet.create({
     color: '#A97C50',
     fontWeight: '700'
   },
-  badges: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 8
-  },
-  category: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#A8998A'
-  },
-  day: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4B3A32',
-    backgroundColor: '#F1E7DA',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: 'hidden'
-  },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#4B3A32',
-    marginBottom: 10
-  },
-  stats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  price: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '800',
-    color: '#4B3A32'
-  },
-  rating: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#7F7063'
-  },
-  address: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B5A4C',
-    marginBottom: 12
-  },
-  summary: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#6B5A4C',
-    marginBottom: 16
-  },
-  sectionHeading: {
     color: '#4B3A32',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1
+    textAlign: 'right',
+    lineHeight: 24,
+    paddingTop: 4
   },
-  sectionHeadingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10
-  },
-  sectionHeadingInRow: {
-    marginBottom: 0
-  },
-  detailsHeading: {
-    marginTop: 18
-  },
-  tipsCard: {
-    backgroundColor: '#FFFBEB',
+  detailsCard: {
+    backgroundColor: '#FFF8F0',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#FEF3C7',
+    borderColor: '#E2D3BF',
     padding: 16,
-    marginTop: 18,
-    marginBottom: 18
+    marginBottom: 4
   },
-  tipsHeading: {
-    color: '#92400E',
-    fontSize: 13,
+  detailBlock: {
+    paddingBottom: 12,
+    marginBottom: 12
+  },
+  detailBlockLast: {
+    paddingBottom: 0,
+    marginBottom: 0
+  },
+  statusPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 12
+  },
+  statusPillOpen: {
+    backgroundColor: '#DCFCE7'
+  },
+  statusPillWarning: {
+    backgroundColor: '#FEF3C7'
+  },
+  statusPillClosed: {
+    backgroundColor: '#FEE2E2'
+  },
+  statusPillMuted: {
+    backgroundColor: '#E5E7EB'
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  statusPillTextOpen: {
+    color: '#166534'
+  },
+  statusPillTextWarning: {
+    color: '#92400E'
+  },
+  statusPillTextClosed: {
+    color: '#991B1B'
+  },
+  statusPillTextMuted: {
+    color: '#4B5563'
+  },
+  detailLabel: {
+    fontSize: 12,
     fontWeight: '800',
+    color: '#7F7063',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 10
+    marginBottom: 6
   },
-  tipText: {
+  detailValue: {
+    fontSize: 14,
+    color: '#6B5A4C',
+    lineHeight: 22,
+    marginBottom: 6
+  },
+  detailSubValue: {
     color: '#6B5A4C',
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 6
   },
-  detailLine: {
+  inlineLink: {
     color: '#6B5A4C',
     fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 8
-  },
-  detailSubline: {
-    color: '#7F7063',
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 10
-  },
-  detailLink: {
-    color: '#A97C50',
-    fontSize: 14,
-    fontWeight: '800',
-    marginBottom: 10
-  },
-  reviewCard: {
-    backgroundColor: '#F1E7DA',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 12,
-    marginBottom: 8
-  },
-  reviewTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6
-  },
-  reviewAuthor: {
-    fontSize: 13,
     fontWeight: '700',
-    color: '#4B3A32'
-  },
-  reviewStars: {
-    fontSize: 12,
-    color: '#D6A45B'
-  },
-  reviewText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#6B5A4C'
+    lineHeight: 20
   }
 });
