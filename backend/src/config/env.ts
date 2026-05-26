@@ -28,7 +28,7 @@ export function isRecommendationProviderAllowed(provider: RecommendationProvider
   }
 
   if (mode === 'open') {
-    return provider === 'opentripmap' || provider === 'wikipedia' || provider === 'foursquare' || provider === 'geoapify' || provider === 'ticketmaster';
+    return provider === 'google' || provider === 'opentripmap' || provider === 'wikipedia' || provider === 'foursquare' || provider === 'geoapify' || provider === 'ticketmaster';
   }
 
   if (mode === 'phase1') {

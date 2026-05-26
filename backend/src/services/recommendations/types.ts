@@ -11,6 +11,7 @@ export type TravelCategory =
 
 export interface RecommendationRequest {
   destination: string;
+  accommodation?: string;
   query?: string;
   startDate?: string;
   endDate?: string;

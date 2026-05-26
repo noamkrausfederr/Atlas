@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dedupePlaces } from './providers.js';
+import { dedupePlaces, wikipediaLooksLikeHistoricalEvent } from './providers.js';
 import { rankPlaces } from './recommendationService.js';
 import type { NormalizedPlace, RecommendationRequest } from './types.js';
 
@@ -135,5 +135,27 @@ describe('rankPlaces', () => {
     expect(typeof result.score).toBe('number');
     expect(typeof result.reason).toBe('string');
     expect(result.reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe('wikipediaLooksLikeHistoricalEvent', () => {
+  it('blocks historical event pages', () => {
+    expect(
+      wikipediaLooksLikeHistoricalEvent({
+        title: 'November 2015 Paris attacks',
+        description: 'terrorist attacks in Paris',
+        categories: ['Terrorist incidents in Paris', 'Massacres in France']
+      })
+    ).toBe(true);
+  });
+
+  it('allows real landmark pages', () => {
+    expect(
+      wikipediaLooksLikeHistoricalEvent({
+        title: 'Eiffel Tower',
+        description: 'wrought-iron lattice tower on the Champ de Mars in Paris, France',
+        categories: ['Towers in Paris', 'Monuments and memorials in Paris']
+      })
+    ).toBe(false);
   });
 });

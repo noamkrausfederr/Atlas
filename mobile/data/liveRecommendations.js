@@ -58,6 +58,29 @@ function normalizeText(value) {
     .trim();
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getAccommodationMatchScore(suggestion, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return 0;
+
+  const normalizedName = normalizeText(suggestion?.name);
+  const normalizedAddress = normalizeText(suggestion?.address);
+  const haystacks = [normalizedName, normalizedAddress].filter(Boolean);
+  if (!haystacks.length) return 0;
+
+  if (haystacks.some((value) => value === normalizedQuery)) return 500;
+  if (haystacks.some((value) => value.startsWith(normalizedQuery))) return 400;
+
+  const wordPrefixPattern = new RegExp(`(?:^|\\s)${escapeRegExp(normalizedQuery)}`);
+  if (haystacks.some((value) => wordPrefixPattern.test(value))) return 300;
+  if (haystacks.some((value) => value.includes(normalizedQuery))) return 200;
+
+  return 0;
+}
+
 function coordinatesAreClose(left, right, maxMeters = 250) {
   if (
     left?.lat == null ||
@@ -132,30 +155,35 @@ function getApiBaseUrls() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   const devHost = getDevServerHost();
 
-  const urls = [];
-
-  if (configured) {
-    const normalized = configured.replace(/\/$/, '');
-    urls.push(normalized);
-    
-    const fallbackPort = normalized.replace(/:\d+(\/|$)/, ':5005$1');
-    if (fallbackPort !== normalized) {
-      urls.push(fallbackPort);
-    }
-  }
+  const localUrls = [];
 
   if (devHost) {
-    urls.push(`http://${devHost}:5005/api`);
-    urls.push(`http://${devHost}:5000/api`);
+    localUrls.push(`http://${devHost}:5005/api`);
+    localUrls.push(`http://${devHost}:5000/api`);
   }
 
   if (Platform.OS === 'android') {
-    urls.push('http://10.0.2.2:5005/api');
-    urls.push('http://10.0.2.2:5000/api');
+    localUrls.push('http://10.0.2.2:5005/api');
+    localUrls.push('http://10.0.2.2:5000/api');
   } else {
-    urls.push('http://localhost:5005/api');
-    urls.push('http://localhost:5000/api');
+    localUrls.push('http://localhost:5005/api');
+    localUrls.push('http://localhost:5000/api');
   }
+
+  const configuredUrls = [];
+  if (configured) {
+    const normalized = configured.replace(/\/$/, '');
+    configuredUrls.push(normalized);
+
+    const fallbackPort = normalized.replace(/:\d+(\/|$)/, ':5005$1');
+    if (fallbackPort !== normalized) {
+      configuredUrls.push(fallbackPort);
+    }
+  }
+
+  const urls = __DEV__
+    ? [...localUrls, ...configuredUrls]
+    : [...configuredUrls, ...localUrls];
 
   return dedupe(urls);
 }
@@ -355,16 +383,28 @@ function buildCacheKey(board, searchQuery = '') {
 }
 
 export async function autocompleteAccommodation(text, destination) {
-  if (!text || text.trim().length < 2) return [];
+  if (!text || text.trim().length < 1) return [];
+  const query = text.trim();
   const baseUrls = getApiBaseUrls();
   for (const baseUrl of baseUrls) {
     try {
-      const params = new URLSearchParams({ text: text.trim() });
+      const params = new URLSearchParams({ text: query });
       if (destination) params.set('destination', destination);
       const res = await fetch(`${baseUrl}/geocode/autocomplete?${params}`);
       if (!res.ok) continue;
       const data = await res.json();
-      return data.suggestions ?? [];
+      return (data.suggestions ?? [])
+        .map((suggestion) => ({
+          ...suggestion,
+          _score: getAccommodationMatchScore(suggestion, query)
+        }))
+        .filter((suggestion) => suggestion._score > 0)
+        .sort((left, right) => right._score - left._score || left.address.localeCompare(right.address))
+        .filter((suggestion, index, list) => (
+          list.findIndex((candidate) => normalizeText(candidate.address) === normalizeText(suggestion.address)) === index
+        ))
+        .slice(0, 6)
+        .map(({ _score, ...suggestion }) => suggestion);
     } catch {}
   }
   return [];
@@ -382,6 +422,7 @@ export async function fetchBoardRecommendations(board, options = {}) {
   const tripDays = getTripDays(board);
   const requestBody = {
     destination: getDestination(board),
+    accommodation: board.accommodation?.trim() || undefined,
     query: trimmedSearchQuery,
     startDate: board.startDate,
     endDate: board.endDate,

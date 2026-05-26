@@ -251,6 +251,10 @@ function hasProvider(place: RankedRecommendation, provider: PlaceSourceAttributi
   return place.sourceAttributions.some((source) => source.provider === provider);
 }
 
+function isGoogleOnlyPlace(place: RankedRecommendation) {
+  return hasProvider(place, 'google') && place.sourceAttributions.every((source) => source.provider === 'google');
+}
+
 function tokenizeForSimilarity(value?: string) {
   return new Set(
     (value ?? '')
@@ -340,6 +344,22 @@ function selectRecommendations(ranked: RankedRecommendation[], limit: number, pr
     selectedIds.add(match.canonicalId);
   }
 
+  const googleOnlyCap = Math.max(2, Math.ceil(limit / 3));
+
+  for (const place of ranked) {
+    if (selected.length >= limit) break;
+    if (selectedIds.has(place.canonicalId)) continue;
+    if (selected.some((candidate) => areTooSimilar(candidate, place))) continue;
+    if (
+      isGoogleOnlyPlace(place) &&
+      selected.filter(isGoogleOnlyPlace).length >= googleOnlyCap
+    ) {
+      continue;
+    }
+    selected.push(place);
+    selectedIds.add(place.canonicalId);
+  }
+
   for (const place of ranked) {
     if (selected.length >= limit) break;
     if (selectedIds.has(place.canonicalId)) continue;
@@ -356,6 +376,7 @@ export async function getRecommendations(request: RecommendationRequest): Promis
   const excludeCanonicalIds = Array.from(new Set((request.excludeCanonicalIds ?? []).filter(Boolean))).sort();
   const cacheKey = JSON.stringify({
     destination: request.destination.trim().toLowerCase(),
+    accommodation: request.accommodation?.trim().toLowerCase(),
     query: request.query?.trim().toLowerCase(),
     startDate: request.startDate,
     endDate: request.endDate,
@@ -383,7 +404,7 @@ export async function getRecommendations(request: RecommendationRequest): Promis
   const resolvedCoordinates =
     request.latitude != null && request.longitude != null
       ? { latitude: request.latitude, longitude: request.longitude }
-      : await geocodeDestination(request.destination);
+      : await geocodeDestination(request.accommodation?.trim() || request.destination);
   const providerContext = {
     destination: request.destination,
     query: request.query,

@@ -74,6 +74,80 @@ function inferCategoryFromWikipedia(title: string, categories: string[] = []): T
   return inferCategoryFromTypes([title.toLowerCase(), ...categories.map((category) => category.toLowerCase())]);
 }
 
+const WIKIPEDIA_BLOCKED_CATEGORY_TERMS = [
+  'attacks',
+  'battles',
+  'bombings',
+  'conflicts',
+  'deaths',
+  'disasters',
+  'events',
+  'executions',
+  'history',
+  'incidents',
+  'massacres',
+  'murders',
+  'riots',
+  'terrorist incidents',
+  'uprisings',
+  'wars'
+];
+
+const WIKIPEDIA_BLOCKED_TEXT_TERMS = [
+  'assassination',
+  'attack',
+  'battle',
+  'bombing',
+  'collapse',
+  'conflict',
+  'disaster',
+  'execution',
+  'historical event',
+  'incident',
+  'massacre',
+  'riot',
+  'siege',
+  'terrorist',
+  'uprising',
+  'war'
+];
+
+function normalizeLooseText(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[^\w\s-]/g, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function wikipediaLooksLikeHistoricalEvent(input: {
+  title?: string;
+  description?: string;
+  extract?: string;
+  categories?: string[];
+}) {
+  const categories = (input.categories ?? []).map((category) => normalizeLooseText(category));
+  if (categories.some((category) => WIKIPEDIA_BLOCKED_CATEGORY_TERMS.some((term) => category.includes(term)))) {
+    return true;
+  }
+
+  const combinedText = normalizeLooseText([input.title, input.description, input.extract].filter(Boolean).join(' '));
+  if (!combinedText) {
+    return false;
+  }
+
+  if (WIKIPEDIA_BLOCKED_TEXT_TERMS.some((term) => combinedText.includes(term))) {
+    return true;
+  }
+
+  if (/\b\d{4}\b/.test(combinedText) && /\b(on|during|after|before|in)\b/.test(combinedText)) {
+    return true;
+  }
+
+  return /^(?:\d{4}|[a-z]+\s+\d{4}|[\d\w\s'-]+(?:attack|battle|bombing|incident|massacre|riot|uprising|war))$/.test(combinedText);
+}
+
 const FETCH_TIMEOUT_MS = 8000;
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
@@ -404,11 +478,19 @@ class WikipediaProvider implements RecommendationProvider {
 
     const detailPages = detailsPayload?.query?.pages ?? {};
 
-    return searchItems.slice(0, context.limit).map((item) => {
+    return searchItems.slice(0, context.limit).map((item): NormalizedPlace | null => {
       const detail = detailPages[String(item.pageid)];
       const categoryNames = (detail?.categories ?? [])
         .map((category) => category.title?.replace(/^Category:/, '') ?? '')
         .filter(Boolean);
+      if (wikipediaLooksLikeHistoricalEvent({
+        title: detail?.title ?? item.title,
+        description: detail?.description,
+        extract: detail?.extract,
+        categories: categoryNames
+      })) {
+        return null;
+      }
       const category = inferCategoryFromWikipedia(item.title, categoryNames);
       const summary = detail?.extract || detail?.description || `A notable place near ${context.destination}.`;
       const tags = Array.from(new Set([category, ...categoryNames.slice(0, 4)])).filter(Boolean);
@@ -433,7 +515,7 @@ class WikipediaProvider implements RecommendationProvider {
         ],
         tags
       };
-    });
+    }).filter((place): place is NormalizedPlace => place !== null);
   }
 }
 

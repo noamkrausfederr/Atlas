@@ -34,6 +34,7 @@ router.post('/', rateLimit, async (req, res) => {
   try {
     const result = await getRecommendations({
       destination: body.destination.trim(),
+      accommodation: body.accommodation?.trim() || undefined,
       query: body.query,
       startDate: body.startDate,
       endDate: body.endDate,

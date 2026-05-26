@@ -112,6 +112,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [accommodationY, setAccommodationY] = useState(0);
   const scrollViewRef = useRef(null);
   const accommodationBlurTimer = useRef(null);
+  const accommodationRequestId = useRef(0);
   const isPublic = Boolean(board.isPublic);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
 
@@ -141,15 +142,26 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     }
   }, [keyboardHeight, isAccommodationFocused, accommodationY]);
 
+  useEffect(() => () => {
+    clearTimeout(accommodationBlurTimer.current);
+  }, []);
+
   useEffect(() => {
-    if (!isAccommodationFocused || accommodation.trim().length < 2) {
+    const query = accommodation.trim();
+    let isActive = true;
+
+    if (!isAccommodationFocused || query.length < 2) {
       setAccommodationSuggestions([]);
       setIsSearchingAccommodation(false);
-      return;
+      return undefined;
     }
+
+    const requestId = ++accommodationRequestId.current;
     setIsSearchingAccommodation(true);
+    const debounce = 220;
     const timer = setTimeout(async () => {
-      const results = await autocompleteAccommodation(accommodation.trim(), board.location ?? '');
+      const results = await autocompleteAccommodation(query, board.location ?? '');
+      if (!isActive || requestId !== accommodationRequestId.current) return;
       setAccommodationSuggestions(
         results.map((item) => ({
           primaryName: item.name || item.address.split(',')[0]?.trim() || item.address,
@@ -157,8 +169,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         }))
       );
       setIsSearchingAccommodation(false);
-    }, 200);
-    return () => clearTimeout(timer);
+    }, debounce);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
   }, [accommodation, isAccommodationFocused, board.location]);
 
   const persistBoard = (patch) => {
@@ -392,7 +408,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDraggingItinerary}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
       >
         <View style={styles.detailHeader}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -478,13 +494,16 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               setIsAccommodationFocused(true);
             }}
             onBlur={() => {
-              accommodationBlurTimer.current = setTimeout(() => setIsAccommodationFocused(false), 200);
-              persistBoard({ accommodation });
+              clearTimeout(accommodationBlurTimer.current);
+              accommodationBlurTimer.current = setTimeout(() => {
+                setIsAccommodationFocused(false);
+                persistBoard({ accommodation });
+              }, 180);
             }}
             onSubmitEditing={() => {
               clearTimeout(accommodationBlurTimer.current);
-              persistBoard({ accommodation });
               setIsAccommodationFocused(false);
+              persistBoard({ accommodation });
               Keyboard.dismiss();
             }}
             placeholder="Hotel, Airbnb, or address..."
@@ -494,31 +513,43 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             autoCorrect={false}
             autoCapitalize="words"
           />
-          {isAccommodationFocused && (isSearchingAccommodation || accommodationSuggestions.length > 0) && (
+          {isAccommodationFocused && accommodation.trim().length >= 2 && (
             <View style={styles.accommodationDropdown}>
-              {isSearchingAccommodation ? (
+              {accommodationSuggestions.length > 0 ? (
+                <>
+                  {accommodationSuggestions.map((suggestion, index) => (
+                    <TouchableOpacity
+                      key={suggestion.fullAddress + index}
+                      style={[styles.accommodationOption, index < accommodationSuggestions.length - 1 && styles.accommodationOptionDivider]}
+                      activeOpacity={0.8}
+                      onPressIn={() => clearTimeout(accommodationBlurTimer.current)}
+                      onPress={() => {
+                        clearTimeout(accommodationBlurTimer.current);
+                        setAccommodation(suggestion.fullAddress);
+                        persistBoard({ accommodation: suggestion.fullAddress });
+                        setAccommodationSuggestions([]);
+                        setIsAccommodationFocused(false);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
+                      <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {isSearchingAccommodation && (
+                    <View style={styles.accommodationDropdownLoadingInline}>
+                      <ActivityIndicator size="small" color="#A97C50" />
+                    </View>
+                  )}
+                </>
+              ) : isSearchingAccommodation ? (
                 <View style={styles.accommodationDropdownLoading}>
                   <ActivityIndicator size="small" color="#A97C50" />
                 </View>
               ) : (
-                accommodationSuggestions.map((suggestion, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[styles.accommodationOption, index < accommodationSuggestions.length - 1 && styles.accommodationOptionDivider]}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      clearTimeout(accommodationBlurTimer.current);
-                      setAccommodation(suggestion.fullAddress);
-                      persistBoard({ accommodation: suggestion.fullAddress });
-                      setAccommodationSuggestions([]);
-                      setIsAccommodationFocused(false);
-                      Keyboard.dismiss();
-                    }}
-                  >
-                    <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
-                    <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
-                  </TouchableOpacity>
-                ))
+                <View style={styles.accommodationDropdownLoading}>
+                  <Text style={styles.accommodationNoResults}>No results found</Text>
+                </View>
               )}
             </View>
           )}
@@ -804,7 +835,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#4B3A32'
+    color: '#4B3A32',
+    textAlign: 'left',
+    writingDirection: 'ltr'
   },
   accommodationInputFocused: {
     borderColor: '#A8998A'
@@ -820,6 +853,17 @@ const styles = StyleSheet.create({
   accommodationDropdownLoading: {
     paddingVertical: 14,
     alignItems: 'center'
+  },
+  accommodationDropdownLoadingInline: {
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1E7DA'
+  },
+  accommodationNoResults: {
+    fontSize: 13,
+    color: '#A8998A',
+    fontWeight: '500'
   },
   accommodationOption: {
     paddingHorizontal: 14,
