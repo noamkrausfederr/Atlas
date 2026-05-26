@@ -1,5 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Image, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, TextInput, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, TextInput, Platform } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -106,6 +108,7 @@ function InnerApp() {
   const [draftBoard, setDraftBoard] = useState({
     title: '',
     location: '',
+    description: '',
     startDate: '',
     endDate: ''
   });
@@ -289,13 +292,16 @@ function InnerApp() {
   }, []);
   
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 8 + 44 + Math.max(insets.bottom, 6) + 8;
+  const tabBarHeight = 62 + Math.max(insets.bottom, 6);
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
   const shouldHideBottomNav = isInboxChatOpen && isKeyboardVisible;
   
-  const upcomingBoards = getUpcomingTrips(boards);
+const upcomingBoards = getUpcomingTrips(boards);
   const pastTrips = getPastTrips(boards);
   const likedPublicTrips = hydratedPublicTrips.filter((trip) => likedPublicTripIds.includes(trip.id));
+  const isTripsRootView = !selectedBoard && activeTab === 'Trips';
+  const isExploreView = activeTab === 'Explore';
+  const isTripDetailView = Boolean(selectedBoard);
   const inboxProfileDirectory = hydratedPublicTrips.reduce((profiles, trip) => {
     if (!profiles[trip.ownerName]) {
       profiles[trip.ownerName] = {
@@ -406,6 +412,7 @@ function InnerApp() {
     setDraftBoard({
       title: '',
       location: '',
+      description: '',
       startDate: '',
       endDate: ''
     });
@@ -477,6 +484,7 @@ function InnerApp() {
       if (endDate < start) {
         endDate.setTime(start.getTime());
       }
+      const description = draftBoard.description.trim();
       const image = await getBoardImageUrl(location || title);
 
       const newBoard = {
@@ -484,6 +492,7 @@ function InnerApp() {
         title,
         subtitle: location || 'New trip',
         location,
+        description,
         image,
         places: 0,
         days: Math.max(1, Math.round((endDate - start) / (1000 * 60 * 60 * 24)) + 1),
@@ -505,13 +514,18 @@ function InnerApp() {
 
   const renderCreateBoardModal = () => (
     <Modal visible={isCreateBoardVisible} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={undefined}
+      >
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>Create new trip</Text>
           <ScrollView
             ref={createBoardFormRef}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            automaticallyAdjustKeyboardInsets={true}
             style={styles.modalForm}
             contentContainerStyle={styles.modalFormContent}
           >
@@ -523,7 +537,7 @@ function InnerApp() {
               returnKeyType="done"
               onChangeText={(value) => setDraftBoard((current) => ({ ...current, title: value }))}
               onSubmitEditing={Keyboard.dismiss}
-              placeholderTextColor="#B1A294"
+              placeholderTextColor="#AAAAAA"
             />
             <Text style={styles.modalLabel}>Location</Text>
             <TextInput
@@ -541,7 +555,7 @@ function InnerApp() {
                 Keyboard.dismiss();
                 setIsLocationFocused(false);
               }}
-              placeholderTextColor="#B1A294"
+              placeholderTextColor="#AAAAAA"
             />
             {isLocationFocused && (draftBoard.location.trim().length >= 2 || cityOptions.length > 0) && (
               <View style={styles.cityDropdown}>
@@ -577,7 +591,7 @@ function InnerApp() {
             <Text style={styles.modalLabel}>Start date</Text>
             <TouchableOpacity
               style={[styles.modalInput, styles.modalDateButton]}
-              onPress={() => setActiveDraftDateField((current) => (current === 'startDate' ? null : 'startDate'))}
+              onPress={() => { Keyboard.dismiss(); setActiveDraftDateField((current) => (current === 'startDate' ? null : 'startDate')); }}
               activeOpacity={0.78}
             >
               <Text style={[styles.modalDateText, !draftBoard.startDate && styles.modalDatePlaceholder]}>
@@ -600,6 +614,7 @@ function InnerApp() {
             <TouchableOpacity
               style={[styles.modalInput, styles.modalDateButton]}
               onPress={() => {
+                Keyboard.dismiss();
                 setActiveDraftDateField((current) => {
                   const next = current === 'endDate' ? null : 'endDate';
                   if (next === 'endDate') {
@@ -626,6 +641,20 @@ function InnerApp() {
                 />
               </View>
             )}
+            <Text style={styles.modalLabel}>Description</Text>
+            <TextInput
+              style={[styles.modalInput, styles.modalMultilineInput]}
+              placeholder="Describe the trip in 1-2 sentences"
+              value={draftBoard.description}
+              multiline
+              blurOnSubmit={true}
+              textAlignVertical="top"
+              returnKeyType="done"
+              onFocus={scrollCreateBoardFormToEnd}
+              onSubmitEditing={Keyboard.dismiss}
+              onChangeText={(value) => setDraftBoard((current) => ({ ...current, description: value }))}
+              placeholderTextColor="#AAAAAA"
+            />
           </ScrollView>
           <View style={styles.modalButtonRow}>
             <TouchableOpacity style={[styles.modalButton, styles.modalCancelButton]} onPress={closeNewBoard}>
@@ -640,7 +669,7 @@ function InnerApp() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -722,18 +751,17 @@ function InnerApp() {
       <>
         <View style={styles.sectionHeader}>
           <View style={styles.logoWrap}>
-            <Text style={styles.logoText}>
-              Atlas
-              <Text style={styles.logoDot}>.</Text>
-            </Text>
+            <BlurView intensity={28} tint="light" style={styles.logoBlur}>
+              <Text style={styles.logoText}>
+                Atlas
+                <Text style={styles.logoDot}>.</Text>
+              </Text>
+            </BlurView>
           </View>
         </View>
 
         <View style={styles.tripSectionHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>Upcoming</Text>
-            <Text style={styles.sectionTitle}>My upcoming trips</Text>
-          </View>
+          <Text style={styles.tripSectionTitle}>Upcoming trips</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
           {upcomingBoards.map((board) => (
@@ -742,10 +770,7 @@ function InnerApp() {
         </ScrollView>
 
         <View style={styles.tripSectionHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>Archive</Text>
-            <Text style={styles.sectionTitle}>Past trips</Text>
-          </View>
+          <Text style={styles.tripSectionTitle}>Past trips</Text>
         </View>
         {pastTrips.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
@@ -754,20 +779,28 @@ function InnerApp() {
             ))}
           </ScrollView>
         ) : (
-          <View style={styles.emptyTrips}>
-            <Text style={styles.emptyTripsText}>No past trips yet.</Text>
-          </View>
+          <View style={styles.emptyTrips} />
         )}
       </>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView
+      style={[styles.safeArea, isTripsRootView && styles.tripsSafeArea, isTripDetailView && styles.detailSafeArea, isExploreView && styles.tripsSafeArea]}
+      edges={['top']}
+    >
       <StatusBar style="dark" />
-      <View style={styles.contentWrapper}>
+      <View
+        style={[
+          styles.contentWrapper,
+          isTripsRootView && styles.tripsContentWrapper,
+          isTripDetailView && styles.detailContentWrapper,
+          isExploreView && styles.tripsContentWrapper
+        ]}
+      >
         {selectedBoard ? (
-          <View style={[styles.detailContainer, { paddingBottom: tabBarHeight }]}>
+          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: tabBarHeight }]}>
             {renderSelectedBoardContent()}
           </View>
         ) : activeTab === 'Inbox' ? (
@@ -776,7 +809,13 @@ function InnerApp() {
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={[styles.container, exploreStack && styles.exploreStackContainer]}
+            contentContainerStyle={[
+              styles.container,
+              exploreStack && styles.exploreStackContainer,
+              isTripsRootView && styles.tripsContainer,
+              isExploreView && styles.exploreContainer
+            ]}
+            style={isTripsRootView ? styles.tripsScrollView : isExploreView ? styles.exploreScrollView : null}
             showsVerticalScrollIndicator={false}
           >
             {renderContent()}
@@ -784,35 +823,38 @@ function InnerApp() {
         )}
         {renderCreateBoardModal()}
         {!shouldHideBottomNav && (
-          <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-            <TouchableOpacity
-              style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
-              onPress={() => openTab('Trips')}
-            >
-              <Text style={[styles.navText, activeTab === 'Trips' && styles.navTextActive]}>Trips</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
-              onPress={() => openTab('Explore')}
-            >
-              <Text style={[styles.navText, activeTab === 'Explore' && styles.navTextActive]}>Explore</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
-              <Text style={styles.createTripNavButtonText}>+</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
-              onPress={() => openTab('Inbox')}
-            >
-              <Text style={[styles.navText, activeTab === 'Inbox' && styles.navTextActive]}>Inbox</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
-              onPress={() => openTab('Profile')}
-            >
-              <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>Profile</Text>
-            </TouchableOpacity>
-          </View>
+          <BlurView intensity={40} tint="light" style={styles.bottomNav}>
+            <View style={styles.navRow}>
+              <TouchableOpacity
+                style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
+                onPress={() => openTab('Trips')}
+              >
+                <Ionicons name="home-outline" size={28} color={activeTab === 'Trips' ? '#555555' : '#AAAAAA'} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
+                onPress={() => openTab('Explore')}
+              >
+                <Ionicons name="search-outline" size={28} color={activeTab === 'Explore' ? '#555555' : '#AAAAAA'} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
+                <Text style={styles.createTripNavButtonText}>+</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
+                onPress={() => openTab('Inbox')}
+              >
+                <Ionicons name="chatbubbles-outline" size={28} color={activeTab === 'Inbox' ? '#555555' : '#AAAAAA'} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
+                onPress={() => openTab('Profile')}
+              >
+                <Ionicons name="person-outline" size={28} color={activeTab === 'Profile' ? '#555555' : '#AAAAAA'} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ height: Math.max(insets.bottom, 6) }} />
+          </BlurView>
         )}
       </View>
     </SafeAreaView>
@@ -832,13 +874,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F6EFE5'
   },
+  tripsSafeArea: {
+    backgroundColor: '#F3F3F1'
+  },
+  detailSafeArea: {
+    backgroundColor: '#F3F3F1'
+  },
   container: {
     padding: 20,
     paddingBottom: 92
   },
+  tripsContainer: {
+    backgroundColor: '#F3F3F1',
+    paddingHorizontal: 12,
+    paddingTop: 8
+  },
+  exploreContainer: {
+    paddingHorizontal: 12,
+    backgroundColor: '#F3F3F1'
+  },
   contentWrapper: {
     flex: 1,
     position: 'relative'
+  },
+  tripsContentWrapper: {
+    backgroundColor: '#F3F3F1'
+  },
+  detailContentWrapper: {
+    backgroundColor: '#F3F3F1'
+  },
+  tripsScrollView: {
+    backgroundColor: '#F3F3F1'
+  },
+  exploreScrollView: {
+    backgroundColor: '#F3F3F1'
   },
   heroCard: {
     backgroundColor: '#FFF8F0',
@@ -893,39 +962,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16
+    marginBottom: 8,
+    paddingLeft: 4
+  },
+  tripSectionTitle: {
+    fontSize: 19,
+    lineHeight: 24,
+    color: '#111111',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   logoWrap: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#FFF8F0',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E2D3BF'
+    borderColor: 'rgba(215,215,210,0.95)',
+    overflow: 'hidden'
+  },
+  logoBlur: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.82)'
   },
   logoText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#4B3A32'
+    color: '#111111'
   },
   logoDot: {
-    color: '#C89B6D'
+    color: '#111111'
   },
   horizontalCards: {
     marginBottom: 12
   },
   emptyTrips: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 18,
+    height: 18,
     marginBottom: 12
-  },
-  emptyTripsText: {
-    color: '#A8998A',
-    fontWeight: '700',
-    textAlign: 'center'
   },
   createTripButton: {
     width: 44,
@@ -1035,46 +1110,49 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    backgroundColor: '#FFF8F0',
+    backgroundColor: 'rgba(243,243,241,0.82)',
     borderTopWidth: 1,
-    borderTopColor: '#EDE3D6',
+    borderTopColor: 'rgba(215,215,210,0.95)',
     zIndex: 20,
-    elevation: 10
+    elevation: 10,
+    overflow: 'hidden'
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 6
   },
   navButton: {
-    flex: 1,
-    height: 44,
+    width: 48,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center'
   },
   navButtonActive: {},
   createTripNavButton: {
-    width: 52,
-    height: 52,
-    marginTop: 2,
-    backgroundColor: '#E6A6B3',
+    width: 48,
+    height: 48,
+    backgroundColor: '#111111',
     borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#E7C7B2',
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8
+    shadowColor: '#000000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6
   },
   createTripNavButtonText: {
-    color: '#FFF8F0',
+    color: '#FFFFFF',
     fontSize: 28,
     lineHeight: 30,
-    fontWeight: '800'
+    fontWeight: '300'
   },
   navText: {
-    color: '#A8998A',
+    color: '#AAAAAA',
     fontSize: 11,
     fontWeight: '500',
     textTransform: 'uppercase',
@@ -1084,7 +1162,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center'
   },
   navTextActive: {
-    color: '#4B3A32',
+    color: '#555555',
     fontWeight: '600'
   },
   modalOverlay: {
@@ -1094,7 +1172,7 @@ const styles = StyleSheet.create({
     padding: 20
   },
   modalCard: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 28,
     padding: 22,
     maxHeight: '92%',
@@ -1107,49 +1185,54 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#4B3A32',
+    color: '#111111',
     marginBottom: 18
   },
   modalForm: {
-    marginBottom: 16
+    marginBottom: 0
   },
   modalFormContent: {
-    paddingBottom: 8
+    paddingBottom: 0
   },
   modalLabel: {
-    color: '#7A6658',
+    color: '#111111',
     fontSize: 13,
     marginBottom: 8,
     fontWeight: '600'
   },
   modalInput: {
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     marginBottom: 14,
-    color: '#4B3A32',
+    color: '#111111',
     borderWidth: 1,
-    borderColor: '#E2D3BF'
+    borderColor: 'rgba(215,215,210,0.95)',
+    textAlign: 'left'
+  },
+  modalMultilineInput: {
+    minHeight: 112,
+    paddingTop: Platform.OS === 'ios' ? 16 : 12
   },
   modalDateButton: {
     justifyContent: 'center'
   },
   modalDateText: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 14,
     fontWeight: '600'
   },
   modalDatePlaceholder: {
-    color: '#B1A294',
+    color: '#AAAAAA',
     fontWeight: '400'
   },
   modalCalendarWrap: {
     width: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
-    backgroundColor: '#FFF8F0',
+    borderColor: 'rgba(215,215,210,0.95)',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     marginTop: -6,
     marginBottom: 14
@@ -1163,10 +1246,10 @@ const styles = StyleSheet.create({
   cityDropdown: {
     marginTop: -6,
     marginBottom: 14,
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#F3F3F1',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     overflow: 'hidden'
   },
   cityDropdownStatus: {
@@ -1214,26 +1297,33 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCancelButton: {
-    backgroundColor: '#F0D6D6'
+    backgroundColor: '#F3F3F1',
+    borderWidth: 1,
+    borderColor: 'rgba(215,215,210,0.95)'
   },
   modalCancelText: {
-    color: '#A97C50',
+    color: '#111111',
     fontWeight: '700'
   },
   modalSaveButton: {
-    backgroundColor: '#C48A96'
+    backgroundColor: '#F3F3F1',
+    borderWidth: 1,
+    borderColor: 'rgba(215,215,210,0.95)'
   },
   modalSaveButtonDisabled: {
     opacity: 0.72
   },
   modalSaveText: {
-    color: '#FFF8F0',
+    color: '#111111',
     fontWeight: '700'
   },
   detailContainer: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 4
+    paddingHorizontal: 0,
+    paddingTop: 0
+  },
+  tripDetailContainer: {
+    backgroundColor: '#F3F3F1'
   },
   exploreStackContainer: {
     paddingBottom: 120

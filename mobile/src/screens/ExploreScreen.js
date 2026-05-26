@@ -1,4 +1,5 @@
 import { ActivityIndicator, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -195,6 +196,7 @@ export function ExploreScreen({
   const [activeFilterDateField, setActiveFilterDateField] = useState(null);
   const [showCountryOptions, setShowCountryOptions] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setSelectedPublicTrip((current) => (
@@ -209,7 +211,13 @@ export function ExploreScreen({
   const travelerTypeOptions = useMemo(() => uniqueValues(publicTrips, 'travelerType'), [publicTrips]);
   const accessibilityOptions = useMemo(() => uniqueValues(publicTrips, 'accessibility'), [publicTrips]);
   const budgetOptions = useMemo(() => uniqueValues(publicTrips, 'budget'), [publicTrips]);
-  const filteredTrips = publicTrips.filter((trip) => matchesPublicTripFilters(trip, filters));
+  const filteredTrips = publicTrips
+    .filter((trip) => matchesPublicTripFilters(trip, filters))
+    .filter((trip) => {
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return trip.title.toLowerCase().includes(q) || trip.location.toLowerCase().includes(q);
+    });
   const addedPublicTripIds = new Set(boards.map((board) => board.sourcePublicTripId).filter(Boolean));
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
   const toggleCountryFilter = (country) => {
@@ -341,9 +349,28 @@ export function ExploreScreen({
     <View>
       <View style={styles.exploreHeader}>
         <Text style={styles.explorePageTitle}>Explore</Text>
-        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
-          <Text style={styles.filterButtonText}>Filter</Text>
-        </TouchableOpacity>
+      </View>
+      <View style={styles.exploreSearchRow}>
+        <View style={styles.exploreSearchBar}>
+          <Ionicons name="search-outline" size={16} color="#AAAAAA" />
+          <TextInput
+            style={styles.exploreSearchInput}
+            placeholder="Search"
+            placeholderTextColor="#AAAAAA"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+        <View style={styles.exploreIconGroup}>
+          <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
+            <Ionicons name="funnel-outline" size={22} color="#AAAAAA" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
+            <Ionicons name="swap-vertical-outline" size={22} color="#AAAAAA" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.publicTripMasonry}>
@@ -374,19 +401,20 @@ export function ExploreScreen({
 }
 
 function PublicTripCard({ trip, onOpenTrip, onOpenProfile, variantIndex = 0 }) {
-  const imageHeights = [210, 164, 176, 224, 190, 152];
+  const imageHeights = [100, 80, 110, 85, 95, 80];
+  const imageHeight = imageHeights[variantIndex % imageHeights.length];
 
   return (
     <View style={styles.publicTripCard}>
       <TouchableOpacity activeOpacity={0.88} onPress={onOpenTrip}>
-        <Image source={{ uri: trip.image }} style={[styles.publicTripImage, { height: imageHeights[variantIndex % imageHeights.length] }]} />
+        <Image source={{ uri: trip.image }} style={[styles.publicTripImage, { height: imageHeight }]} />
       </TouchableOpacity>
       <View style={styles.publicTripBody}>
         <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
-          <View style={styles.publicTripTitleRow}>
-            <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
-          </View>
+          <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
           <Text style={styles.publicTripMeta} numberOfLines={2}>{trip.location}</Text>
+          <Text style={styles.publicTripDates} numberOfLines={1}>{formatDateRange(trip)}</Text>
+          {trip.description ? <Text style={styles.publicTripDescription} numberOfLines={3}>{trip.description}</Text> : null}
         </TouchableOpacity>
         <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripOwnerButton}>
           <Text style={styles.publicTripOwner} numberOfLines={1}>By {trip.ownerName}</Text>
@@ -1003,27 +1031,56 @@ export function ExploreMoreScreen({ board, onBack }) {
 const styles = StyleSheet.create({
   exploreHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
     gap: 12
   },
   explorePageTitle: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 32,
     lineHeight: 38,
-    fontWeight: '900'
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800',
+    marginLeft: 2
+  },
+  exploreSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 0
+  },
+  exploreIconGroup: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  exploreSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+    marginLeft: 6
+  },
+  exploreSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#111111',
+    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    includeFontPadding: false
   },
   filterButton: {
-    borderRadius: 14,
-    backgroundColor: '#E6A6B3',
-    paddingVertical: 11,
-    paddingHorizontal: 16
-  },
-  filterButtonText: {
-    color: '#FFF8F0',
-    fontWeight: '800',
-    fontSize: 13
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   filterPanel: {
     backgroundColor: '#FFF8F0',
@@ -1261,52 +1318,67 @@ const styles = StyleSheet.create({
     gap: 14
   },
   publicTripCard: {
-    overflow: 'hidden'
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2
   },
   publicTripImage: {
     width: '100%',
-    borderRadius: 18,
-    backgroundColor: '#F1E7DA'
+    backgroundColor: '#F3F3F1'
   },
   publicTripBody: {
-    paddingTop: 8,
-    paddingHorizontal: 2,
-    paddingBottom: 4
-  },
-  publicTripTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 6
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 12,
+    paddingRight: 10
   },
   publicTripTitle: {
-    flexShrink: 1,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '800',
-    color: '#4B3A32',
-    textAlign: 'left'
+    fontSize: 15,
+    lineHeight: 20,
+    color: '#111111',
+    marginBottom: 3,
+    fontFamily: Platform.select({ ios: 'SF Pro Display', android: 'sans-serif-medium', default: 'System' }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
-  publicTripMore: {
-    color: '#4B3A32',
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 16
+  publicTripDates: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#7A7A7A',
+    marginBottom: 4,
+    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontWeight: '400'
+  },
+  publicTripDescription: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#9A9A9A',
+    marginTop: 4,
+    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontWeight: '400'
   },
   publicTripOwner: {
-    color: '#A97C50',
+    color: '#575757',
     fontSize: 11,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   publicTripOwnerButton: {
     alignSelf: 'flex-start',
-    marginTop: 4
+    marginTop: 10
   },
   publicTripMeta: {
-    color: '#7F7063',
     fontSize: 12,
     lineHeight: 16,
-    marginTop: 2
+    color: '#575757',
+    marginBottom: 4,
+    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontWeight: Platform.OS === 'ios' ? '600' : '500'
   },
   publicTripTagRow: {
     flexDirection: 'row',
