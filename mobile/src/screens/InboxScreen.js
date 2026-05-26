@@ -20,6 +20,21 @@ function formatRelativeTime(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86400000);
+
+  if (diffDays === 1) {
+    return 'Yesterday';
+  }
+
+  if (diffDays > 1 && diffDays < 7) {
+    return date.toLocaleDateString([], { weekday: 'long' });
+  }
+
   return date.toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit'
@@ -103,9 +118,8 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                         <Text style={styles.unreadBadgeText}>{formatUnreadCount(thread.unreadCount)}</Text>
                       </View>
                     ) : null}
-                    <Text style={styles.threadTime}>{formatRelativeTime(thread.lastMessageAt)}</Text>
                   </View>
-                <View style={styles.threadTopRow}>
+                  <View style={styles.threadTopRow}>
                     <Text style={styles.threadName}>{thread.ownerName}</Text>
                   </View>
                   <Text style={styles.threadHandle}>{thread.handle}</Text>
@@ -337,18 +351,18 @@ const styles = StyleSheet.create({
   },
   threadListContent: {
     flexGrow: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 18,
     paddingTop: 20,
     paddingBottom: 20
   },
   header: {
-    marginBottom: 18,
+    marginBottom: 8,
     paddingLeft: 8
   },
   title: {
     color: '#111111',
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '800',
     fontFamily: Platform.select({
       ios: 'SF Pro Display',
@@ -365,13 +379,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E1E1DC',
+    borderColor: '#E8E8E3',
     padding: 14,
     minHeight: 92
   },
   threadCardActive: {
-    borderColor: '#CFCFC9',
-    backgroundColor: '#FCFCFB'
+    borderColor: '#E8E8E3',
+    backgroundColor: '#FFFFFF'
   },
   threadAvatar: {
     width: 46,
@@ -403,10 +417,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     position: 'relative',
-    paddingRight: 60
+    paddingRight: 62
   },
   threadTopRow: {
-    marginBottom: 2
+    marginBottom: 2,
+    paddingRight: 0
   },
   threadName: {
     color: '#111111',
@@ -422,29 +437,19 @@ const styles = StyleSheet.create({
   },
   threadMeta: {
     position: 'absolute',
-    top: 2,
+    top: 0,
     bottom: 0,
     right: 0,
-    width: 50,
+    width: 56,
     alignItems: 'center',
-    justifyContent: 'space-between',
     flexShrink: 0
   },
-  threadTime: {
-    color: '#8A8A84',
-    fontSize: 11,
-    fontWeight: '700',
-    width: '100%',
-    marginBottom: 1,
-    textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
-  },
   unreadBadge: {
-    marginTop: 1,
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -14,
+    marginTop: -14,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -452,7 +457,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.68)',
+    borderColor: 'rgba(216,216,210,0.9)',
     backgroundColor: 'transparent'
   },
   unreadBadgeBlur: {
@@ -481,6 +486,8 @@ const styles = StyleSheet.create({
     })
   },
   threadPreview: {
+    flex: 1,
+    minWidth: 0,
     color: '#6F6F6B',
     fontSize: 13,
     lineHeight: 18,
