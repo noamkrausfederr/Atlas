@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { hasProviderKey } from '../config/env.js';
-import { geocodeDestination } from '../services/recommendations/geocode.js';
+import { geocodeDestination, geocodeQuery, geocodePlaceId } from '../services/recommendations/geocode.js';
 
 const router = Router();
 
@@ -169,6 +169,33 @@ router.get('/autocomplete', async (req, res) => {
     res.json({ suggestions: await fetchGeoapifyAutocomplete(text, destination) });
   } catch {
     res.json({ suggestions: [] });
+  }
+});
+
+router.get('/resolve', async (req, res) => {
+  const text = String(req.query.text ?? '').trim();
+  const placeId = String(req.query.placeId ?? '').trim();
+
+  if (!text && !placeId) {
+    res.json({ coords: null });
+    return;
+  }
+
+  try {
+    const coords = placeId
+      ? await geocodePlaceId(placeId) ?? (text ? await geocodeQuery(text) : null)
+      : await geocodeQuery(text);
+
+    res.json({
+      coords: coords
+        ? {
+            lat: coords.latitude,
+            lng: coords.longitude
+          }
+        : null
+    });
+  } catch {
+    res.json({ coords: null });
   }
 });
 

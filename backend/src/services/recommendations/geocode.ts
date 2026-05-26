@@ -7,31 +7,41 @@ type Coordinates = {
 };
 
 const geocodeCache = new MemoryCache<Coordinates>(1000 * 60 * 60 * 6);
+const placeIdCache = new MemoryCache<Coordinates>(1000 * 60 * 60 * 24);
 
-export async function geocodeDestination(destination: string): Promise<Coordinates | null> {
-  const cacheKey = destination.trim().toLowerCase();
+function normalizeDestinationQuery(destination: string) {
+  let queryDestination = destination.trim().toLowerCase();
+  if (queryDestination.includes('venice')) {
+    return 'Piazza San Marco, Venice, Italy';
+  }
+  if (queryDestination.includes('paris')) {
+    return 'paris, france';
+  }
+  if (queryDestination.includes('kyoto')) {
+    return 'kyoto, japan';
+  }
+  if (queryDestination.includes('francisco')) {
+    return 'san francisco, usa';
+  }
+  return destination;
+}
+
+export async function geocodeQuery(query: string): Promise<Coordinates | null> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return null;
+  }
+
+  const cacheKey = trimmedQuery.toLowerCase();
   const cached = geocodeCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  let queryDestination = destination.trim().toLowerCase();
-  if (queryDestination.includes('venice')) {
-    queryDestination = 'Piazza San Marco, Venice, Italy';
-  } else if (queryDestination.includes('paris')) {
-    queryDestination = 'paris, france';
-  } else if (queryDestination.includes('kyoto')) {
-    queryDestination = 'kyoto, japan';
-  } else if (queryDestination.includes('francisco')) {
-    queryDestination = 'san francisco, usa';
-  } else {
-    queryDestination = destination;
-  }
-
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY as string;
   const providers = [
-    () => geocodeWithGoogle(queryDestination, googleApiKey),
-    () => geocodeWithNominatim(queryDestination)
+    () => geocodeWithGoogle(trimmedQuery, googleApiKey),
+    () => geocodeWithNominatim(trimmedQuery)
   ];
 
   for (const resolver of providers) {
@@ -43,6 +53,20 @@ export async function geocodeDestination(destination: string): Promise<Coordinat
   }
 
   return null;
+}
+
+export async function geocodeDestination(destination: string): Promise<Coordinates | null> {
+  const cacheKey = destination.trim().toLowerCase();
+  const cached = geocodeCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const result = await geocodeQuery(normalizeDestinationQuery(destination));
+  if (result) {
+    geocodeCache.set(cacheKey, result);
+  }
+  return result;
 }
 
 const GEOCODE_TIMEOUT_MS = 8000;
@@ -91,6 +115,54 @@ async function geocodeWithGoogle(destination: string, apiKey: string): Promise<C
       latitude: location.latitude,
       longitude: location.longitude
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function geocodePlaceId(placeId: string): Promise<Coordinates | null> {
+  if (!isRecommendationProviderAllowed('google') || !hasProviderKey('google')) {
+    return null;
+  }
+
+  const trimmedPlaceId = placeId.trim();
+  if (!trimmedPlaceId) {
+    return null;
+  }
+
+  const cached = placeIdCache.get(trimmedPlaceId);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await geocodeFetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(trimmedPlaceId)}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY as string,
+        'X-Goog-FieldMask': 'location'
+      }
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      location?: { latitude?: number; longitude?: number };
+    };
+
+    const location = payload.location;
+    if (location?.latitude == null || location.longitude == null) {
+      return null;
+    }
+
+    const result = {
+      latitude: location.latitude,
+      longitude: location.longitude
+    };
+    placeIdCache.set(trimmedPlaceId, result);
+    return result;
   } catch {
     return null;
   }

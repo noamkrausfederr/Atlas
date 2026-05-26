@@ -3,14 +3,16 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 export function RecommendationCard({ rec, onPress }) {
   return (
     <TouchableOpacity style={styles.recCard} onPress={() => onPress(rec)} activeOpacity={0.85}>
-      <Text style={styles.recCategory}>{rec.category}</Text>
+      <View style={styles.recHeader}>
+        <Text style={styles.recCategory}>{rec.category}</Text>
+        {rec.distanceFromAccommodation ? (
+          <Text style={styles.recDistance}>{rec.distanceFromAccommodation} from stay</Text>
+        ) : null}
+      </View>
       <Text style={styles.recTitle}>{rec.title}</Text>
       <Text style={styles.recReason} numberOfLines={2}>
         {rec.reason}
       </Text>
-      {rec.distanceFromAccommodation ? (
-        <Text style={styles.recDistance}>{rec.distanceFromAccommodation} from your stay</Text>
-      ) : null}
     </TouchableOpacity>
   );
 }
@@ -24,13 +26,19 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10
   },
+  recHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8
+  },
   recCategory: {
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: '#A8998A',
-    marginBottom: 8
+    flexShrink: 1
   },
   recTitle: {
     fontSize: 16,
@@ -47,6 +55,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#A8998A',
-    marginTop: 6
+    textAlign: 'right',
+    marginLeft: 10,
+    flexShrink: 0
   },
 });

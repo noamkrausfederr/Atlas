@@ -5,21 +5,122 @@ const recommendationCache = new Map();
 const accommodationGeoCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 10;
 const RECOMMENDATION_BATCH_SIZE = 10;
+let lastWorkingApiBaseUrl = null;
 
-async function geocodeAccommodation(address) {
-  const key = address.trim().toLowerCase();
+async function geocodeAccommodation(board) {
+  if (
+    board?.accommodationCoords?.lat != null &&
+    board?.accommodationCoords?.lng != null
+  ) {
+    return board.accommodationCoords;
+  }
+
+  const address = board?.accommodation?.trim();
+  if (!address) {
+    return null;
+  }
+
+  const key = [
+    address.toLowerCase(),
+    board?.accommodationPlaceId || ''
+  ].join('::');
   if (accommodationGeoCache.has(key)) return accommodationGeoCache.get(key);
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
-    const res = await fetch(url, { headers: { 'User-Agent': 'TripBoard/0.1' } });
-    const data = await res.json();
-    if (data?.[0]?.lat && data?.[0]?.lon) {
-      const coords = { lat: Number(data[0].lat), lng: Number(data[0].lon) };
-      accommodationGeoCache.set(key, coords);
-      return coords;
-    }
-  } catch {}
+
+  for (const baseUrl of getApiBaseUrls()) {
+    try {
+      const params = new URLSearchParams({ text: address });
+      if (board?.accommodationPlaceId) {
+        params.set('placeId', board.accommodationPlaceId);
+      }
+      const res = await fetch(`${baseUrl}/geocode/resolve?${params}`);
+      if (!res.ok) {
+        continue;
+      }
+      const data = await res.json();
+      if (data?.coords?.lat != null && data?.coords?.lng != null) {
+        const coords = { lat: Number(data.coords.lat), lng: Number(data.coords.lng) };
+        accommodationGeoCache.set(key, coords);
+        rememberWorkingApiBaseUrl(baseUrl);
+        return coords;
+      }
+    } catch {}
+  }
+
+  accommodationGeoCache.set(key, null);
   return null;
+}
+
+function getAccommodationCacheKey(board) {
+  return [
+    normalizeText(board?.accommodation || ''),
+    board?.accommodationPlaceId || '',
+    board?.accommodationCoords?.lat ?? '',
+    board?.accommodationCoords?.lng ?? ''
+  ].join(':');
+}
+
+function isFiniteCoordinate(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function shouldShowDistanceFromAccommodation(board, recommendation) {
+  return Boolean(
+    board?.accommodation?.trim() &&
+    isFiniteCoordinate(recommendation?.lat) &&
+    isFiniteCoordinate(recommendation?.lng)
+  );
+}
+
+function withAccommodationDistance(board, recommendation, accommodationCoords) {
+  if (!shouldShowDistanceFromAccommodation(board, recommendation) || !accommodationCoords) {
+    return recommendation;
+  }
+
+  const km = distanceKm(accommodationCoords.lat, accommodationCoords.lng, recommendation.lat, recommendation.lng);
+  return {
+    ...recommendation,
+    distanceFromAccommodation: formatDistance(km)
+  };
+}
+
+function clearAccommodationDistance(recommendation) {
+  if (!recommendation?.distanceFromAccommodation) {
+    return recommendation;
+  }
+
+  const nextRecommendation = { ...recommendation };
+  delete nextRecommendation.distanceFromAccommodation;
+  return nextRecommendation;
+}
+
+function applyAccommodationDistances(board, recommendations, accommodationCoords) {
+  if (!board?.accommodation?.trim()) {
+    return recommendations.map(clearAccommodationDistance);
+  }
+
+  return recommendations.map((recommendation) => {
+    if (accommodationCoords) {
+      return withAccommodationDistance(board, recommendation, accommodationCoords);
+    }
+    return clearAccommodationDistance(recommendation);
+  });
+}
+
+function cachedRecommendationsNeedAccommodationDistances(board, cachedValue) {
+  if (!board?.accommodation?.trim()) {
+    return false;
+  }
+
+  const recommendations = cachedValue?.recommendations || [];
+  const hasLocatableRecommendations = recommendations.some(
+    (recommendation) => isFiniteCoordinate(recommendation?.lat) && isFiniteCoordinate(recommendation?.lng)
+  );
+
+  if (!hasLocatableRecommendations) {
+    return false;
+  }
+
+  return !recommendations.some((recommendation) => recommendation?.distanceFromAccommodation);
 }
 
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -185,7 +286,19 @@ function getApiBaseUrls() {
     ? [...localUrls, ...configuredUrls]
     : [...configuredUrls, ...localUrls];
 
-  return dedupe(urls);
+  const deduped = dedupe(urls);
+  if (!lastWorkingApiBaseUrl) {
+    return deduped;
+  }
+
+  return [
+    lastWorkingApiBaseUrl,
+    ...deduped.filter((url) => url !== lastWorkingApiBaseUrl)
+  ];
+}
+
+function rememberWorkingApiBaseUrl(baseUrl) {
+  lastWorkingApiBaseUrl = baseUrl;
 }
 
 async function fetchRecommendationsPayload(requestBody) {
@@ -207,6 +320,7 @@ async function fetchRecommendationsPayload(requestBody) {
       }
 
       const payload = await response.json();
+      rememberWorkingApiBaseUrl(baseUrl);
       return { payload, baseUrl };
     } catch (error) {
       lastError = error;
@@ -252,6 +366,18 @@ function humanizeCategory(category) {
     .split(/[_\s-]+/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function isTicketmasterRecommendation(item) {
+  return (item?.sourceAttributions || []).some((source) => source?.provider === 'ticketmaster');
+}
+
+function getDisplayCategory(item) {
+  if (isTicketmasterRecommendation(item)) {
+    return 'Live Events';
+  }
+
+  return humanizeCategory(item?.category);
 }
 
 function prettifyProviderName(provider) {
@@ -360,7 +486,7 @@ function mapApiRecommendation(board, item, dayLabel) {
     slug: slugify(item.name),
     boardId: board.id,
     title: item.name,
-    category: humanizeCategory(item.category),
+    category: getDisplayCategory(item),
     dayLabel,
     reason: item.reason,
     description: item.description || `A live recommendation for ${getDestination(board)} sourced from live web data.`,
@@ -379,7 +505,7 @@ function mapApiRecommendation(board, item, dayLabel) {
 }
 
 function buildCacheKey(board, searchQuery = '') {
-  return `${board.id}:${getDestination(board)}:${getTripDays(board)}:${board.budget || ''}:${board.subtitle || ''}:${board.startDate || ''}:${board.endDate || ''}:${normalizeText(searchQuery)}`;
+  return `${board.id}:${getDestination(board)}:${getTripDays(board)}:${board.budget || ''}:${board.subtitle || ''}:${board.startDate || ''}:${board.endDate || ''}:${normalizeText(searchQuery)}:${getAccommodationCacheKey(board)}`;
 }
 
 export async function autocompleteAccommodation(text, destination) {
@@ -393,6 +519,7 @@ export async function autocompleteAccommodation(text, destination) {
       const res = await fetch(`${baseUrl}/geocode/autocomplete?${params}`);
       if (!res.ok) continue;
       const data = await res.json();
+      rememberWorkingApiBaseUrl(baseUrl);
       return (data.suggestions ?? [])
         .map((suggestion) => ({
           ...suggestion,
@@ -415,7 +542,13 @@ export async function fetchBoardRecommendations(board, options = {}) {
   const trimmedSearchQuery = String(searchQuery || '').trim();
   const cacheKey = buildCacheKey(board, trimmedSearchQuery);
   const cached = recommendationCache.get(cacheKey);
-  if (!loadMore && cached && Date.now() - cached.cachedAt < CACHE_TTL_MS && !cached.value.meta.usedMockData) {
+  if (
+    !loadMore &&
+    cached &&
+    Date.now() - cached.cachedAt < CACHE_TTL_MS &&
+    !cached.value.meta.usedMockData &&
+    !cachedRecommendationsNeedAccommodationDistances(board, cached.value)
+  ) {
     return cached.value;
   }
 
@@ -440,18 +573,17 @@ export async function fetchBoardRecommendations(board, options = {}) {
   try {
     const [{ payload }, accommodationCoords] = await Promise.all([
       fetchRecommendationsPayload(requestBody),
-      board.accommodation?.trim() ? geocodeAccommodation(board.accommodation.trim()) : Promise.resolve(null)
+      board.accommodation?.trim() ? geocodeAccommodation(board) : Promise.resolve(null)
     ]);
     const liveItems = payload.recommendations || [];
     const dayLabels = assignDayLabels(liveItems.length || 1, tripDays);
-    const nextRecommendations = liveItems.map((item, index) => {
-      const rec = mapApiRecommendation(board, item, dayLabels[index] ?? `Day ${Math.min(index + 1, tripDays)}`);
-      if (accommodationCoords && item.lat != null && item.lng != null) {
-        const km = distanceKm(accommodationCoords.lat, accommodationCoords.lng, item.lat, item.lng);
-        rec.distanceFromAccommodation = formatDistance(km);
-      }
-      return rec;
-    });
+    const nextRecommendations = applyAccommodationDistances(
+      board,
+      liveItems.map((item, index) => (
+        mapApiRecommendation(board, item, dayLabels[index] ?? `Day ${Math.min(index + 1, tripDays)}`)
+      )),
+      accommodationCoords
+    );
     const newRecommendations = loadMore
       ? filterPreviouslySeenRecommendations(nextRecommendations, getSeenRecommendations(cached))
       : nextRecommendations;

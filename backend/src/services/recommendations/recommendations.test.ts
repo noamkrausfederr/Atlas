@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dedupePlaces, wikipediaLooksLikeHistoricalEvent } from './providers.js';
-import { rankPlaces } from './recommendationService.js';
+import { filterPlacesByRequestedCategories, rankPlaces } from './recommendationService.js';
 import type { NormalizedPlace, RecommendationRequest } from './types.js';
 
 function makePlace(overrides: Partial<NormalizedPlace> & { canonicalId: string; name: string }): NormalizedPlace {
@@ -135,6 +135,41 @@ describe('rankPlaces', () => {
     expect(typeof result.score).toBe('number');
     expect(typeof result.reason).toBe('string');
     expect(result.reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe('filterPlacesByRequestedCategories', () => {
+  it('keeps only exact category matches for single-category requests', () => {
+    const places = [
+      makePlace({ canonicalId: 'cafe', name: 'Cafe', category: 'cafe' }),
+      makePlace({ canonicalId: 'restaurant', name: 'Restaurant', category: 'restaurant' })
+    ];
+
+    const filtered = filterPlacesByRequestedCategories(places, ['cafe']);
+
+    expect(filtered.map((place) => place.canonicalId)).toEqual(['cafe']);
+  });
+
+  it('does not blend attraction and experience categories', () => {
+    const places = [
+      makePlace({ canonicalId: 'attraction', name: 'Attraction', category: 'attraction' }),
+      makePlace({ canonicalId: 'experience', name: 'Experience', category: 'experience' })
+    ];
+
+    expect(filterPlacesByRequestedCategories(places, ['attraction']).map((place) => place.canonicalId)).toEqual(['attraction']);
+    expect(filterPlacesByRequestedCategories(places, ['experience']).map((place) => place.canonicalId)).toEqual(['experience']);
+  });
+
+  it('keeps all requested categories for multi-category searches', () => {
+    const places = [
+      makePlace({ canonicalId: 'cafe', name: 'Cafe', category: 'cafe' }),
+      makePlace({ canonicalId: 'museum', name: 'Museum', category: 'museum' }),
+      makePlace({ canonicalId: 'park', name: 'Park', category: 'park' })
+    ];
+
+    const filtered = filterPlacesByRequestedCategories(places, ['cafe', 'museum']);
+
+    expect(filtered.map((place) => place.canonicalId)).toEqual(['cafe', 'museum']);
   });
 });
 

@@ -111,6 +111,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [accommodationY, setAccommodationY] = useState(0);
   const scrollViewRef = useRef(null);
+  const accommodationInputRef = useRef(null);
   const accommodationBlurTimer = useRef(null);
   const accommodationRequestId = useRef(0);
   const isPublic = Boolean(board.isPublic);
@@ -165,7 +166,10 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
       setAccommodationSuggestions(
         results.map((item) => ({
           primaryName: item.name || item.address.split(',')[0]?.trim() || item.address,
-          fullAddress: item.address
+          fullAddress: item.address,
+          lat: item.lat,
+          lng: item.lng,
+          placeId: item.placeId || null
         }))
       );
       setIsSearchingAccommodation(false);
@@ -486,33 +490,64 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
           onLayout={(event) => setAccommodationY(event.nativeEvent.layout.y)}
         >
           <Text style={styles.accommodationLabel}>Staying at</Text>
-          <TextInput
-            value={accommodation}
-            onChangeText={setAccommodation}
-            onFocus={() => {
-              clearTimeout(accommodationBlurTimer.current);
-              setIsAccommodationFocused(true);
-            }}
-            onBlur={() => {
-              clearTimeout(accommodationBlurTimer.current);
-              accommodationBlurTimer.current = setTimeout(() => {
+          <View style={[styles.accommodationInputWrap, isAccommodationFocused && styles.accommodationInputFocused]}>
+            <TextInput
+              ref={accommodationInputRef}
+              value={accommodation}
+              onChangeText={setAccommodation}
+              onFocus={() => {
+                clearTimeout(accommodationBlurTimer.current);
+                setIsAccommodationFocused(true);
+              }}
+              onBlur={() => {
+                clearTimeout(accommodationBlurTimer.current);
+                accommodationBlurTimer.current = setTimeout(() => {
+                  setIsAccommodationFocused(false);
+                  persistBoard({
+                    accommodation,
+                    accommodationCoords: null,
+                    accommodationPlaceId: null
+                  });
+                }, 180);
+              }}
+              onSubmitEditing={() => {
+                clearTimeout(accommodationBlurTimer.current);
                 setIsAccommodationFocused(false);
-                persistBoard({ accommodation });
-              }, 180);
-            }}
-            onSubmitEditing={() => {
-              clearTimeout(accommodationBlurTimer.current);
-              setIsAccommodationFocused(false);
-              persistBoard({ accommodation });
-              Keyboard.dismiss();
-            }}
-            placeholder="Hotel, Airbnb, or address..."
-            placeholderTextColor="#C4B5A5"
-            style={[styles.accommodationInput, isAccommodationFocused && styles.accommodationInputFocused]}
-            returnKeyType="done"
-            autoCorrect={false}
-            autoCapitalize="words"
-          />
+                persistBoard({
+                  accommodation,
+                  accommodationCoords: null,
+                  accommodationPlaceId: null
+                });
+                Keyboard.dismiss();
+              }}
+              placeholder="Hotel, Airbnb, or address..."
+              placeholderTextColor="#C4B5A5"
+              style={styles.accommodationInput}
+              returnKeyType="done"
+              autoCorrect={false}
+              autoCapitalize="words"
+            />
+            {accommodation.trim().length > 0 ? (
+              <TouchableOpacity
+                style={styles.accommodationClearButton}
+                activeOpacity={0.75}
+                onPress={() => {
+                  clearTimeout(accommodationBlurTimer.current);
+                  setAccommodation('');
+                  setAccommodationSuggestions([]);
+                  setIsAccommodationFocused(true);
+                  persistBoard({
+                    accommodation: '',
+                    accommodationCoords: null,
+                    accommodationPlaceId: null
+                  });
+                  requestAnimationFrame(() => accommodationInputRef.current?.focus?.());
+                }}
+              >
+                <Text style={styles.accommodationClearButtonText}>x</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           {isAccommodationFocused && accommodation.trim().length >= 2 && (
             <View style={styles.accommodationDropdown}>
               {accommodationSuggestions.length > 0 ? (
@@ -526,7 +561,13 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                       onPress={() => {
                         clearTimeout(accommodationBlurTimer.current);
                         setAccommodation(suggestion.fullAddress);
-                        persistBoard({ accommodation: suggestion.fullAddress });
+                        persistBoard({
+                          accommodation: suggestion.fullAddress,
+                          accommodationCoords: suggestion.lat != null && suggestion.lng != null
+                            ? { lat: suggestion.lat, lng: suggestion.lng }
+                            : null,
+                          accommodationPlaceId: suggestion.placeId || null
+                        });
                         setAccommodationSuggestions([]);
                         setIsAccommodationFocused(false);
                         Keyboard.dismiss();
@@ -828,19 +869,40 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   accommodationInput: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    paddingHorizontal: 14,
+    flex: 1,
+    minWidth: 0,
     paddingVertical: 10,
+    paddingLeft: 14,
+    paddingRight: 6,
     fontSize: 14,
     color: '#4B3A32',
     textAlign: 'left',
     writingDirection: 'ltr'
   },
+  accommodationInputWrap: {
+    backgroundColor: '#FFF8F0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2D3BF',
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
   accommodationInputFocused: {
     borderColor: '#A8998A'
+  },
+  accommodationClearButton: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  accommodationClearButtonText: {
+    fontSize: 18,
+    lineHeight: 20,
+    color: '#A8998A',
+    fontWeight: '500'
   },
   accommodationDropdown: {
     marginTop: 6,

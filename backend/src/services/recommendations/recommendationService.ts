@@ -104,14 +104,7 @@ const ACTIONABLE_ATTRACTION_TAG_PATTERN =
   /(museum|gallery|shopping|mall|market|park|garden|theatre|theater|cinema|venue|tour|cruise|boat|castle|palace|cathedral|church|tower|zoo|aquarium|amusement|theme_park)/i;
 
 function categoryMatchesRequest(placeCategory: TravelCategory, requestedCategories: TravelCategory[] = []) {
-  if (requestedCategories.includes(placeCategory)) {
-    return true;
-  }
-
-  return (
-    (placeCategory === 'experience' && requestedCategories.includes('attraction')) ||
-    (placeCategory === 'attraction' && requestedCategories.includes('experience'))
-  );
+  return requestedCategories.includes(placeCategory);
 }
 
 function tokenizeQuery(value?: string) {
@@ -235,6 +228,17 @@ function isActionableRecommendation(place: NormalizedPlace) {
 
 function isEventSearch(request: RecommendationRequest): boolean {
   return EVENT_QUERY_PATTERN.test(request.query ?? '');
+}
+
+export function filterPlacesByRequestedCategories(
+  places: NormalizedPlace[],
+  requestedCategories: TravelCategory[] = []
+) {
+  if (!requestedCategories.length) {
+    return places;
+  }
+
+  return places.filter((place) => categoryMatchesRequest(place.category, requestedCategories));
 }
 
 export function rankPlaces(places: NormalizedPlace[], request: RecommendationRequest): RankedRecommendation[] {
@@ -425,7 +429,10 @@ export async function getRecommendations(request: RecommendationRequest): Promis
       .map((provider) => provider.fetchPlaces(providerContext))
   );
 
-  const places = dedupePlaces(fetched.flat()).filter(isActionableRecommendation);
+  const places = filterPlacesByRequestedCategories(
+    dedupePlaces(fetched.flat()).filter(isActionableRecommendation),
+    request.categories ?? []
+  );
   const excludedIds = new Set(excludeCanonicalIds);
   const unseenPlaces = rankPlaces(places, request).filter((place) => !excludedIds.has(place.canonicalId));
   const ranked = selectRecommendations(unseenPlaces, limit, eventSearch);

@@ -5,7 +5,7 @@ This backend now exposes `POST /api/recommendations` as the shared contract for 
 ## Current behavior
 
 - If no live provider API keys are configured, the endpoint returns mock recommendations with the same normalized response shape.
-- `RECOMMENDATION_PROVIDER_MODE=open` enables the free-first stack: Geoapify, Ticketmaster, and Foursquare for real places and events, plus Wikipedia and optional OpenTripMap enrichment.
+- `RECOMMENDATION_PROVIDER_MODE=open` enables the free-first stack: Geoapify, Ticketmaster, and optional Foursquare/OpenTripMap enrichment, plus Wikipedia and Google when `GOOGLE_PLACES_API_KEY` is configured.
 - `RECOMMENDATION_PROVIDER_MODE=phase1` enables only Google Places and Tripadvisor.
 - `RECOMMENDATION_PROVIDER_MODE=full` enables Google Places, Tripadvisor, and Yelp.
 - `RECOMMENDATION_PROVIDER_MODE=mock` disables all paid providers and always falls back to mock results.
@@ -15,7 +15,7 @@ This backend now exposes `POST /api/recommendations` as the shared contract for 
 - If `TICKETMASTER_API_KEY` is configured in `open` mode, Atlas uses Ticketmaster Discovery API events to add nearby concerts, shows, and other live events as `experience` recommendations.
 - If `OPENTRIPMAP_API_KEY` is configured in `open` mode, OpenTripMap is used for richer place metadata, websites, images, and travel descriptions.
 - In `open` mode, Wikipedia geosearch and page summaries provide real nearby place pages with source URLs, even if no API keys are configured.
-- If `GOOGLE_PLACES_API_KEY` is configured and phase 1 or full mode is enabled, Google Places nearby results are fetched and ranked.
+- If `GOOGLE_PLACES_API_KEY` is configured, Google autocomplete is used for accommodation search and Google Places nearby results can contribute to recommendation ranking.
 - If `TRIPADVISOR_API_KEY` is configured and phase 1 or full mode is enabled, Tripadvisor location search is used and then enriched with location details and a first photo.
 - If `YELP_API_KEY` is configured and full mode is enabled, Yelp business search is used for live restaurant, cafe, bar, shopping, hotel, and local place recommendations.
 - Provider results are normalized and deduplicated into one internal place model before ranking.
@@ -44,13 +44,14 @@ This backend now exposes `POST /api/recommendations` as the shared contract for 
 - `FOURSQUARE_API_KEY` is optional in open mode. Add it if you want extra real venue coverage and short social-tip text.
 - `TICKETMASTER_API_KEY` is optional in open mode. Add it if you want concerts, shows, and other ticketed events mixed into recommendations.
 - `OPENTRIPMAP_API_KEY` is optional in open mode. Leave it blank and Atlas will still use Geoapify/Foursquare when configured, otherwise Wikipedia + Nominatim.
-- Switch to `RECOMMENDATION_PROVIDER_MODE=phase1` later when you want Google + Tripadvisor.
+- Switch to `RECOMMENDATION_PROVIDER_MODE=phase1` later when you want a Google + Tripadvisor-heavy stack.
 - Switch to `RECOMMENDATION_PROVIDER_MODE=mock` if you want zero chance of provider billing while you keep building the UI.
 - Leave `YELP_API_KEY` blank unless you intentionally want the paid `full` stack later.
 - If you want to override the mobile app's API target, set `EXPO_PUBLIC_API_BASE_URL` in [mobile/.env](/Users/noam/Desktop/travel/mobile/.env:1).
-- If `EXPO_PUBLIC_API_BASE_URL` is blank, the app falls back to:
-  - `http://localhost:5000/api` on iOS/web
-  - `http://10.0.2.2:5000/api` on Android emulator
+- In development, the app now tries the local backend first and falls back to `EXPO_PUBLIC_API_BASE_URL` if local is unavailable.
+- Local fallback order includes:
+  - `http://localhost:5005/api` on iOS/web
+  - `http://10.0.2.2:5005/api` on Android emulator
 
 ## Response shape
 
