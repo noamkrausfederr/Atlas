@@ -10,6 +10,7 @@ import {
   View
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
+import { BlurView } from 'expo-blur';
 
 function formatHandle(ownerName) {
   return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
@@ -17,26 +18,63 @@ function formatHandle(ownerName) {
 
 function formatRelativeTime(value) {
   if (!value) return '';
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
 
-  const diffMinutes = Math.max(Math.round((Date.now() - timestamp) / 60000), 0);
-  if (diffMinutes < 1) return 'Now';
-  if (diffMinutes < 60) return `${diffMinutes}m`;
+function formatUnreadCount(count) {
+  if (!count) return '';
+  return count > 99 ? '99' : String(count);
+}
 
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h`;
+function getMessageDayKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
 
-  const diffDays = Math.round(diffHours / 24);
-  return `${diffDays}d`;
+function formatMessageTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+function formatMessageDayLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86400000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
 }
 
 function ThreadList({ threads, selectedProfileName, onSelectThread }) {
   return (
-    <>
+    <ScrollView
+      style={styles.threadListScroll}
+      contentContainerStyle={styles.threadListContent}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Social</Text>
-        <Text style={styles.title}>Inbox</Text>
+        <Text style={styles.title}>inbox</Text>
       </View>
 
       {threads.length > 0 ? (
@@ -58,16 +96,17 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                   </View>
                 )}
                 <View style={styles.threadBody}>
-                  <View style={styles.threadTopRow}>
+                  <View style={styles.threadMeta}>
+                    {thread.unreadCount > 0 ? (
+                      <View style={styles.unreadBadge}>
+                        <BlurView intensity={28} tint="extraLight" style={styles.unreadBadgeBlur} />
+                        <Text style={styles.unreadBadgeText}>{formatUnreadCount(thread.unreadCount)}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.threadTime}>{formatRelativeTime(thread.lastMessageAt)}</Text>
+                  </View>
+                <View style={styles.threadTopRow}>
                     <Text style={styles.threadName}>{thread.ownerName}</Text>
-                    <View style={styles.threadMeta}>
-                      <Text style={styles.threadTime}>{formatRelativeTime(thread.lastMessageAt)}</Text>
-                      {thread.unreadCount > 0 ? (
-                        <View style={styles.unreadBadge}>
-                          <Text style={styles.unreadBadgeText}>{thread.unreadCount}</Text>
-                        </View>
-                      ) : null}
-                    </View>
                   </View>
                   <Text style={styles.threadHandle}>{thread.handle}</Text>
                   <Text style={styles.threadPreview} numberOfLines={1} ellipsizeMode="tail">
@@ -84,13 +123,36 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
           <Text style={styles.emptyStateText}>Start a conversation from a public profile.</Text>
         </View>
       )}
-    </>
+    </ScrollView>
   );
 }
 
-function ChatScreen({ profile, messages, onBack, unreadCount, onSendMessage }) {
+function ChatScreen({ profile, messages, onBack, onSendMessage }) {
   const [draftMessage, setDraftMessage] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const chatItems = useMemo(() => {
+    const items = [];
+    let previousDayKey = '';
+
+    messages.forEach((message) => {
+      const dayKey = getMessageDayKey(message.createdAt);
+      if (dayKey && dayKey !== previousDayKey) {
+        items.push({
+          type: 'day',
+          id: `day-${dayKey}`,
+          label: formatMessageDayLabel(message.createdAt)
+        });
+        previousDayKey = dayKey;
+      }
+
+      items.push({
+        type: 'message',
+        ...message
+      });
+    });
+
+    return items;
+  }, [messages]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -125,15 +187,22 @@ function ChatScreen({ profile, messages, onBack, unreadCount, onSendMessage }) {
     <View style={styles.chatScreen}>
       <View style={styles.chatHeader}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.85}>
-          <Text style={styles.backButtonArrow}>‹</Text>
-          <Text style={styles.backButtonText}>{unreadCount}</Text>
+          <Text style={styles.backButtonArrow}>←</Text>
         </TouchableOpacity>
-        {profile.image ? <Image source={{ uri: profile.image }} style={styles.chatProfilePhoto} /> : null}
+        {profile.image ? (
+          <Image source={{ uri: profile.image }} style={styles.chatProfilePhoto} />
+        ) : (
+          <View style={styles.chatProfileAvatarFallback}>
+            <Text style={styles.chatProfileAvatarFallbackText}>{profile.ownerName.slice(0, 1)}</Text>
+          </View>
+        )}
         <View style={styles.chatHeaderText}>
           <Text style={styles.chatTitle}>{profile.ownerName}</Text>
           <Text style={styles.chatHandle}>{profile.handle}</Text>
         </View>
       </View>
+
+      <View style={styles.chatHeaderDivider} />
 
       <ScrollView
         style={styles.chatScroll}
@@ -141,17 +210,36 @@ function ChatScreen({ profile, messages, onBack, unreadCount, onSendMessage }) {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.chatMessages}
       >
-        {messages.length > 0 ? messages.map((message) => (
-          <View
-            key={message.id}
-            style={[styles.chatBubbleRow, message.incoming ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}
-          >
-            <View style={[styles.chatBubble, message.incoming ? styles.chatBubbleIncoming : styles.chatBubbleOutgoing]}>
-              <Text style={[styles.chatBubbleText, message.incoming ? styles.chatBubbleTextIncoming : styles.chatBubbleTextOutgoing]}>
-                {message.text}
-              </Text>
+        {chatItems.length > 0 ? chatItems.map((item) => (
+          item.type === 'day' ? (
+            <View key={item.id} style={styles.chatDayRow}>
+              <View style={styles.chatDayBadge}>
+                <BlurView intensity={28} tint="extraLight" style={styles.chatDayBadgeBlur} />
+                <Text style={styles.chatDayBadgeText}>{item.label}</Text>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View
+              key={item.id}
+              style={[styles.chatBubbleRow, item.incoming ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}
+            >
+              <View style={[styles.chatBubbleStack, item.incoming ? styles.chatBubbleStackLeft : styles.chatBubbleStackRight]}>
+                <View style={[styles.chatBubble, item.incoming ? styles.chatBubbleIncoming : styles.chatBubbleOutgoing]}>
+                  <BlurView
+                    intensity={28}
+                    tint="extraLight"
+                    style={item.incoming ? styles.chatBubbleIncomingBlur : styles.chatBubbleOutgoingBlur}
+                  />
+                  <Text style={[styles.chatBubbleText, item.incoming ? styles.chatBubbleTextIncoming : styles.chatBubbleTextOutgoing]}>
+                    {item.text}
+                  </Text>
+                </View>
+                <Text style={[styles.chatMessageTime, item.incoming ? styles.chatMessageTimeLeft : styles.chatMessageTimeRight]}>
+                  {formatMessageTime(item.createdAt)}
+                </Text>
+              </View>
+            </View>
+          )
         )) : (
           <View style={styles.emptyChatState}>
             <Text style={styles.emptyChatText}>Say hi to start the chat.</Text>
@@ -162,17 +250,21 @@ function ChatScreen({ profile, messages, onBack, unreadCount, onSendMessage }) {
       <View
         style={[
           styles.chatComposer,
-          { bottom: keyboardHeight > 0 ? keyboardHeight + 8 : 0 }
+          { bottom: keyboardHeight > 0 ? keyboardHeight + 8 : 14 }
         ]}
       >
-        <TextInput
-          placeholder={`Message ${profile.ownerName}...`}
-          placeholderTextColor="#B1A294"
-          value={draftMessage}
-          onChangeText={setDraftMessage}
-          style={styles.chatInput}
-        />
+        <View style={styles.chatInputWrap}>
+          <BlurView intensity={28} tint="extraLight" style={styles.chatInputBlur} />
+          <TextInput
+            placeholder="Message..."
+            placeholderTextColor="#8A8A84"
+            value={draftMessage}
+            onChangeText={setDraftMessage}
+            style={styles.chatInput}
+          />
+        </View>
         <TouchableOpacity style={styles.sendButton} activeOpacity={0.9} onPress={sendMessage}>
+          <BlurView intensity={28} tint="extraLight" style={styles.sendButtonBlur} />
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
@@ -217,7 +309,6 @@ export function InboxScreen({
       <ChatScreen
         profile={activeProfile}
         messages={activeThread?.messages ?? []}
-        unreadCount={unreadCount}
         onBack={onCloseThread}
         onSendMessage={onSendMessage}
       />
@@ -237,23 +328,33 @@ export function InboxScreen({
 
 const styles = StyleSheet.create({
   inboxScreen: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#F3F3F1'
+  },
+  threadListScroll: {
+    flex: 1,
+    backgroundColor: '#F3F3F1'
+  },
+  threadListContent: {
+    flexGrow: 1,
+    paddingHorizontal: 12,
+    paddingTop: 20,
+    paddingBottom: 20
   },
   header: {
-    marginBottom: 18
-  },
-  eyebrow: {
-    color: '#C89B6D',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1
+    marginBottom: 18,
+    paddingLeft: 8
   },
   title: {
-    marginTop: 4,
-    color: '#4B3A32',
-    fontSize: 28,
-    fontWeight: '800'
+    color: '#111111',
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   threadList: {
     gap: 12
@@ -261,174 +362,298 @@ const styles = StyleSheet.create({
   threadCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#FAEEE7',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E8C9D0',
+    borderColor: '#E1E1DC',
     padding: 14,
     minHeight: 92
   },
-  threadCardActive: {},
+  threadCardActive: {
+    borderColor: '#CFCFC9',
+    backgroundColor: '#FCFCFB'
+  },
   threadAvatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#D9E7D1',
+    backgroundColor: '#ECECE8',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    alignSelf: 'center'
   },
   threadAvatarImage: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#D9E7D1'
+    backgroundColor: '#ECECE8',
+    alignSelf: 'center'
   },
   threadAvatarText: {
-    color: '#A97C50',
+    color: '#555555',
     fontSize: 18,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   threadBody: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    position: 'relative',
+    paddingRight: 60
   },
   threadTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     marginBottom: 2
   },
   threadName: {
-    color: '#4B3A32',
-    fontSize: 15,
+    color: '#111111',
+    fontSize: 16,
     fontWeight: '800',
     flex: 1,
-    paddingRight: 8
+    paddingRight: 8,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   threadMeta: {
-    width: 40,
-    alignItems: 'flex-end',
-    gap: 4,
+    position: 'absolute',
+    top: 2,
+    bottom: 0,
+    right: 0,
+    width: 50,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     flexShrink: 0
   },
   threadTime: {
-    color: '#A8998A',
+    color: '#8A8A84',
     fontSize: 11,
-    fontWeight: '700'
+    fontWeight: '700',
+    width: '100%',
+    marginBottom: 1,
+    textAlign: 'center',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   unreadBadge: {
+    marginTop: 1,
     width: 28,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#E6A6B3',
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.68)',
+    backgroundColor: 'transparent'
+  },
+  unreadBadgeBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(243,243,241,0.82)'
   },
   unreadBadgeText: {
-    color: '#FFF8F0',
+    color: '#111111',
     fontSize: 11,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   threadHandle: {
-    color: '#A97C50',
+    color: '#6F6F6B',
     fontSize: 12,
     fontWeight: '700',
-    marginBottom: 6
+    marginBottom: 6,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   threadPreview: {
-    color: '#7A6658',
+    color: '#6F6F6B',
     fontSize: 13,
-    lineHeight: 18
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   emptyState: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E1E1DC',
     padding: 22,
     alignItems: 'center'
   },
   emptyStateTitle: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: 6
+    marginBottom: 6,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   emptyStateText: {
-    color: '#7A6658',
+    color: '#6F6F6B',
     fontSize: 14,
     lineHeight: 20,
-    textAlign: 'center'
+    textAlign: 'center',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginBottom: 18
+    gap: 12,
+    marginBottom: 18,
+    paddingHorizontal: 16,
+    paddingTop: 20
   },
   chatScreen: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#F3F3F1'
   },
   chatScroll: {
     flex: 1
   },
+  chatHeaderDivider: {
+    height: 1,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    backgroundColor: '#D8D8D2'
+  },
   backButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#F1E7DA',
-    borderRadius: 999,
-    minWidth: 70,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E2D3BF'
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 2,
+    paddingVertical: 4
   },
   backButtonArrow: {
-    color: '#4B3A32',
+    color: '#4A4A4A',
     fontSize: 26,
     lineHeight: 26,
-    fontWeight: '500',
-    marginTop: -1
-  },
-  backButtonText: {
-    color: '#4B3A32',
-    fontSize: 17,
-    fontWeight: '700'
+    fontWeight: Platform.OS === 'ios' ? '700' : '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   chatHeaderText: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   chatProfilePhoto: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#D9E7D1'
+    backgroundColor: '#ECECE8'
+  },
+  chatProfileAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#ECECE8',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  chatProfileAvatarFallbackText: {
+    color: '#555555',
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   chatTitle: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 22,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   chatHandle: {
     marginTop: 2,
-    color: '#A97C50',
+    color: '#6F6F6B',
     fontSize: 13,
-    fontWeight: '700'
+    fontWeight: '600',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   chatMessages: {
-    gap: 12,
+    gap: 9,
+    paddingHorizontal: 18,
     paddingBottom: 96
+  },
+  chatDayRow: {
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  chatDayBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(216,216,210,0.9)',
+    backgroundColor: 'transparent',
+    overflow: 'hidden'
+  },
+  chatDayBadgeBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(243,243,241,0.82)'
+  },
+  chatDayBadgeText: {
+    color: '#6F6F6B',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   emptyChatState: {
     alignItems: 'center',
     paddingTop: 28
   },
   emptyChatText: {
-    color: '#A8998A',
+    color: '#8A8A84',
     fontSize: 14,
-    fontWeight: '700'
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   chatBubbleRow: {
     flexDirection: 'row'
@@ -439,58 +664,132 @@ const styles = StyleSheet.create({
   chatBubbleRowRight: {
     justifyContent: 'flex-end'
   },
+  chatBubbleStack: {
+    maxWidth: '82%'
+  },
+  chatBubbleStackLeft: {
+    alignItems: 'flex-start'
+  },
+  chatBubbleStackRight: {
+    alignItems: 'flex-end'
+  },
   chatBubble: {
-    maxWidth: '82%',
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 11
+    paddingVertical: 11,
+    overflow: 'hidden'
   },
   chatBubbleIncoming: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#E2D3BF'
+    borderColor: '#E4E4DE'
+  },
+  chatBubbleIncomingBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.66)'
   },
   chatBubbleOutgoing: {
-    backgroundColor: '#E6A6B3'
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#E4E4DE'
+  },
+  chatBubbleOutgoingBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.72)'
   },
   chatBubbleText: {
     fontSize: 14,
-    lineHeight: 20
+    lineHeight: 20,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   chatBubbleTextIncoming: {
-    color: '#4B3A32'
+    color: '#111111'
   },
   chatBubbleTextOutgoing: {
-    color: '#FFF8F0'
+    color: '#111111'
+  },
+  chatMessageTime: {
+    marginTop: 5,
+    color: '#8A8A84',
+    fontSize: 11,
+    lineHeight: 14,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  chatMessageTimeLeft: {
+    paddingLeft: 10,
+    textAlign: 'left'
+  },
+  chatMessageTimeRight: {
+    paddingRight: 10,
+    textAlign: 'right'
   },
   chatComposer: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 18,
+    right: 18,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingTop: 8,
-    backgroundColor: '#F6EFE5'
+    paddingBottom: 8,
+    backgroundColor: 'transparent'
+  },
+  chatInputWrap: {
+    flex: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(216,216,210,0.9)',
+    backgroundColor: 'transparent'
+  },
+  chatInputBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(243,243,241,0.82)'
   },
   chatInput: {
-    flex: 1,
-    backgroundColor: '#FFF8F0',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    paddingHorizontal: 16,
+    paddingLeft: 18,
+    paddingRight: 16,
     paddingVertical: 14,
-    color: '#4B3A32'
+    color: '#111111',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   sendButton: {
-    backgroundColor: '#E6A6B3',
     borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 14
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(216,216,210,0.9)',
+    backgroundColor: 'transparent'
+  },
+  sendButtonBlur: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(243,243,241,0.82)'
   },
   sendButtonText: {
-    color: '#FFF8F0',
-    fontWeight: '800'
+    color: '#8A8A84',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   }
 });

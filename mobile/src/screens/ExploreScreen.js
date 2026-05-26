@@ -1,4 +1,5 @@
 import { ActivityIndicator, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -11,6 +12,7 @@ import { PublicProfileView } from './ProfileScreen';
 
 const DAY_RANGE_MIN = 1;
 const DAY_RANGE_MAX = 30;
+const EXPLORE_BATCH_SIZE = 8;
 const PUBLIC_PROFILE_IMAGES = [
   'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80',
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
@@ -23,10 +25,10 @@ const FILTER_DEFAULTS = {
   country: [],
   minDays: DAY_RANGE_MIN,
   maxDays: DAY_RANGE_MAX,
-  pace: 'All',
-  travelerType: 'All',
-  accessibility: 'All',
-  budget: 'All',
+  pace: [],
+  travelerType: [],
+  accessibility: [],
+  budget: [],
   startDate: '',
   endDate: ''
 };
@@ -144,6 +146,14 @@ function getPublicProfileData(ownerName, trips, isFollowing = false) {
   };
 }
 
+function formatDateRangeWithYear(trip) {
+  if (!trip.startDate || !trip.endDate) return `${trip.days || 3} days`;
+  const start = new Date(trip.startDate);
+  const end = new Date(trip.endDate);
+  const opts = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}, ${end.getFullYear()}`;
+}
+
 function getPublicTripLikeCount(trip, isLiked = false) {
   const seed = trip.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const baseLikes = 120 + (seed % 780);
@@ -163,10 +173,10 @@ function matchesPublicTripFilters(trip, filters) {
   const highDays = Math.max(filters.minDays, filters.maxDays);
   if (trip.days < lowDays) return false;
   if (trip.days > highDays) return false;
-  if (filters.pace !== 'All' && trip.pace !== filters.pace) return false;
-  if (filters.travelerType !== 'All' && trip.travelerType !== filters.travelerType) return false;
-  if (filters.accessibility !== 'All' && trip.accessibility !== filters.accessibility) return false;
-  if (filters.budget !== 'All' && trip.budget !== filters.budget) return false;
+  if (filters.pace.length > 0 && !filters.pace.includes(trip.pace)) return false;
+  if (filters.travelerType.length > 0 && !filters.travelerType.includes(trip.travelerType)) return false;
+  if (filters.accessibility.length > 0 && !filters.accessibility.includes(trip.accessibility)) return false;
+  if (filters.budget.length > 0 && !filters.budget.includes(trip.budget)) return false;
 
   const filterStart = parseFilterDate(filters.startDate);
   const filterEnd = parseFilterDate(filters.endDate);
@@ -197,6 +207,7 @@ export function ExploreScreen({
   const [showCountryOptions, setShowCountryOptions] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [seenTripIds, setSeenTripIds] = useState(new Set());
 
   useEffect(() => {
     setSelectedPublicTrip((current) => (
@@ -211,13 +222,30 @@ export function ExploreScreen({
   const travelerTypeOptions = useMemo(() => uniqueValues(publicTrips, 'travelerType'), [publicTrips]);
   const accessibilityOptions = useMemo(() => uniqueValues(publicTrips, 'accessibility'), [publicTrips]);
   const budgetOptions = useMemo(() => uniqueValues(publicTrips, 'budget'), [publicTrips]);
-  const filteredTrips = publicTrips
-    .filter((trip) => matchesPublicTripFilters(trip, filters))
-    .filter((trip) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return true;
-      return trip.title.toLowerCase().includes(q) || trip.location.toLowerCase().includes(q);
-    });
+  const filteredTrips = useMemo(() =>
+    publicTrips
+      .filter((trip) => matchesPublicTripFilters(trip, filters))
+      .filter((trip) => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return true;
+        return trip.title.toLowerCase().includes(q) || trip.location.toLowerCase().includes(q);
+      }),
+    [publicTrips, filters, searchQuery]
+  );
+
+  useEffect(() => {
+    setSeenTripIds(new Set());
+  }, [filters, searchQuery]);
+
+  const unseenFiltered = useMemo(
+    () => filteredTrips.filter((t) => !seenTripIds.has(t.id)),
+    [filteredTrips, seenTripIds]
+  );
+  const tripsToShow = useMemo(
+    () => (unseenFiltered.length > 0 ? unseenFiltered : filteredTrips).slice(0, EXPLORE_BATCH_SIZE),
+    [unseenFiltered, filteredTrips]
+  );
+
   const addedPublicTripIds = new Set(boards.map((board) => board.sourcePublicTripId).filter(Boolean));
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
   const toggleCountryFilter = (country) => {
@@ -234,6 +262,14 @@ export function ExploreScreen({
     setFilters(FILTER_DEFAULTS);
     setCountrySearch('');
     setShowCountryOptions(false);
+  };
+  const handleRefresh = () => {
+    setSeenTripIds((prev) => {
+      const next = new Set(prev);
+      tripsToShow.forEach((t) => next.add(t.id));
+      if (filteredTrips.every((t) => next.has(t.id))) return new Set();
+      return next;
+    });
   };
   const updateDayRange = (minDays, maxDays) => setFilters((current) => ({ ...current, minDays, maxDays }));
   const handleFilterDateChange = (field, _event, selectedDate) => {
@@ -367,7 +403,7 @@ export function ExploreScreen({
           <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
             <Ionicons name="funnel-outline" size={22} color="#AAAAAA" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
+          <TouchableOpacity style={styles.filterButton} onPress={handleRefresh}>
             <Ionicons name="swap-vertical-outline" size={22} color="#AAAAAA" />
           </TouchableOpacity>
         </View>
@@ -376,7 +412,7 @@ export function ExploreScreen({
       <View style={styles.publicTripMasonry}>
         {[0, 1].map((column) => (
           <View key={column} style={styles.publicTripMasonryColumn}>
-            {filteredTrips
+            {tripsToShow
               .filter((_, index) => index % 2 === column)
               .map((trip, index) => (
                 <PublicTripCard
@@ -391,7 +427,7 @@ export function ExploreScreen({
         ))}
       </View>
 
-      {filteredTrips.length === 0 && (
+      {tripsToShow.length === 0 && (
         <View style={styles.emptyPublicTrips}>
           <Text style={styles.emptyPublicTripsText}>No public trips match these filters.</Text>
         </View>
@@ -447,7 +483,7 @@ function ExploreFilterScreen({
     <View style={styles.exploreSubScreen}>
       <View style={styles.exploreSubHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={[styles.exploreSubHeaderText, styles.filterSubHeaderText]}>
           <Text style={styles.exploreSubTitle}>Filters</Text>
@@ -567,7 +603,7 @@ function CountryMultiSelect({
         value={searchValue}
         onChangeText={onSearchChange}
         onFocus={onFocusSearch}
-        placeholderTextColor="#B1A294"
+        placeholderTextColor="#AAAAAA"
       />
 
       {selectedCountries.length > 0 && (
@@ -707,77 +743,83 @@ function PublicTripDetail({
 
   return (
     <View style={styles.publicDetailScreen}>
-      <View style={styles.exploreSubHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-        <View style={[styles.exploreSubHeaderText, styles.publicDetailHeaderText]}>
-          <Text style={[styles.exploreSubTitle, styles.publicDetailHeaderTitle]}>{trip.title}</Text>
+      <View style={styles.publicDetailCard}>
+        <View style={styles.publicDetailHeader}>
+          <TouchableOpacity onPress={onBack} style={[styles.backButton, styles.publicDetailBackButton]}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onToggleLike} style={[styles.publicHeartButton, styles.publicDetailHeaderAction]}>
+            <Text style={[styles.publicHeartButtonText, isLiked && styles.publicHeartButtonTextActive]}>
+              {isLiked ? '♥' : '♡'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      <Image source={{ uri: trip.image }} style={styles.publicDetailImage} />
-      <View style={styles.publicDetailActionRow}>
-        <TouchableOpacity onPress={onOpenProfile} style={[styles.publicProfileInline, styles.publicProfileInlineCompact]}>
-          <View style={styles.publicProfileAvatar}>
-            <Text style={styles.publicProfileAvatarText}>{trip.ownerName.slice(0, 1)}</Text>
+        <View style={styles.publicProfileInline}>
+          <TouchableOpacity onPress={onOpenProfile} style={styles.publicProfilePressable}>
+            <Image
+              source={{ uri: PUBLIC_PROFILE_IMAGES[trip.ownerName.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % PUBLIC_PROFILE_IMAGES.length] }}
+              style={styles.publicProfileAvatarImage}
+            />
+            <View style={styles.publicProfileTextWrap}>
+              <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
+              <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.publicDetailTitleGroup}>
+          <Text style={styles.publicDetailTitle} numberOfLines={2}>{trip.title}</Text>
+          {trip.location ? <Text style={styles.publicDetailLocation}>{trip.location}</Text> : null}
+          <Text style={styles.publicDetailMeta}>{formatDateRangeWithYear(trip)}</Text>
+        </View>
+
+        <Image source={{ uri: trip.image }} style={styles.publicDetailImage} />
+
+        {trip.description ? <Text style={styles.publicDetailDescription}>{trip.description}</Text> : null}
+
+        <PublicTripTags trip={trip} />
+
+        <View style={styles.publicDetailItineraryHead}>
+          <Text style={styles.publicDetailSectionTitle}>Itinerary</Text>
+        </View>
+        {itinerarySections.map((section, index) => (
+          <View key={section.key} style={styles.publicItineraryDaySection}>
+            <View style={styles.publicItineraryDayRail}>
+              <View style={styles.publicItineraryDayDot} />
+              {index < itinerarySections.length - 1 && <View style={styles.publicItineraryDayLine} />}
+            </View>
+            <View style={styles.publicItineraryDayContent}>
+              <Text style={styles.publicItineraryDayTitle}>{section.title}</Text>
+              {section.places.length === 0 && <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>}
+              {section.places.length > 0 && (
+                <View style={styles.publicPlaceGroup}>
+                  <BlurView intensity={28} tint="extraLight" style={styles.publicPlaceGroupGlass} />
+                  {section.places.map((place) => (
+                    <TouchableOpacity
+                      key={place.id}
+                      style={styles.publicPlaceRow}
+                      activeOpacity={0.82}
+                      onPress={() => setSelectedPlaceDetail({ place, dateLabel: section.title })}
+                    >
+                      <Text style={styles.publicPlaceName}>{place.name}</Text>
+                      {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.publicProfileTextWrap}>
-            <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
-            <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
-          </View>
-        </TouchableOpacity>
+        ))}
+
         <TouchableOpacity
-          onPress={onToggleLike}
-          style={styles.publicHeartButton}
+          style={[styles.addPublicTripButton, styles.publicDetailAddButton, alreadyAdded && styles.addPublicTripButtonDone]}
+          onPress={() => onAddPublicTrip(trip)}
+          disabled={alreadyAdded}
         >
-          <Text style={[styles.publicHeartButtonText, isLiked && styles.publicHeartButtonTextActive]}>
-            {isLiked ? '♥' : '♡'}
-          </Text>
-          <Text style={[styles.publicHeartCount, isLiked && styles.publicHeartCountActive]}>
-            {likeCount}
-          </Text>
+          <Text style={styles.addPublicTripButtonText}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
         </TouchableOpacity>
       </View>
-
-      <Text style={styles.publicDetailMeta}>
-        {trip.location} · {formatDateRange(trip)}
-      </Text>
-      <PublicTripTags trip={trip} />
-      <Text style={styles.publicDetailDescription}>{trip.description}</Text>
-
-      <Text style={styles.publicDetailSectionTitle}>Itinerary</Text>
-      {itinerarySections.map((section, index) => (
-        <View key={section.key} style={styles.publicItineraryDaySection}>
-          <View style={styles.publicItineraryDayRail}>
-            <View style={styles.publicItineraryDayDot} />
-            {index < itinerarySections.length - 1 && <View style={styles.publicItineraryDayLine} />}
-          </View>
-          <View style={styles.publicItineraryDayContent}>
-            <Text style={styles.publicItineraryDayTitle}>{section.title}</Text>
-            {section.places.length === 0 && <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>}
-            {section.places.map((place) => (
-              <TouchableOpacity
-                key={place.id}
-                style={styles.publicPlaceRow}
-                activeOpacity={0.82}
-                onPress={() => setSelectedPlaceDetail({ place, dateLabel: section.title })}
-              >
-                <Text style={styles.publicPlaceName}>{place.name}</Text>
-                {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      ))}
-
-      <TouchableOpacity
-        style={[styles.addPublicTripButton, styles.publicDetailAddButton, alreadyAdded && styles.addPublicTripButtonDone]}
-        onPress={() => onAddPublicTrip(trip)}
-        disabled={alreadyAdded}
-      >
-        <Text style={styles.addPublicTripButtonText}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
-      </TouchableOpacity>
 
       <PlaceDetailModal
         visible={Boolean(selectedPlaceDetail)}
@@ -799,7 +841,7 @@ function PublicProfile({ ownerName, trips, isFollowing, onBack, onOpenTrip, onTo
     <View>
       <View style={styles.exploreSubHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
       </View>
       <PublicProfileView
@@ -824,19 +866,35 @@ function PublicProfile({ ownerName, trips, isFollowing, onBack, onOpenTrip, onTo
 }
 
 function FilterChips({ label, options, value, onChange, compact = false }) {
+  const isAll = value.length === 0;
+
+  const handlePress = (option) => {
+    if (option === 'All') {
+      onChange([]);
+      return;
+    }
+    const next = value.includes(option)
+      ? value.filter((v) => v !== option)
+      : [...value, option];
+    onChange(next);
+  };
+
   return (
     <View style={!compact && styles.filterGroup}>
       {label && <Text style={styles.filterLabel}>{label}</Text>}
       <View style={[styles.filterChipRow, compact && styles.filterChipRowCompact]}>
-        {options.map((option) => (
-          <TouchableOpacity
-            key={option}
-            style={[styles.filterChip, value === option && styles.filterChipActive]}
-            onPress={() => onChange(option)}
-          >
-            <Text style={[styles.filterChipText, value === option && styles.filterChipTextActive]}>{option}</Text>
-          </TouchableOpacity>
-        ))}
+        {options.map((option) => {
+          const isActive = option === 'All' ? isAll : value.includes(option);
+          return (
+            <TouchableOpacity
+              key={option}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => handlePress(option)}
+            >
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{option}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -926,7 +984,7 @@ export function ExploreMoreScreen({ board, onBack }) {
     <View style={[styles.exploreSubScreen, { flex: 1, paddingBottom: 0 }]}>
       <View style={styles.exploreSubHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.exploreSubHeaderText}>
           <Text style={styles.exploreSubTitle}>{board.title}</Text>
@@ -1038,25 +1096,28 @@ const styles = StyleSheet.create({
   },
   explorePageTitle: {
     color: '#111111',
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 24,
+    lineHeight: 28,
     fontFamily: Platform.select({
       ios: 'SF Pro Display',
       android: 'sans-serif-medium',
       default: 'System'
     }),
-    fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    marginLeft: 2
+    fontWeight: '800',
+    textTransform: 'lowercase',
+    marginLeft: 12
   },
   exploreSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    gap: 0
+    gap: 0,
+    paddingRight: 10
   },
   exploreIconGroup: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    marginLeft: 10
   },
   exploreSearchBar: {
     flex: 1,
@@ -1078,28 +1139,26 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     paddingVertical: 6,
-    paddingHorizontal: 2,
+    paddingHorizontal: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
   filterPanel: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 14,
+    borderColor: 'rgba(215,215,210,0.95)',
+    padding: 18,
     marginBottom: 16
   },
   filterGroup: {
-    marginTop: 12
+    marginTop: 20
   },
   filterLabel: {
-    color: '#7F7063',
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8
+    color: '#111111',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10
   },
   filterDateRow: {
     flexDirection: 'row',
@@ -1107,40 +1166,39 @@ const styles = StyleSheet.create({
   },
   filterDateButton: {
     flex: 1,
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 12,
     paddingVertical: 10
   },
   filterDateButtonActive: {
-    backgroundColor: '#FFF8F0',
-    borderColor: '#A8998A'
+    backgroundColor: '#FFFFFF',
+    borderColor: '#B8B8B2'
   },
   filterDateButtonLabel: {
-    color: '#A8998A',
+    color: '#7A7A7A',
     fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    fontWeight: '700',
+    textTransform: 'lowercase',
     marginBottom: 3
   },
   filterDateButtonText: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 13,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   filterDatePlaceholder: {
-    color: '#B1A294',
-    fontWeight: '500'
+    color: '#AAAAAA',
+    fontWeight: '400'
   },
   filterCalendarWrap: {
     width: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
-    backgroundColor: '#FFF8F0',
+    borderColor: 'rgba(215,215,210,0.95)',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     marginTop: 10
   },
@@ -1157,34 +1215,34 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   selectedCountryBubble: {
-    backgroundColor: '#F2D8D8',
+    backgroundColor: '#F3F3F1',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E6A6B3',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 11,
     paddingVertical: 7
   },
   selectedCountryBubbleText: {
-    color: '#A97C50',
+    color: '#111111',
     fontSize: 12,
-    fontWeight: '800'
+    fontWeight: '700'
   },
   countryDropdownPanel: {
     marginTop: 10,
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     padding: 10
   },
   countrySearchInput: {
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#4B3A32',
+    color: '#111111',
     marginBottom: 0
   },
   countryOptionList: {
@@ -1195,36 +1253,36 @@ const styles = StyleSheet.create({
   countryOption: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
-    backgroundColor: '#F1E7DA',
+    borderColor: 'rgba(215,215,210,0.95)',
+    backgroundColor: '#F3F3F1',
     paddingHorizontal: 10,
     paddingVertical: 7
   },
   countryOptionSelected: {
-    backgroundColor: '#F2D8D8',
-    borderColor: '#E6A6B3'
+    backgroundColor: '#E8E8E8',
+    borderColor: '#B8B8B2'
   },
   countryOptionText: {
-    color: '#7F7063',
+    color: '#575757',
     fontSize: 12,
     fontWeight: '700'
   },
   countryOptionTextSelected: {
-    color: '#A97C50'
+    color: '#111111'
   },
   daysRangeContainer: {
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10
   },
   daysRangeValue: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     marginBottom: 18
   },
   daysRangeTrackWrap: {
@@ -1235,14 +1293,14 @@ const styles = StyleSheet.create({
   daysRangeTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#E2D3BF'
+    backgroundColor: 'rgba(215,215,210,0.95)'
   },
   daysRangeFill: {
     position: 'absolute',
     top: 12,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#E6A6B3'
+    backgroundColor: '#B8B8B2'
   },
   daysRangeThumb: {
     position: 'absolute',
@@ -1250,9 +1308,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 999,
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#555555',
     borderWidth: 3,
-    borderColor: '#FFF8F0'
+    borderColor: '#FFFFFF'
   },
   daysRangeThumbMin: {
     zIndex: 2
@@ -1267,7 +1325,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   daysRangeEndLabel: {
-    color: '#7F7063',
+    color: '#7A7A7A',
     fontSize: 11,
     fontWeight: '700'
   },
@@ -1281,32 +1339,32 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   filterChipActive: {
-    backgroundColor: '#F2D8D8',
-    borderColor: '#E6A6B3'
+    backgroundColor: '#E8E8E8',
+    borderColor: '#B8B8B2'
   },
   filterChipText: {
-    color: '#7F7063',
+    color: '#AAAAAA',
     fontSize: 12,
     fontWeight: '700'
   },
   filterChipTextActive: {
-    color: '#A97C50'
+    color: '#111111'
   },
   clearFiltersButton: {
-    marginTop: 14,
+    marginTop: 22,
     alignItems: 'center',
     paddingVertical: 10
   },
   clearFiltersText: {
-    color: '#A97C50',
-    fontWeight: '800'
+    color: '#555555',
+    fontWeight: '700'
   },
   publicTripMasonry: {
     flexDirection: 'row',
@@ -1340,12 +1398,13 @@ const styles = StyleSheet.create({
     paddingRight: 10
   },
   publicTripTitle: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 19,
+    lineHeight: 24,
     color: '#111111',
     marginBottom: 3,
     fontFamily: Platform.select({ ios: 'SF Pro Display', android: 'sans-serif-medium', default: 'System' }),
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+    fontWeight: '800',
+    textTransform: 'lowercase'
   },
   publicTripDates: {
     fontSize: 12,
@@ -1384,33 +1443,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 7,
+    justifyContent: 'center',
     marginBottom: 12
   },
   publicTripTag: {
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#F3F3F1',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingHorizontal: 9,
     paddingVertical: 6
   },
   publicTripTagText: {
-    color: '#7F7063',
+    color: '#AAAAAA',
     fontSize: 11,
-    fontWeight: '800'
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   addPublicTripButton: {
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#F3F3F1',
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(215,215,210,0.95)',
     paddingVertical: 13,
     alignItems: 'center'
   },
   addPublicTripButtonDone: {
-    backgroundColor: '#A8998A'
+    backgroundColor: '#F3F3F1',
+    borderColor: '#DEDEDA'
   },
   addPublicTripButtonText: {
-    color: '#FFF8F0',
-    fontWeight: '800'
+    color: '#111111',
+    fontWeight: Platform.OS === 'ios' ? '600' : '700',
+    fontSize: 15,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   emptyPublicTrips: {
     backgroundColor: '#FFF8F0',
@@ -1425,106 +1499,170 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   publicDetailScreen: {
-    paddingBottom: 24
+    backgroundColor: '#F3F3F1'
+  },
+  publicDetailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    overflow: 'hidden'
+  },
+  publicDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10
+  },
+  publicDetailBackButton: {
+    marginLeft: 0,
+    paddingHorizontal: 0
+  },
+  publicDetailHeaderAction: {
+    marginRight: 0,
+    paddingHorizontal: 0
+  },
+  publicDetailTitleGroup: {
+    marginBottom: 16
+  },
+  publicDetailTitle: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '800',
+    color: '#111111',
+    textTransform: 'lowercase'
+  },
+  publicDetailLocation: {
+    color: '#575757',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '600' : '500',
+    marginTop: 4
   },
   publicDetailImage: {
     width: '100%',
-    height: 220,
-    borderRadius: 20,
-    marginBottom: 14
-  },
-  publicDetailActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14
+    height: 176,
+    borderRadius: 18,
+    marginBottom: 16
   },
   publicProfileInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFF8F0',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 12,
+    paddingVertical: 8,
+    marginBottom: 10
   },
-  publicProfileInlineCompact: {
+  publicProfilePressable: {
     flex: 1,
-    minWidth: 0,
-    paddingRight: 10,
-    minHeight: 66
-  },
-  publicProfileAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F2D8D8',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    gap: 10,
+    minWidth: 0
+  },
+  publicProfileAvatarImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19
   },
   publicProfileTextWrap: {
     flex: 1,
     minWidth: 0
   },
-  publicProfileAvatarText: {
-    color: '#A97C50',
-    fontSize: 18,
-    fontWeight: '800'
-  },
   publicProfileName: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   publicProfileSubtext: {
     marginTop: 2,
-    color: '#A97C50',
+    color: '#575757',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: Platform.OS === 'ios' ? '600' : '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   publicHeartButton: {
-    width: 66,
-    height: 66,
+    minWidth: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    marginRight: 6,
+    height: 36
   },
   publicHeartButtonText: {
-    color: '#A8998A',
-    fontSize: 30,
-    lineHeight: 32,
-    fontWeight: '800'
+    color: '#CCCCCC',
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '500'
   },
   publicHeartButtonTextActive: {
-    color: '#E6A6B3'
+    color: '#FF3B30'
   },
   publicHeartCount: {
-    marginTop: 2,
-    color: '#A8998A',
+    marginTop: 1,
+    color: '#CCCCCC',
     fontSize: 11,
-    fontWeight: '700'
+    fontWeight: '400'
   },
   publicHeartCountActive: {
-    color: '#E6A6B3'
+    color: '#FF3B30'
   },
   publicDetailMeta: {
-    color: '#7F7063',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10
+    color: '#6F6F6B',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '600' : '500',
+    marginTop: 4
   },
   publicDetailDescription: {
-    color: '#6B5A4C',
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#6F6F6B',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    marginBottom: 12,
+    textAlign: 'center'
+  },
+  publicDetailItineraryHead: {
+    marginTop: 4,
     marginBottom: 12
   },
   publicDetailSectionTitle: {
-    color: '#4B3A32',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 10
+    color: '#111111',
+    fontSize: 24,
+    lineHeight: 28,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '800'
   },
   publicItineraryDaySection: {
     flexDirection: 'row',
@@ -1538,48 +1676,82 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#B8B8B2',
     marginTop: 6
   },
   publicItineraryDayLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#EEDFD7',
+    backgroundColor: '#E1E1DC',
     marginTop: 4
   },
   publicItineraryDayContent: {
     flex: 1,
-    paddingBottom: 18
+    paddingBottom: 10
   },
   publicItineraryDayTitle: {
-    marginBottom: 10,
-    color: '#4B3A32',
-    fontSize: 15,
+    marginBottom: 14,
+    color: '#111111',
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
     fontWeight: '800'
   },
   publicItineraryEmpty: {
-    color: '#A8998A',
+    color: '#6F6F6B',
     marginBottom: 10,
-    fontSize: 13
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  publicPlaceGroup: {
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'transparent'
+  },
+  publicPlaceGroupGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(243,243,241,0.88)'
   },
   publicPlaceRow: {
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEDFD7'
+    paddingHorizontal: 12
   },
   publicPlaceName: {
-    color: '#4B3A32',
-    fontSize: 14,
-    fontWeight: '800'
+    color: '#111111',
+    fontSize: 16,
+    lineHeight: 21,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   publicPlaceNote: {
     marginTop: 4,
-    color: '#7F7063',
-    fontSize: 12,
-    lineHeight: 17
+    color: '#6F6F6B',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   publicDetailAddButton: {
-    marginTop: 8
+    marginTop: 4
   },
   publicProfileHeader: {
     backgroundColor: '#FFF8F0',
@@ -1629,14 +1801,25 @@ const styles = StyleSheet.create({
     gap: 10
   },
   backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#F2D8D8'
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginTop: 0,
+    marginLeft: 8,
+    minWidth: 28,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    height: 28
   },
   backButtonText: {
-    color: '#A97C50',
-    fontWeight: '700'
+    color: '#4A4A4A',
+    fontSize: 26,
+    lineHeight: 26,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   exploreSubHeaderText: {
     flex: 1
@@ -1645,12 +1828,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end'
   },
   filterSubHeaderText: {
-    alignItems: 'flex-end'
+    alignItems: 'flex-end',
+    paddingRight: 10
   },
   exploreSubTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#4B3A32'
+    color: '#111111',
+    textTransform: 'lowercase',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   publicDetailHeaderTitle: {
     textAlign: 'right'

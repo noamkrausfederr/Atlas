@@ -301,6 +301,7 @@ const upcomingBoards = getUpcomingTrips(boards);
   const likedPublicTrips = hydratedPublicTrips.filter((trip) => likedPublicTripIds.includes(trip.id));
   const isTripsRootView = !selectedBoard && activeTab === 'Trips';
   const isExploreView = activeTab === 'Explore';
+  const isInboxView = activeTab === 'Inbox';
   const isTripDetailView = Boolean(selectedBoard);
   const inboxProfileDirectory = hydratedPublicTrips.reduce((profiles, trip) => {
     if (!profiles[trip.ownerName]) {
@@ -787,7 +788,7 @@ const upcomingBoards = getUpcomingTrips(boards);
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, isTripsRootView && styles.tripsSafeArea, isTripDetailView && styles.detailSafeArea, isExploreView && styles.tripsSafeArea]}
+      style={[styles.safeArea, (isTripsRootView || isExploreView || isInboxView) && styles.tripsSafeArea, isTripDetailView && styles.detailSafeArea]}
       edges={['top']}
     >
       <StatusBar style="dark" />
@@ -796,7 +797,7 @@ const upcomingBoards = getUpcomingTrips(boards);
           styles.contentWrapper,
           isTripsRootView && styles.tripsContentWrapper,
           isTripDetailView && styles.detailContentWrapper,
-          isExploreView && styles.tripsContentWrapper
+          (isExploreView || isInboxView) && styles.tripsContentWrapper
         ]}
       >
         {selectedBoard ? (
@@ -804,7 +805,7 @@ const upcomingBoards = getUpcomingTrips(boards);
             {renderSelectedBoardContent()}
           </View>
         ) : activeTab === 'Inbox' ? (
-          <View style={[styles.detailContainer, { paddingBottom: shouldHideBottomNav ? 0 : tabBarHeight }]}>
+          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: shouldHideBottomNav ? 0 : tabBarHeight }]}>
             {renderContent()}
           </View>
         ) : (
@@ -963,18 +964,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
-    paddingLeft: 4
+    paddingLeft: 8
   },
   tripSectionTitle: {
-    fontSize: 19,
-    lineHeight: 24,
+    fontSize: 24,
+    lineHeight: 28,
     color: '#111111',
     fontFamily: Platform.select({
       ios: 'SF Pro Display',
       android: 'sans-serif-medium',
       default: 'System'
     }),
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+    fontWeight: '800',
+    textTransform: 'lowercase'
   },
   logoWrap: {
     borderRadius: 22,
@@ -993,7 +995,7 @@ const styles = StyleSheet.create({
     color: '#111111'
   },
   logoDot: {
-    color: '#111111'
+    color: '#555555'
   },
   horizontalCards: {
     marginBottom: 12

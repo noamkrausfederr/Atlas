@@ -94,7 +94,8 @@ const styles = StyleSheet.create({
       android: 'sans-serif-medium',
       default: 'System'
     }),
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+    fontWeight: '800',
+    textTransform: 'lowercase'
   },
   cardLocation: {
     fontSize: 13,

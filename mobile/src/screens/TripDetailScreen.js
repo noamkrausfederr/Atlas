@@ -1249,12 +1249,10 @@ const styles = StyleSheet.create({
     })
   },
   addLinkFooter: {
-    borderTopWidth: 1,
-    borderTopColor: '#E1E1DC',
     paddingTop: 14,
     paddingBottom: 0,
-    marginHorizontal: -20,
-    paddingHorizontal: 20
+    marginHorizontal: -16,
+    paddingHorizontal: 16
   },
   addLinkRow: {
     flexDirection: 'row',
