@@ -1,4 +1,4 @@
-import { ActivityIndicator, Animated, Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
@@ -48,6 +48,59 @@ function formatTripHeaderDate(date) {
   return `${weekday}, ${month} ${day}, ${year}`;
 }
 
+function getSafeDate(value, fallback = new Date()) {
+  const candidate = value ? new Date(value) : new Date(fallback);
+  return Number.isNaN(candidate.getTime()) ? new Date(fallback) : candidate;
+}
+
+function parseItineraryTimeValue(value) {
+  if (!value || typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function formatItineraryTimeValue(value) {
+  const totalMinutes = parseItineraryTimeValue(value);
+  if (totalMinutes === null) return value || '';
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getFallbackItineraryTime(index) {
+  const totalMinutes = 9 * 60 + index * 120;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function clampTimeMinutes(value) {
+  const minutesInDay = 24 * 60;
+  const normalized = ((value % minutesInDay) + minutesInDay) % minutesInDay;
+  const rounded = Math.round(normalized / 5) * 5;
+  return rounded === minutesInDay ? 0 : rounded;
+}
+
+function formatMinutesAsTime(totalMinutes) {
+  const safeMinutes = clampTimeMinutes(totalMinutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function formatItineraryChipWeekday(date) {
+  return date.toLocaleDateString(undefined, { weekday: 'short' });
+}
+
+function formatItineraryChipMonth(date) {
+  return date.toLocaleDateString(undefined, { month: 'short' });
+}
+
 function getTripDateSections(startDate, endDate) {
   const sections = [];
   const cursor = new Date(startDate);
@@ -83,7 +136,188 @@ function getPlaceSectionIndex(place, sectionCount) {
   return 0;
 }
 
-export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommendations }) {
+export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDeleteBoard }) {
+  const today = startOfToday();
+  const initialStartDate = clampDateToMin(getSafeDate(board.startDate, today), today);
+  const initialEndDate = clampDateToMin(getSafeDate(board.endDate, initialStartDate), initialStartDate);
+  const [title, setTitle] = useState(board.title ?? '');
+  const [location, setLocation] = useState(board.location ?? board.subtitle ?? '');
+  const [description, setDescription] = useState(board.description ?? '');
+  const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
+  const [startDate, setStartDate] = useState(initialStartDate);
+  const [endDate, setEndDate] = useState(initialEndDate);
+  const [isPublic, setIsPublic] = useState(Boolean(board.isPublic));
+  const [activeDateField, setActiveDateField] = useState(null);
+
+  const handleSave = () => {
+    onSave?.({
+      title: title.trim() || board.title,
+      location: location.trim(),
+      subtitle: location.trim() || board.subtitle,
+      description: description.trim(),
+      accommodation: accommodation.trim(),
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      days: Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1),
+      isPublic
+    });
+    onBack?.();
+  };
+
+  const handleStartDateChange = (_event, selectedDate) => {
+    if (!selectedDate) return;
+    const nextStart = clampDateToMin(selectedDate, today);
+    const nextEnd = endDate < nextStart ? nextStart : endDate;
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+    setActiveDateField('end');
+  };
+
+  const handleEndDateChange = (_event, selectedDate) => {
+    if (!selectedDate) return;
+    const nextEnd = clampDateToMin(selectedDate, startDate > today ? startDate : today);
+    setEndDate(nextEnd);
+    setActiveDateField(null);
+  };
+
+  return (
+    <View style={styles.detailScreen}>
+      <ScrollView contentContainerStyle={styles.editScrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.editCard}>
+          <View style={styles.editHeader}>
+            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+              <Text style={styles.backButtonText}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.editHeaderTitle}>Edit trip</Text>
+            <TouchableOpacity onPress={handleSave} style={styles.editSaveButton} activeOpacity={0.8}>
+              <Text style={styles.editSaveButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.editFieldGroup}>
+            <Text style={styles.editLabel}>Trip title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              style={styles.editInput}
+              placeholder="Trip title"
+              placeholderTextColor="#A8A8A2"
+            />
+          </View>
+
+          <View style={styles.editFieldGroup}>
+            <Text style={styles.editLabel}>Location</Text>
+            <TextInput
+              value={location}
+              onChangeText={setLocation}
+              style={styles.editInput}
+              placeholder="City, country"
+              placeholderTextColor="#A8A8A2"
+            />
+          </View>
+
+          <View style={styles.editDateRow}>
+            <View style={styles.editDateField}>
+              <Text style={styles.editLabel}>Start</Text>
+              <TouchableOpacity
+                style={[styles.editInput, styles.editDateButton]}
+                activeOpacity={0.8}
+                onPress={() => setActiveDateField((current) => (current === 'start' ? null : 'start'))}
+              >
+                <Text style={styles.editDateValue}>{formatTripHeaderDate(startDate)}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.editDateField}>
+              <Text style={styles.editLabel}>End</Text>
+              <TouchableOpacity
+                style={[styles.editInput, styles.editDateButton]}
+                activeOpacity={0.8}
+                onPress={() => setActiveDateField((current) => (current === 'end' ? null : 'end'))}
+              >
+                <Text style={styles.editDateValue}>{formatTripHeaderDate(endDate)}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {activeDateField === 'start' ? (
+            <View style={styles.editCalendarWrap}>
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                minimumDate={today}
+                onChange={handleStartDateChange}
+              />
+            </View>
+          ) : null}
+
+          {activeDateField === 'end' ? (
+            <View style={styles.editCalendarWrap}>
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                minimumDate={startDate > today ? startDate : today}
+                onChange={handleEndDateChange}
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.editFieldGroup}>
+            <Text style={styles.editLabel}>Staying at</Text>
+            <TextInput
+              value={accommodation}
+              onChangeText={setAccommodation}
+              style={styles.editInput}
+              placeholder="Hotel, Airbnb, or address"
+              placeholderTextColor="#A8A8A2"
+            />
+          </View>
+
+          <View style={styles.editFieldGroup}>
+            <Text style={styles.editLabel}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              style={[styles.editInput, styles.editTextArea]}
+              placeholder="Add a short description"
+              placeholderTextColor="#A8A8A2"
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={styles.editPrivacyRow}
+            activeOpacity={0.8}
+            onPress={() => setIsPublic((current) => !current)}
+          >
+            <View>
+              <Text style={styles.editPrivacyTitle}>Trip privacy</Text>
+              <Text style={styles.editPrivacySubtitle}>{isPublic ? 'Visible on your public profile' : 'Only visible to you'}</Text>
+            </View>
+            <View style={[styles.editPrivacyPill, isPublic && styles.editPrivacyPillActive]}>
+              <Text style={[styles.editPrivacyPillText, isPublic && styles.editPrivacyPillTextActive]}>
+                {isPublic ? 'Public' : 'Private'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.editActionsSection}>
+            <TouchableOpacity style={styles.editSecondaryAction} activeOpacity={0.8} onPress={onDuplicateBoard}>
+              <Text style={styles.editSecondaryActionText}>Duplicate</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.editDangerAction} activeOpacity={0.8} onPress={onDeleteBoard}>
+              <Text style={styles.editDangerActionText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommendations, onOpenEditTrip }) {
   const today = startOfToday();
   const [itinerary, setItinerary] = useState(board.placesList ?? []);
   const [draggedPlaceId, setDraggedPlaceId] = useState(null);
@@ -110,7 +344,18 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     const minEnd = board.startDate ? clampDateToMin(new Date(board.startDate), today) : today;
     return clampDateToMin(initial, minEnd);
   });
-  const [activeDateField, setActiveDateField] = useState(null);
+  const [selectedItineraryDayIndex, setSelectedItineraryDayIndex] = useState(0);
+  const [editingTimePlaceId, setEditingTimePlaceId] = useState(null);
+  const [timeDrafts, setTimeDrafts] = useState({});
+  const [editingActivityPlaceId, setEditingActivityPlaceId] = useState(null);
+  const [activityDrafts, setActivityDrafts] = useState({});
+  const [addActivityModal, setAddActivityModal] = useState(null);
+  const [showAddActivityTimePicker, setShowAddActivityTimePicker] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [isAddressFocused, setIsAddressFocused] = useState(false);
+  const addressRequestId = useRef(0);
+  const addressBlurTimer = useRef(null);
   const [linkInput, setLinkInput] = useState('');
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
@@ -123,18 +368,36 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const accommodationInputRef = useRef(null);
   const accommodationBlurTimer = useRef(null);
   const accommodationRequestId = useRef(0);
-  const isPublic = Boolean(board.isPublic);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
 
   itinerary.forEach((place) => {
     const target = getPlaceSectionIndex(place, itinerarySections.length);
+    const enrichPlace = (sectionIndex, fallbackIndex) => ({
+      ...place,
+      displayTime: place.time || getFallbackItineraryTime(fallbackIndex),
+      sectionIndex
+    });
     if (target instanceof Date) {
       const matchingIndex = itinerarySections.findIndex((section) => section.key === getDateKey(target));
-      itinerarySections[matchingIndex >= 0 ? matchingIndex : 0].places.push(place);
+      const normalizedIndex = matchingIndex >= 0 ? matchingIndex : 0;
+      itinerarySections[normalizedIndex].places.push(
+        enrichPlace(normalizedIndex, itinerarySections[normalizedIndex].places.length)
+      );
       return;
     }
-    itinerarySections[target].places.push(place);
+    itinerarySections[target].places.push(
+      enrichPlace(target, itinerarySections[target].places.length)
+    );
   });
+  itinerarySections.forEach((section) => {
+    section.places.sort((left, right) => {
+      const leftMinutes = parseItineraryTimeValue(left.displayTime) ?? Number.POSITIVE_INFINITY;
+      const rightMinutes = parseItineraryTimeValue(right.displayTime) ?? Number.POSITIVE_INFINITY;
+      return leftMinutes - rightMinutes;
+    });
+  });
+  const safeSelectedItineraryDayIndex = Math.min(Math.max(selectedItineraryDayIndex, 0), Math.max(itinerarySections.length - 1, 0));
+  const selectedItinerarySection = itinerarySections[safeSelectedItineraryDayIndex] ?? itinerarySections[0] ?? null;
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -155,6 +418,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   useEffect(() => () => {
     clearTimeout(accommodationBlurTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (selectedItineraryDayIndex !== safeSelectedItineraryDayIndex) {
+      setSelectedItineraryDayIndex(safeSelectedItineraryDayIndex);
+    }
+  }, [safeSelectedItineraryDayIndex, selectedItineraryDayIndex]);
 
   useEffect(() => {
     const query = accommodation.trim();
@@ -190,6 +459,41 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     };
   }, [accommodation, isAccommodationFocused, board.location]);
 
+  useEffect(() => {
+    const query = addActivityModal?.address?.trim() ?? '';
+    let isActive = true;
+
+    if (!isAddressFocused || query.length < 2) {
+      setAddressSuggestions([]);
+      setIsSearchingAddress(false);
+      return undefined;
+    }
+
+    const requestId = ++addressRequestId.current;
+    setIsSearchingAddress(true);
+    const timer = setTimeout(async () => {
+      const results = await autocompleteAccommodation(query, board.location ?? '');
+      if (!isActive || requestId !== addressRequestId.current) return;
+      setAddressSuggestions(
+        results.map((item) => ({
+          primaryName: item.name || item.address.split(',')[0]?.trim() || item.address,
+          fullAddress: item.address,
+          lat: item.lat,
+          lng: item.lng,
+          placeId: item.placeId || null
+        }))
+      );
+      setIsSearchingAddress(false);
+    }, 220);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [addActivityModal?.address, isAddressFocused, board.location]);
+
+  useEffect(() => () => { clearTimeout(addressBlurTimer.current); }, []);
+
   const persistBoard = (patch) => {
     onUpdateBoard?.({
       placesList: itinerary,
@@ -204,6 +508,28 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString()
     });
+  };
+
+  const buildSortedItinerary = (places) => {
+    const nextSections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
+
+    places.forEach((place) => {
+      const target = getPlaceSectionIndex(place, nextSections.length);
+      const normalizedTarget = target instanceof Date
+        ? Math.max(0, nextSections.findIndex((section) => section.key === getDateKey(target)))
+        : target;
+      nextSections[normalizedTarget >= 0 ? normalizedTarget : 0].places.push(place);
+    });
+
+    nextSections.forEach((section) => {
+      section.places.sort((left, right) => {
+        const leftMinutes = parseItineraryTimeValue(left.time) ?? Number.POSITIVE_INFINITY;
+        const rightMinutes = parseItineraryTimeValue(right.time) ?? Number.POSITIVE_INFINITY;
+        return leftMinutes - rightMinutes;
+      });
+    });
+
+    return nextSections.flatMap((section) => section.places);
   };
 
   const measureItineraryLayouts = () => {
@@ -346,69 +672,156 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 
   const extractPlacesFromUrl = async (url) => {
     if (!url) return [];
+    const selectedDateIso = itinerarySections[safeSelectedItineraryDayIndex]?.date?.toISOString?.() ?? startDate.toISOString();
+    const selectedDaySeed = { dayIndex: safeSelectedItineraryDayIndex, day: safeSelectedItineraryDayIndex + 1, date: selectedDateIso };
     if (url.includes('tiktok.com')) {
       return [
-        { id: `p-${Date.now()}-1`, name: `${board.title} - Highlight 1`, note: 'From TikTok', sourceUrl: url, dayIndex: 0 },
-        { id: `p-${Date.now()}-2`, name: `${board.title} - Highlight 2`, note: 'From TikTok', sourceUrl: url, dayIndex: 0 }
+        { id: `p-${Date.now()}-1`, name: `${board.title} - Highlight 1`, note: 'From TikTok', sourceUrl: url, ...selectedDaySeed },
+        { id: `p-${Date.now()}-2`, name: `${board.title} - Highlight 2`, note: 'From TikTok', sourceUrl: url, ...selectedDaySeed }
       ];
     }
     try {
       const parts = new URL(url).pathname.split('/').filter(Boolean);
       const token = parts.slice(-1)[0] || url;
-      return [{ id: `p-${Date.now()}`, name: decodeURIComponent(token), note: 'From link', sourceUrl: url, dayIndex: 0 }];
+      return [{ id: `p-${Date.now()}`, name: decodeURIComponent(token), note: 'From link', sourceUrl: url, ...selectedDaySeed }];
     } catch (e) {
-      return [{ id: `p-${Date.now()}`, name: url, note: 'From link', sourceUrl: url, dayIndex: 0 }];
+      return [{ id: `p-${Date.now()}`, name: url, note: 'From link', sourceUrl: url, ...selectedDaySeed }];
     }
   };
 
   const handleAddLink = async () => {
     const places = await extractPlacesFromUrl(linkInput.trim());
     if (places.length) {
-      const next = [...itinerary, ...places];
+      const next = buildSortedItinerary([...itinerary, ...places]);
       setItinerary(next);
-      onUpdateBoard?.({
-        placesList: next,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
-      });
+      persistItinerary(next);
     }
     setLinkInput('');
   };
 
-  const toggleDateField = (field) => {
-    setActiveDateField((current) => (current === field ? null : field));
+  const handleAddActivityToSelectedDay = () => {
+    if (!selectedItinerarySection) return;
+    setAddActivityModal({ name: '', note: '', time: '', address: '' });
+    setShowAddActivityTimePicker(false);
+    setAddressSuggestions([]);
+    setIsAddressFocused(false);
   };
 
-  const handleStartDateChange = (_event, selectedDate) => {
-    if (!selectedDate) {
+  const handleConfirmAddActivity = () => {
+    if (!selectedItinerarySection || !addActivityModal) return;
+    const lastPlace = selectedItinerarySection.places[selectedItinerarySection.places.length - 1];
+    const lastMinutes = parseItineraryTimeValue(lastPlace?.displayTime);
+    const nextActivityTime = lastMinutes !== null
+      ? formatMinutesAsTime(lastMinutes + 60)
+      : getFallbackItineraryTime(selectedItinerarySection.places.length);
+    const draftTime = addActivityModal.time?.trim();
+    const parsedDraftTime = parseItineraryTimeValue(draftTime);
+    const resolvedTime = parsedDraftTime !== null ? formatMinutesAsTime(parsedDraftTime) : nextActivityTime;
+    const nextActivity = {
+      id: `p-${Date.now()}`,
+      name: addActivityModal.name.trim() || 'New activity',
+      note: addActivityModal.note.trim(),
+      address: addActivityModal.address?.trim() ?? '',
+      time: resolvedTime,
+      dayIndex: safeSelectedItineraryDayIndex,
+      day: safeSelectedItineraryDayIndex + 1,
+      date: selectedItinerarySection.date.toISOString()
+    };
+    const nextItinerary = [...itinerary, nextActivity];
+    setItinerary(nextItinerary);
+    persistItinerary(nextItinerary);
+    setShowAddActivityTimePicker(false);
+    setAddressSuggestions([]);
+    setIsAddressFocused(false);
+    setAddActivityModal(null);
+  };
+
+  const updatePlaceTime = (placeId, totalMinutes) => {
+    const nextItinerary = buildSortedItinerary(
+      itinerary.map((place) => (
+        place.id === placeId ? { ...place, time: formatMinutesAsTime(totalMinutes) } : place
+      ))
+    );
+    setItinerary(nextItinerary);
+    persistItinerary(nextItinerary);
+  };
+
+  const sanitizeTimeDraft = (value) => {
+    const digits = value.replace(/[^\d]/g, '').slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  };
+
+  const startEditingTime = (place) => {
+    setEditingTimePlaceId(place.id);
+    setTimeDrafts((current) => ({
+      ...current,
+      [place.id]: formatItineraryTimeValue(place.displayTime)
+    }));
+  };
+
+  const updateTimeDraft = (placeId, value) => {
+    setTimeDrafts((current) => ({
+      ...current,
+      [placeId]: sanitizeTimeDraft(value)
+    }));
+  };
+
+  const finishEditingTime = (place) => {
+    const draftValue = timeDrafts[place.id] ?? formatItineraryTimeValue(place.displayTime);
+    const parsedMinutes = parseItineraryTimeValue(draftValue);
+    const fallbackMinutes = parseItineraryTimeValue(place.displayTime) ?? 9 * 60;
+    updatePlaceTime(place.id, parsedMinutes ?? fallbackMinutes);
+    setTimeDrafts((current) => {
+      const next = { ...current };
+      delete next[place.id];
+      return next;
+    });
+    setEditingTimePlaceId((current) => (current === place.id ? null : current));
+  };
+
+  const updateActivityDraft = (placeId, field, value) => {
+    setActivityDrafts((current) => ({
+      ...current,
+      [placeId]: {
+        name: current[placeId]?.name ?? '',
+        note: current[placeId]?.note ?? '',
+        [field]: value
+      }
+    }));
+  };
+
+  const startEditingActivity = (place) => {
+    setEditingActivityPlaceId(place.id);
+    setActivityDrafts((current) => ({
+      ...current,
+      [place.id]: {
+        name: place.name ?? '',
+        note: place.note ?? ''
+      }
+    }));
+  };
+
+  const saveActivityDetails = (place) => {
+    const draft = activityDrafts[place.id];
+    if (!draft) {
+      setEditingActivityPlaceId(null);
       return;
     }
-    const nextStart = clampDateToMin(selectedDate, today);
-    const nextEnd = endDate < nextStart ? nextStart : endDate;
-    setStartDate(nextStart);
-    if (endDate < nextStart) {
-      setEndDate(nextEnd);
-    }
-    persistBoard({ startDate: nextStart.toISOString(), endDate: nextEnd.toISOString() });
-    setActiveDateField('end');
-  };
 
-  const handleEndDateChange = (_event, selectedDate) => {
-    if (Platform.OS === 'android') {
-      setActiveDateField(null);
-    }
-    if (!selectedDate) {
-      return;
-    }
-    const minEnd = startDate > today ? startDate : today;
-    const nextEnd = clampDateToMin(selectedDate, minEnd);
-    setEndDate(nextEnd);
-    persistBoard({ startDate: startDate.toISOString(), endDate: nextEnd.toISOString() });
-    setActiveDateField(null);
-  };
-
-  const updatePrivacy = (nextIsPublic) => {
-    onUpdateBoard?.({ isPublic: nextIsPublic });
+    const nextName = draft.name.trim() || 'New activity';
+    const nextNote = draft.note.trim();
+    const nextItinerary = itinerary.map((entry) => (
+      entry.id === place.id ? { ...entry, name: nextName, note: nextNote } : entry
+    ));
+    setItinerary(nextItinerary);
+    persistItinerary(nextItinerary);
+    setEditingActivityPlaceId(null);
+    setActivityDrafts((current) => {
+      const next = { ...current };
+      delete next[place.id];
+      return next;
+    });
   };
 
   return (
@@ -428,7 +841,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerMenuButton} onPress={() => {}}>
+            <TouchableOpacity style={styles.headerMenuButton} onPress={onOpenEditTrip} activeOpacity={0.85}>
               <Text style={styles.headerMenuButtonText}>...</Text>
             </TouchableOpacity>
           </View>
@@ -437,17 +850,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               <Text style={styles.detailTitle} numberOfLines={2}>
                 {board.title}
               </Text>
-              <TouchableOpacity
-                style={styles.privacySwitch}
-                activeOpacity={0.8}
-                onPress={() => updatePrivacy(!isPublic)}
-              >
-                <BlurView intensity={28} tint="extraLight" style={styles.privacySwitchBlur}>
-                  <View style={[styles.privacySwitchThumb, isPublic ? styles.privacySwitchThumbPublic : styles.privacySwitchThumbPrivate]} />
-                  <Text style={[styles.privacySwitchOption, isPublic && styles.privacySwitchOptionActive]}>Public</Text>
-                  <Text style={[styles.privacySwitchOption, !isPublic && styles.privacySwitchOptionActive]}>Private</Text>
-                </BlurView>
-              </TouchableOpacity>
             </View>
             {board.location ? (
               <Text style={styles.detailLocation} numberOfLines={1}>
@@ -465,54 +867,21 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
           <View style={styles.datesTopRow}>
             <View style={styles.dateField}>
               <Text style={styles.statLabel}>Start</Text>
-              <TouchableOpacity
-                style={[styles.dateBox, activeDateField === 'start' && styles.dateBoxActive]}
-                onPress={() => toggleDateField('start')}
-                activeOpacity={0.75}
-              >
+              <View style={styles.dateBox}>
                 <BlurView intensity={28} tint="extraLight" style={styles.glassDateFieldBlur}>
                   <Text style={styles.datesValue}>{formatTripHeaderDate(startDate)}</Text>
                 </BlurView>
-              </TouchableOpacity>
+              </View>
             </View>
             <View style={[styles.dateField, styles.dateFieldLast]}>
               <Text style={styles.statLabel}>End</Text>
-              <TouchableOpacity
-                style={[styles.dateBox, styles.dateBoxLast, activeDateField === 'end' && styles.dateBoxActive]}
-                onPress={() => toggleDateField('end')}
-                activeOpacity={0.75}
-              >
+              <View style={[styles.dateBox, styles.dateBoxLast]}>
                 <BlurView intensity={28} tint="extraLight" style={styles.glassDateFieldBlur}>
                   <Text style={styles.datesValue}>{formatTripHeaderDate(endDate)}</Text>
                 </BlurView>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
-
-          {activeDateField === 'start' && (
-            <View style={styles.inlineCalendarWrap}>
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={today}
-                onChange={handleStartDateChange}
-                style={styles.inlineCalendar}
-              />
-            </View>
-          )}
-          {activeDateField === 'end' && (
-            <View style={styles.inlineCalendarWrap}>
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={startDate > today ? startDate : today}
-                onChange={handleEndDateChange}
-                style={styles.inlineCalendar}
-              />
-            </View>
-          )}
 
           <View
             style={styles.accommodationSection}
@@ -627,87 +996,192 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             )}
           </View>
           <View style={styles.detailBody}>
-            <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
-            <View style={styles.itineraryList}>
-            {itinerarySections.map((section, index) => (
-              <View
-                key={section.key}
-                ref={(node) => {
-                  if (node) sectionRefs.current[index] = node;
-                }}
-                style={[styles.itineraryDaySection, dropTargetSectionIndex === index && styles.itineraryDaySectionActive]}
-                onLayout={() => {
-                  sectionRefs.current[index]?.measureInWindow?.((_x, y, _width, height) => {
-                  sectionLayouts.current[index] = { y, height };
-                  });
-                }}
-              >
-                <View style={styles.itineraryDayRail}>
-                  <View style={styles.itineraryDayDot} />
-                  {index < itinerarySections.length - 1 && <View style={styles.itineraryDayLine} />}
+            <View style={styles.itinerarySectionCard}>
+              <View style={styles.itineraryHeaderRow}>
+                <View>
+                  <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
+                  <Text style={styles.itinerarySubheading}>Tap a date to focus the day. Tap a time to edit it.</Text>
                 </View>
-                <View style={styles.itineraryDayContent}>
-                  <Text style={styles.itineraryDayTitle}>{section.title}</Text>
-                  {section.places.length === 0 && <Text style={styles.itineraryEmpty}>No plans yet.</Text>}
-                  {section.places.length > 0 ? (
-                    <View style={styles.itineraryItemsGroup}>
-                      <BlurView intensity={28} tint="extraLight" style={styles.itineraryItemsGroupGlass} />
-                      {section.places.map((p, placeIndex) => {
-                        const isDragged = draggedPlaceId === p.id;
-                        return (
-                          <Animated.View
-                            key={p.id}
-                            ref={(node) => {
-                              if (node) itemRefs.current[p.id] = node;
-                            }}
-                            style={[
-                              styles.itineraryRow,
-                              isDragged && styles.itineraryRowDragging,
-                              isDragged && { transform: [{ translateY: dragTranslateY }] }
-                            ]}
-                            onLayout={() => {
-                              itemRefs.current[p.id]?.measureInWindow?.((_x, y, _width, height) => {
-                                itemLayouts.current[p.id] = {
-                                  id: p.id,
-                                  sectionIndex: index,
-                                  index: placeIndex,
-                                  y,
-                                  height
-                                };
-                              });
-                              itemLayouts.current[p.id] = {
-                                ...(itemLayouts.current[p.id] ?? {}),
-                                sectionIndex: index,
-                                index: placeIndex
-                              };
-                            }}
-                            {...createPlacePanHandlers(p.id)}
-                          >
-                            <Pressable
-                              delayLongPress={220}
-                              onLongPress={() => beginHoldingPlace(p.id)}
-                              onPress={() => {
-                                if (!suppressPlacePressRef.current) {
-                                  setSelectedPlaceDetail({ place: p, dateLabel: section.title });
-                                }
-                              }}
-                              onPressOut={() => {
-                                if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
-                                  resetDraggingState();
-                                }
-                              }}
-                            >
-                              <Text style={styles.itineraryName}>{p.name}</Text>
-                              {p.note && <Text style={styles.itineraryNote}>{p.note}</Text>}
-                            </Pressable>
-                          </Animated.View>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-                </View>
+                <TouchableOpacity
+                  style={styles.itineraryAddButton}
+                  activeOpacity={0.85}
+                  onPress={handleAddActivityToSelectedDay}
+                >
+                  <BlurView intensity={28} tint="extraLight" style={styles.itineraryAddButtonBlur}>
+                    <Text style={styles.itineraryAddButtonText}>+</Text>
+                  </BlurView>
+                </TouchableOpacity>
               </View>
-            ))}
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.itineraryDateRow}
+                style={styles.itineraryDateScroll}
+              >
+                {itinerarySections.map((section, index) => {
+                  const isActive = index === safeSelectedItineraryDayIndex;
+                  return (
+                    <TouchableOpacity
+                      key={section.key}
+                      style={[styles.itineraryDateChip, isActive && styles.itineraryDateChipActive]}
+                      activeOpacity={0.85}
+                      onPress={() => setSelectedItineraryDayIndex(index)}
+                    >
+                      <Text style={[styles.itineraryDateChipDayNumber, isActive && styles.itineraryDateChipTextActive]}>
+                        {section.date.getDate()}
+                      </Text>
+                      <Text style={[styles.itineraryDateChipWeekday, isActive && styles.itineraryDateChipTextActive]}>
+                        {formatItineraryChipWeekday(section.date)}
+                      </Text>
+                      <Text style={[styles.itineraryDateChipMonth, isActive && styles.itineraryDateChipTextActive]}>
+                        {formatItineraryChipMonth(section.date)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.itineraryList}>
+              {selectedItinerarySection ? (
+                <View
+                  key={selectedItinerarySection.key}
+                  ref={(node) => {
+                    if (node) sectionRefs.current[safeSelectedItineraryDayIndex] = node;
+                  }}
+                  style={[
+                    styles.itineraryDaySection,
+                    dropTargetSectionIndex === safeSelectedItineraryDayIndex && styles.itineraryDaySectionActive
+                  ]}
+                  onLayout={() => {
+                    sectionRefs.current[safeSelectedItineraryDayIndex]?.measureInWindow?.((_x, y, _width, height) => {
+                    sectionLayouts.current[safeSelectedItineraryDayIndex] = { y, height };
+                    });
+                  }}
+                >
+                  <View style={styles.itineraryDayContent}>
+                    {selectedItinerarySection.places.length === 0 ? (
+                      <View style={styles.itineraryEmptyState}>
+                        <Text style={styles.itineraryEmptyTitle}>Nothing planned yet</Text>
+                        <Text style={styles.itineraryEmpty}>Start building this day with the + button.</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.itineraryItemsList}>
+                        {selectedItinerarySection.places.map((p, placeIndex) => {
+                          const isDragged = draggedPlaceId === p.id;
+                          const isEditingTime = editingTimePlaceId === p.id;
+                          const isEditingActivity = editingActivityPlaceId === p.id;
+                          const activityDraft = activityDrafts[p.id];
+                          const timeValue = isEditingTime
+                            ? (timeDrafts[p.id] ?? formatItineraryTimeValue(p.displayTime))
+                            : formatItineraryTimeValue(p.displayTime);
+                          return (
+                            <Animated.View
+                              key={p.id}
+                              ref={(node) => {
+                                if (node) itemRefs.current[p.id] = node;
+                              }}
+                              style={[
+                                styles.itineraryRow,
+                                isDragged && styles.itineraryRowDragging,
+                                isDragged && { transform: [{ translateY: dragTranslateY }] }
+                              ]}
+                              onLayout={() => {
+                                itemRefs.current[p.id]?.measureInWindow?.((_x, y, _width, height) => {
+                                  itemLayouts.current[p.id] = {
+                                    id: p.id,
+                                    sectionIndex: safeSelectedItineraryDayIndex,
+                                    index: placeIndex,
+                                    y,
+                                    height
+                                  };
+                                });
+                                itemLayouts.current[p.id] = {
+                                  ...(itemLayouts.current[p.id] ?? {}),
+                                  sectionIndex: safeSelectedItineraryDayIndex,
+                                  index: placeIndex
+                                };
+                              }}
+                              {...createPlacePanHandlers(p.id)}
+                            >
+                              <View style={styles.itineraryRowShell}>
+                                <View style={styles.itineraryTimeTextWrap}>
+                                  <TextInput
+                                    style={[
+                                      styles.itineraryTimeInput,
+                                      isEditingTime && styles.itineraryTimeInputEditing
+                                    ]}
+                                    value={timeValue}
+                                    onFocus={() => startEditingTime(p)}
+                                    onChangeText={(value) => updateTimeDraft(p.id, value)}
+                                    onBlur={() => finishEditingTime(p)}
+                                    onSubmitEditing={() => finishEditingTime(p)}
+                                    keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                                    returnKeyType="done"
+                                    maxLength={5}
+                                    selectTextOnFocus
+                                    placeholder="09:00"
+                                    placeholderTextColor="#A3A39D"
+                                  />
+                                </View>
+                                <View style={styles.itineraryRowCard}>
+                                  {isEditingActivity ? (
+                                    <View style={styles.itineraryRowPressable}>
+                                      <TextInput
+                                        style={styles.itineraryNameInput}
+                                        value={activityDraft?.name ?? ''}
+                                        onChangeText={(value) => updateActivityDraft(p.id, 'name', value)}
+                                        placeholder="Activity name"
+                                        placeholderTextColor="#A3A39D"
+                                        autoFocus
+                                      />
+                                      <TextInput
+                                        style={styles.itineraryNoteInput}
+                                        value={activityDraft?.note ?? ''}
+                                        onChangeText={(value) => updateActivityDraft(p.id, 'note', value)}
+                                        placeholder="Add details"
+                                        placeholderTextColor="#A3A39D"
+                                        multiline
+                                      />
+                                      <TouchableOpacity
+                                        style={styles.itinerarySaveActivityButton}
+                                        activeOpacity={0.85}
+                                        onPress={() => saveActivityDetails(p)}
+                                      >
+                                        <Text style={styles.itinerarySaveActivityButtonText}>Save</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  ) : (
+                                    <Pressable
+                                      style={styles.itineraryRowPressable}
+                                      delayLongPress={220}
+                                      onLongPress={() => beginHoldingPlace(p.id)}
+                                      onPress={() => {
+                                        if (!suppressPlacePressRef.current) {
+                                          setSelectedPlaceDetail({ place: p, dateLabel: selectedItinerarySection.title });
+                                        }
+                                      }}
+                                      onPressOut={() => {
+                                        if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
+                                          resetDraggingState();
+                                        }
+                                      }}
+                                    >
+                                      <Text style={styles.itineraryName}>{p.name}</Text>
+                                      {p.note && <Text style={styles.itineraryNote}>{p.note}</Text>}
+                                    </Pressable>
+                                  )}
+                                </View>
+                              </View>
+                            </Animated.View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+              </View>
             </View>
           </View>
 
@@ -745,6 +1219,151 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         fallbackImage={board.image}
         onClose={() => setSelectedPlaceDetail(null)}
       />
+
+      <Modal
+        visible={Boolean(addActivityModal)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setAddActivityModal(null); setShowAddActivityTimePicker(false); }}
+      >
+          <Pressable style={[styles.addActivityOverlay, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]} onPress={() => { Keyboard.dismiss(); setAddActivityModal(null); setShowAddActivityTimePicker(false); }}>
+            <Pressable style={styles.addActivityCard} onPress={() => {}}>
+              <Text style={styles.addActivityTitle}>New activity</Text>
+              {selectedItinerarySection ? (
+                <Text style={styles.addActivityDate}>{selectedItinerarySection.title}</Text>
+              ) : null}
+              <TextInput
+                style={styles.addActivityNameInput}
+                placeholder="Activity name"
+                placeholderTextColor="#AFAFA9"
+                value={addActivityModal?.name ?? ''}
+                onChangeText={(value) => setAddActivityModal((current) => ({ ...current, name: value }))}
+                autoFocus
+                returnKeyType="done"
+                blurOnSubmit
+              />
+              <TouchableOpacity
+                style={styles.addActivityFieldInput}
+                activeOpacity={0.8}
+                onPress={() => { Keyboard.dismiss(); setShowAddActivityTimePicker((v) => !v); }}
+              >
+                <Text style={addActivityModal?.time ? styles.addActivityFieldValue : styles.addActivityFieldPlaceholder}>
+                  {addActivityModal?.time || 'Time (optional)'}
+                </Text>
+              </TouchableOpacity>
+              {showAddActivityTimePicker && (
+                <View style={styles.addActivityTimePickerWrap}>
+                  <DateTimePicker
+                    value={(() => {
+                      const d = new Date();
+                      const minutes = parseItineraryTimeValue(addActivityModal?.time);
+                      if (minutes !== null) {
+                        d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                      }
+                      return d;
+                    })()}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    minuteInterval={5}
+                    onChange={(event, selectedDate) => {
+                      if (Platform.OS === 'android') setShowAddActivityTimePicker(false);
+                      if (selectedDate && event.type !== 'dismissed') {
+                        const h = selectedDate.getHours();
+                        const m = selectedDate.getMinutes();
+                        setAddActivityModal((current) => ({
+                          ...current,
+                          time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                        }));
+                      }
+                    }}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity style={styles.addActivityTimePickerDone} onPress={() => setShowAddActivityTimePicker(false)}>
+                      <Text style={styles.addActivityTimePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              <View style={styles.addActivityAddressWrap}>
+                <TextInput
+                  style={styles.addActivityFieldInput}
+                  placeholder="Address (optional)"
+                  placeholderTextColor="#AFAFA9"
+                  value={addActivityModal?.address ?? ''}
+                  onChangeText={(value) => setAddActivityModal((current) => ({ ...current, address: value }))}
+                  onFocus={() => {
+                    clearTimeout(addressBlurTimer.current);
+                    setIsAddressFocused(true);
+                  }}
+                  onBlur={() => {
+                    addressBlurTimer.current = setTimeout(() => setIsAddressFocused(false), 180);
+                  }}
+                  returnKeyType="next"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+                {isAddressFocused && (addActivityModal?.address?.trim().length ?? 0) >= 2 && (
+                  <View style={styles.addActivityAddressDropdown}>
+                    {addressSuggestions.length > 0 ? (
+                      <>
+                        {addressSuggestions.map((suggestion, index) => (
+                          <TouchableOpacity
+                            key={suggestion.fullAddress + index}
+                            style={[styles.accommodationOption, index < addressSuggestions.length - 1 && styles.accommodationOptionDivider]}
+                            activeOpacity={0.8}
+                            onPressIn={() => clearTimeout(addressBlurTimer.current)}
+                            onPress={() => {
+                              clearTimeout(addressBlurTimer.current);
+                              setAddActivityModal((current) => ({ ...current, address: suggestion.fullAddress }));
+                              setAddressSuggestions([]);
+                              setIsAddressFocused(false);
+                              Keyboard.dismiss();
+                            }}
+                          >
+                            <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
+                            <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {isSearchingAddress && (
+                          <View style={styles.accommodationDropdownLoadingInline}>
+                            <ActivityIndicator size="small" color="#A97C50" />
+                          </View>
+                        )}
+                      </>
+                    ) : isSearchingAddress ? (
+                      <View style={styles.accommodationDropdownLoading}>
+                        <ActivityIndicator size="small" color="#A97C50" />
+                      </View>
+                    ) : (
+                      <View style={styles.accommodationDropdownLoading}>
+                        <Text style={styles.accommodationNoResults}>No results found</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+              <TextInput
+                style={styles.addActivityNoteInput}
+                placeholder="Notes (optional)"
+                placeholderTextColor="#AFAFA9"
+                value={addActivityModal?.note ?? ''}
+                onChangeText={(value) => setAddActivityModal((current) => ({ ...current, note: value }))}
+                multiline
+                textAlignVertical="top"
+                returnKeyType="done"
+                blurOnSubmit
+              />
+              <View style={styles.addActivityActions}>
+                <TouchableOpacity style={styles.addActivityCancelBtn} activeOpacity={0.8} onPress={() => { setAddActivityModal(null); setShowAddActivityTimePicker(false); }}>
+                  <Text style={styles.addActivityCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.addActivityDoneBtn} activeOpacity={0.85} onPress={handleConfirmAddActivity}>
+                  <Text style={styles.addActivityDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -759,17 +1378,64 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 20
   },
+  editScrollContent: {
+    paddingHorizontal: 12,
+    paddingTop: 20,
+    paddingBottom: 28
+  },
   detailCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     overflow: 'hidden'
   },
+  editCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16
+  },
   detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14
+  },
+  editHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 22
+  },
+  editHeaderTitle: {
+    color: '#111111',
+    fontSize: 22,
+    lineHeight: 26,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '800'
+  },
+  editSaveButton: {
+    minWidth: 54,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14
+  },
+  editSaveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 16,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
   },
   backButton: {
     paddingVertical: 4,
@@ -846,56 +1512,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12
-  },
-  privacySwitch: {
-    width: 148,
-    height: 40,
-    flexShrink: 0,
-    marginLeft: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    overflow: 'hidden'
-  },
-  privacySwitchBlur: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 4,
-    backgroundColor: 'rgba(243,243,241,0.88)'
-  },
-  privacySwitchThumb: {
-    position: 'absolute',
-    top: 4,
-    bottom: 4,
-    width: 70,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.96)'
-  },
-  privacySwitchThumbPublic: {
-    left: 3
-  },
-  privacySwitchThumbPrivate: {
-    right: 3
-  },
-  privacySwitchOption: {
-    flex: 1,
-    zIndex: 1,
-    color: '#72726E',
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
-    fontWeight: Platform.OS === 'ios' ? '600' : '700'
-  },
-  privacySwitchOptionActive: {
-    color: '#111111',
-    fontWeight: '700'
   },
   detailImage: {
     width: '100%',
@@ -1131,12 +1747,147 @@ const styles = StyleSheet.create({
     color: '#111111',
     marginTop: 4
   },
+  itinerarySectionCard: {
+    marginTop: 4,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E5E5DF',
+    backgroundColor: '#FCFCFA',
+    padding: 16
+  },
+  itineraryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14
+  },
   itineraryHeading: {
-    marginTop: 8,
-    marginBottom: 12
+    marginTop: 0,
+    marginBottom: 4
+  },
+  itinerarySubheading: {
+    color: '#7A7A74',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  itineraryAddButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(216,216,210,0.95)',
+    backgroundColor: 'transparent'
+  },
+  itineraryAddButtonBlur: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(243,243,241,0.86)'
+  },
+  itineraryAddButtonText: {
+    color: '#4A4A4A',
+    fontSize: 24,
+    lineHeight: 24,
+    marginTop: -1,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '500'
+  },
+  itineraryDateScroll: {
+    marginBottom: 18
+  },
+  itineraryDateRow: {
+    paddingRight: 4,
+    gap: 8
+  },
+  itineraryDateChip: {
+    width: 50,
+    minHeight: 60,
+    borderRadius: 14,
+    backgroundColor: '#F1F1ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: '#ECECE7'
+  },
+  itineraryDateChipActive: {
+    backgroundColor: '#181818',
+    borderColor: '#181818'
+  },
+  itineraryDateChipDayNumber: {
+    color: '#111111',
+    fontSize: 18,
+    lineHeight: 20,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '800'
+  },
+  itineraryDateChipWeekday: {
+    marginTop: 2,
+    color: '#4F4F4A',
+    fontSize: 10,
+    lineHeight: 12,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  itineraryDateChipMonth: {
+    marginTop: 1,
+    color: '#8A8A84',
+    fontSize: 9,
+    lineHeight: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    fontWeight: '600'
+  },
+  itineraryDateChipTextActive: {
+    color: '#FFFFFF'
   },
   itineraryList: {
     overflow: 'visible'
+  },
+  itineraryEmptyState: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ECECE7',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 16,
+    paddingVertical: 18
+  },
+  itineraryEmptyTitle: {
+    color: '#111111',
+    fontSize: 16,
+    lineHeight: 20,
+    marginBottom: 4,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryEmpty: {
     color: '#6F6F6B',
@@ -1150,63 +1901,53 @@ const styles = StyleSheet.create({
     })
   },
   itineraryDaySection: {
-    flexDirection: 'row',
     alignItems: 'stretch',
-    borderRadius: 14,
     overflow: 'visible'
   },
   itineraryDaySectionActive: {
     backgroundColor: 'transparent'
   },
-  itineraryDayRail: {
-    width: 24,
-    alignItems: 'center'
-  },
-  itineraryDayDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#B8B8B2',
-    marginTop: 5
-  },
-  itineraryDayLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: '#E1E1DC',
-    marginTop: 4
-  },
   itineraryDayContent: {
     flex: 1,
     paddingTop: 0,
-    paddingRight: 14,
-    paddingLeft: 2,
-    paddingBottom: 14,
+    paddingRight: 0,
+    paddingLeft: 0,
+    paddingBottom: 0,
     overflow: 'visible'
   },
-  itineraryDayTitle: {
-    marginTop: 0,
-    marginBottom: 14,
-    color: '#111111',
-    fontSize: 18,
-    lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
-    fontWeight: '800'
+  itineraryItemsList: {
+    gap: 12
   },
   itineraryRow: {
-    paddingVertical: 10,
-    paddingHorizontal: 12
+    overflow: 'visible'
+  },
+  itineraryRowShell: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6
+  },
+  itineraryRowCard: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E5DF',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden'
+  },
+  itineraryRowPressable: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 65
+  },
+  itineraryTextWrap: {
+    flex: 1,
+    minWidth: 0
   },
   itineraryRowDragging: {
     backgroundColor: '#EFEFEC',
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#CFCFC9',
-    borderBottomColor: '#CFCFC9',
-    paddingHorizontal: 10,
     opacity: 0.96,
     zIndex: 10,
     elevation: 6,
@@ -1214,18 +1955,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 }
-  },
-  itineraryItemsGroup: {
-    position: 'relative',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'transparent'
-  },
-  itineraryItemsGroupGlass: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.88)'
   },
   itineraryName: {
     fontSize: 16,
@@ -1238,15 +1967,260 @@ const styles = StyleSheet.create({
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
     color: '#111111'
   },
+  itineraryNameInput: {
+    fontSize: 16,
+    lineHeight: 21,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginBottom: 6,
+    color: '#111111',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  itineraryTimeTextWrap: {
+    width: 50,
+    flexShrink: 0,
+    justifyContent: 'flex-start',
+    paddingTop: 11,
+    overflow: 'visible'
+  },
+  itineraryTimeInput: {
+    color: '#6A6A64',
+    fontSize: 12,
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    minHeight: 24,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlign: 'left',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  itineraryTimeInputEditing: {
+    color: '#111111'
+  },
   itineraryNote: {
     color: '#6F6F6B',
     fontSize: 14,
     lineHeight: 18,
+    marginTop: 2,
     fontFamily: Platform.select({
       ios: 'SF Pro Text',
       android: 'sans-serif',
       default: 'System'
     })
+  },
+  itineraryNoteInput: {
+    color: '#6F6F6B',
+    fontSize: 14,
+    lineHeight: 18,
+    minHeight: 38,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    textAlignVertical: 'top',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  itinerarySaveActivityButton: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  itinerarySaveActivityButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    lineHeight: 14,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
+  },
+  editFieldGroup: {
+    marginBottom: 16
+  },
+  editLabel: {
+    color: '#111111',
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+    marginLeft: 4,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  editInput: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    color: '#111111',
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  editTextArea: {
+    minHeight: 112
+  },
+  editDateRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16
+  },
+  editDateField: {
+    flex: 1
+  },
+  editDateButton: {
+    justifyContent: 'center'
+  },
+  editDateValue: {
+    color: '#111111',
+    fontSize: 15,
+    lineHeight: 19,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  editCalendarWrap: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5DF',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    marginBottom: 16
+  },
+  editPrivacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 2
+  },
+  editPrivacyTitle: {
+    color: '#111111',
+    fontSize: 15,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
+  },
+  editPrivacySubtitle: {
+    color: '#6F6F6B',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 3,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  editPrivacyPill: {
+    minWidth: 72,
+    height: 32,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: '#ECECE7'
+  },
+  editPrivacyPillActive: {
+    backgroundColor: '#111111'
+  },
+  editPrivacyPillText: {
+    color: '#64645F',
+    fontSize: 12,
+    lineHeight: 14,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
+  },
+  editPrivacyPillTextActive: {
+    color: '#FFFFFF'
+  },
+  editActionsSection: {
+    marginTop: 22,
+    gap: 10
+  },
+  editSecondaryAction: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5DF',
+    backgroundColor: '#F7F7F4',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  editSecondaryActionText: {
+    color: '#111111',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
+  },
+  editDangerAction: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9D2D2',
+    backgroundColor: '#FFF9F9',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  editDangerActionText: {
+    color: '#B24C4C',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    fontWeight: '700'
   },
   addLinkFooter: {
     paddingTop: 14,
@@ -1321,5 +2295,190 @@ const styles = StyleSheet.create({
       default: 'System'
     }),
     fontWeight: Platform.OS === 'ios' ? '600' : '700'
+  },
+  addActivityOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.40)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20
+  },
+  addActivityAddressWrap: {
+    marginBottom: 0
+  },
+  addActivityAddressDropdown: {
+    marginTop: 4,
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DEDEDA',
+    overflow: 'hidden'
+  },
+  addActivityCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20
+  },
+  addActivityTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#111111',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    }),
+    marginBottom: 4
+  },
+  addActivityDate: {
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#7A7A74',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    marginBottom: 16
+  },
+  addActivityNameInput: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#111111',
+    textAlign: 'left',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    marginBottom: 10
+  },
+  addActivityFieldInput: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    justifyContent: 'center',
+    marginBottom: 10
+  },
+  addActivityFieldValue: {
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#111111',
+    textAlign: 'left',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  addActivityFieldPlaceholder: {
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#AFAFA9',
+    textAlign: 'left',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  addActivityTimePickerWrap: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    overflow: 'hidden',
+    marginBottom: 10
+  },
+  addActivityTimePickerDone: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 14,
+    paddingBottom: 10
+  },
+  addActivityTimePickerDoneText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111111',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  addActivityNoteInput: {
+    minHeight: 72,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8E8E2',
+    backgroundColor: '#F7F7F4',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#111111',
+    textAlign: 'left',
+    textAlignVertical: 'top',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    }),
+    marginBottom: 18
+  },
+  addActivityActions: {
+    flexDirection: 'row',
+    gap: 10
+  },
+  addActivityCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5DF',
+    backgroundColor: '#F7F7F4',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  addActivityCancelText: {
+    color: '#4A4A4A',
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  addActivityDoneBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  addActivityDoneText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   }
 });

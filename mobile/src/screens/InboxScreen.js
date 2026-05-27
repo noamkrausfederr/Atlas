@@ -106,9 +106,7 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                 {thread.image ? (
                   <Image source={{ uri: thread.image }} style={styles.threadAvatarImage} />
                 ) : (
-                  <View style={styles.threadAvatar}>
-                    <Text style={styles.threadAvatarText}>{thread.ownerName.slice(0, 1)}</Text>
-                  </View>
+                  <View style={styles.threadAvatar} />
                 )}
                 <View style={styles.threadBody}>
                   <View style={styles.threadMeta}>
@@ -206,9 +204,7 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
         {profile.image ? (
           <Image source={{ uri: profile.image }} style={styles.chatProfilePhoto} />
         ) : (
-          <View style={styles.chatProfileAvatarFallback}>
-            <Text style={styles.chatProfileAvatarFallbackText}>{profile.ownerName.slice(0, 1)}</Text>
-          </View>
+          <View style={styles.chatProfileAvatarFallback} />
         )}
         <View style={styles.chatHeaderText}>
           <Text style={styles.chatTitle}>{profile.ownerName}</Text>
@@ -392,8 +388,6 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 23,
     backgroundColor: '#ECECE8',
-    alignItems: 'center',
-    justifyContent: 'center',
     alignSelf: 'center'
   },
   threadAvatarImage: {
@@ -402,16 +396,6 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     backgroundColor: '#ECECE8',
     alignSelf: 'center'
-  },
-  threadAvatarText: {
-    color: '#555555',
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
   },
   threadBody: {
     flex: 1,
@@ -581,19 +565,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ECECE8',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  chatProfileAvatarFallbackText: {
-    color: '#555555',
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    backgroundColor: '#ECECE8'
   },
   chatTitle: {
     color: '#111111',

@@ -1,15 +1,17 @@
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const DEFAULT_PROFILE_IMAGE =
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=500&q=80';
-
-const DEFAULT_TRAVEL_TAGS = ['Foodie', 'Solo', 'Boutique stays', 'City walks', 'Cafe hopping'];
+import { Ionicons } from '@expo/vector-icons';
+import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
 
 function formatSocialCount(value) {
   if (typeof value === 'string') return value;
   if (value >= 10000) return `${(value / 1000).toFixed(1)}K`;
   if (value >= 1000) return `${Math.round(value / 100) / 10}K`;
   return String(value);
+}
+
+function getProfileTripLikeCount(board) {
+  const seed = board.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return 120 + (seed % 780);
 }
 
 function PublicTripGridCard({ board, onPress }) {
@@ -28,25 +30,51 @@ export function PublicProfileView({
   name,
   handle,
   bio,
-  image = DEFAULT_PROFILE_IMAGE,
+  image = null,
   followers,
   following,
   likes,
-  travelTags = DEFAULT_TRAVEL_TAGS,
   publicBoards,
   onOpenBoard,
+  hideTripsSection = false,
+  showScreenHeader = false,
+  showSettingsButton = false,
   showFollowButton = true,
   showMessageButton = false,
   isFollowing = false,
   onToggleFollow,
-  onMessagePress
+  onMessagePress,
+  onSettingsPress
 }) {
   return (
-    <View>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.screenContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {showScreenHeader ? (
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>profile</Text>
+        </View>
+      ) : null}
+
+      {showSettingsButton ? (
+        <View style={styles.topActions}>
+          <TouchableOpacity style={styles.settingsButton} activeOpacity={0.85} onPress={onSettingsPress}>
+            <Ionicons name="settings-outline" size={22} color="#555555" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <View style={styles.profileHero}>
-        <Image source={{ uri: image }} style={styles.profilePhoto} />
+        {image ? (
+          <Image source={{ uri: image }} style={styles.profilePhoto} />
+        ) : (
+          <View style={styles.profilePhoto} />
+        )}
         <Text style={styles.profileName}>{name}</Text>
         <Text style={styles.profileHandle}>{handle}</Text>
+
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(followers)}</Text>
@@ -62,6 +90,7 @@ export function PublicProfileView({
           </View>
         </View>
         <Text style={styles.profileBio}>{bio}</Text>
+
         {showFollowButton ? (
           <View style={styles.profileActionRow}>
             <TouchableOpacity
@@ -82,43 +111,39 @@ export function PublicProfileView({
         ) : null}
       </View>
 
-      <View style={styles.tagSection}>
-        <Text style={[styles.sectionTitle, styles.tagSectionTitle]}>Travel style</Text>
-        <View style={styles.tagRow}>
-          {travelTags.map((tag) => (
-            <View key={tag} style={styles.tagChip}>
-              <Text style={styles.tagChipText}>{tag}</Text>
+      <View style={styles.profileDivider} />
+
+      {!hideTripsSection ? (
+        <>
+          <View style={styles.tripsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Public trips</Text>
+              <Text style={styles.sectionMeta}>
+                {publicBoards.length} {publicBoards.length === 1 ? 'trip' : 'trips'}
+              </Text>
             </View>
-          ))}
-        </View>
-      </View>
 
-      <View style={styles.tripsSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Public trips</Text>
-          <Text style={styles.sectionMeta}>
-            {publicBoards.length} {publicBoards.length === 1 ? 'trip' : 'trips'}
-          </Text>
-        </View>
-
-        {publicBoards.length > 0 ? (
-          <View style={styles.tripGrid}>
-            {publicBoards.map((board) => (
-              <PublicTripGridCard key={board.id} board={board} onPress={onOpenBoard} />
-            ))}
+            {publicBoards.length > 0 ? (
+              <View style={styles.tripGrid}>
+                {publicBoards.map((board) => (
+                  <PublicTripGridCard key={board.id} board={board} onPress={onOpenBoard} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No public trips yet.</Text>
+              </View>
+            )}
           </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No public trips yet.</Text>
-          </View>
-        )}
-      </View>
-    </View>
+        </>
+      ) : null}
+    </ScrollView>
   );
 }
 
-export function ProfileScreen({ boards, likedTrips, followingCount, onOpenBoard }) {
+export function ProfileScreen({ boards, followingCount, onOpenBoard, onOpenSettings }) {
   const publicBoards = boards.filter((board) => board.isPublic === true);
+  const totalLikesReceived = publicBoards.reduce((sum, board) => sum + getProfileTripLikeCount(board), 0);
 
   return (
     <PublicProfileView
@@ -127,121 +152,319 @@ export function ProfileScreen({ boards, likedTrips, followingCount, onOpenBoard 
       bio="Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat."
       followers="12.4K"
       following={followingCount}
-      likes={likedTrips.length}
-      travelTags={DEFAULT_TRAVEL_TAGS}
+      likes={totalLikesReceived}
       publicBoards={publicBoards}
       onOpenBoard={onOpenBoard}
+      hideTripsSection
+      showSettingsButton
+      onSettingsPress={onOpenSettings}
       showFollowButton={false}
     />
   );
 }
 
+function SettingsToggleRow({ label, value, onValueChange, detail = '' }) {
+  return (
+    <View style={styles.settingsRow}>
+      <View style={styles.settingsCopy}>
+        <Text style={styles.settingsLabel}>{label}</Text>
+        {detail ? <Text style={styles.settingsDetail}>{detail}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: '#D9D9D3', true: '#111111' }}
+        thumbColor="#FFFFFF"
+        ios_backgroundColor="#D9D9D3"
+      />
+    </View>
+  );
+}
+
+function SettingsLinkRow({ label, detail = '', onPress, tone = 'default' }) {
+  const labelStyle = tone === 'danger' ? styles.settingsLabelDanger : styles.settingsLabel;
+
+  return (
+    <TouchableOpacity style={styles.settingsRow} activeOpacity={0.85} onPress={onPress}>
+      <View style={styles.settingsCopy}>
+        <Text style={labelStyle}>{label}</Text>
+        {detail ? <Text style={styles.settingsDetail}>{detail}</Text> : null}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={tone === 'danger' ? '#B24C4C' : '#8A8A84'} />
+    </TouchableOpacity>
+  );
+}
+
+export function SettingsScreen({ onBack }) {
+  const [pushAlertsEnabled, setPushAlertsEnabled] = useState(true);
+  const [privateAccountEnabled, setPrivateAccountEnabled] = useState(false);
+  const [friendActivityEnabled, setFriendActivityEnabled] = useState(true);
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.settingsScreenContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.settingsHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.85}>
+          <Text style={styles.backButtonArrow}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.settingsTitle}>Settings</Text>
+        <View style={styles.settingsHeaderSpacer} />
+      </View>
+
+      <View style={styles.settingsSection}>
+        <Text style={styles.settingsSectionTitle}>Account</Text>
+        <View style={styles.settingsCard}>
+          <SettingsLinkRow label="Edit profile" detail="Name, bio, username, and photo" onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsLinkRow label="Password" detail="Last updated 3 months ago" onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsToggleRow
+            label="Private account"
+            detail="Only approved followers can view your trips."
+            value={privateAccountEnabled}
+            onValueChange={setPrivateAccountEnabled}
+          />
+        </View>
+      </View>
+
+      <View style={styles.settingsSection}>
+        <Text style={styles.settingsSectionTitle}>Notifications</Text>
+        <View style={styles.settingsCard}>
+          <SettingsToggleRow
+            label="Push alerts"
+            detail="Trip reminders, messages, and updates."
+            value={pushAlertsEnabled}
+            onValueChange={setPushAlertsEnabled}
+          />
+          <View style={styles.settingsDivider} />
+          <SettingsToggleRow
+            label="Friend activity"
+            detail="When people you follow publish or update trips."
+            value={friendActivityEnabled}
+            onValueChange={setFriendActivityEnabled}
+          />
+        </View>
+      </View>
+
+      <View style={styles.settingsSection}>
+        <Text style={styles.settingsSectionTitle}>Preferences</Text>
+        <View style={styles.settingsCard}>
+          <SettingsLinkRow label="Saved places" detail="Manage your pinned recommendations." onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsLinkRow label="Download preferences" detail="Offline maps and media quality." onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsLinkRow label="Language" detail="English" onPress={() => {}} />
+        </View>
+      </View>
+
+      <View style={styles.settingsSection}>
+        <Text style={styles.settingsSectionTitle}>Support</Text>
+        <View style={styles.settingsCard}>
+          <SettingsLinkRow label="Help center" detail="FAQs, contact, and troubleshooting." onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsLinkRow label="Privacy policy" onPress={() => {}} />
+          <View style={styles.settingsDivider} />
+          <SettingsLinkRow label="Log out" tone="danger" onPress={() => {}} />
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
-  profileHero: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 30,
-    paddingVertical: 26,
-    paddingHorizontal: 24,
+  screen: {
+    flex: 1,
+    backgroundColor: '#F3F3F1'
+  },
+  screenContent: {
+    flexGrow: 1,
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 12
+  },
+  header: {
+    marginBottom: 4,
+    paddingLeft: 8
+  },
+  headerTitle: {
+    color: '#111111',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  topActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginRight: 6,
+    marginBottom: 2
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    marginBottom: 18,
-    shadowColor: '#E7C7B2',
-    shadowOpacity: 0.65,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8
+    justifyContent: 'center'
+  },
+  profileHero: {
+    backgroundColor: 'transparent',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 8
   },
   profilePhoto: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    marginBottom: 14,
-    backgroundColor: '#D9E7D1'
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginBottom: 8,
+    backgroundColor: '#ECECE8'
   },
   profileName: {
-    fontSize: 26,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '800',
-    color: '#4B3A32'
+    color: '#1A1A1A',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   profileHandle: {
-    marginTop: 4,
-    fontSize: 14,
+    marginTop: 5,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#A97C50'
+    color: '#5E5E59',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   profileBio: {
-    marginTop: 16,
-    fontSize: 14,
-    lineHeight: 21,
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
-    color: '#7A6658'
+    color: '#555550',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   followButton: {
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#111111',
     borderRadius: 999,
-    minHeight: 48,
+    minHeight: 44,
     paddingHorizontal: 30,
     paddingVertical: 12,
     justifyContent: 'center'
   },
   followButtonText: {
-    color: '#FFF8F0',
+    color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   profileActionRow: {
-    marginTop: 18,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10
   },
   followButtonActive: {
-    backgroundColor: '#EBDCCF'
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8D8D2'
   },
   followButtonTextActive: {
-    color: '#A97C50'
+    color: '#111111'
   },
   headerMessageButton: {
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#FFFFFF',
     borderRadius: 999,
-    minHeight: 48,
+    minHeight: 44,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#D8D8D2',
     justifyContent: 'center'
   },
   headerMessageButtonText: {
-    color: '#A97C50',
+    color: '#111111',
     fontSize: 15,
-    fontWeight: '800'
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 4,
-    marginTop: 14,
-    marginBottom: 0
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+    marginTop: 6,
+    paddingTop: 8
+  },
+  profileDivider: {
+    height: 1,
+    backgroundColor: '#DDDDD7',
+    marginHorizontal: 8,
+    marginBottom: 8
   },
   statCard: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
     alignItems: 'center'
   },
   statValue: {
-    color: '#4B3A32',
-    fontSize: 16,
-    fontWeight: '800'
+    color: '#1A1A1A',
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   statLabel: {
-    marginTop: 4,
-    color: '#8D7E71',
-    fontSize: 10,
-    fontWeight: '700',
+    marginTop: 2,
+    color: '#666661',
+    fontSize: 8,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1
+    letterSpacing: 0.6,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
-  tagSection: {
-    marginBottom: 22
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E1E1DC',
+    padding: 18,
+    marginBottom: 12
+  },
+  tripsSection: {
+    marginTop: 12,
+    marginBottom: 12
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -250,38 +473,24 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 20,
-    fontWeight: '800'
-  },
-  tagSectionTitle: {
-    marginBottom: 10
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   sectionMeta: {
-    color: '#A97C50',
-    fontSize: 15,
-    fontWeight: '800'
-  },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8
-  },
-  tagChip: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#E4D6C8',
-    paddingHorizontal: 12,
-    paddingVertical: 8
-  },
-  tagChipText: {
-    color: '#7A6658',
-    fontSize: 12,
-    fontWeight: '700'
-  },
-  tripsSection: {
-    marginBottom: 8
+    color: '#6F6F6B',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   tripGrid: {
     flexDirection: 'row',
@@ -291,42 +500,156 @@ const styles = StyleSheet.create({
   },
   tripCard: {
     width: '48%',
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E8DBCD'
+    borderColor: '#E1E1DC'
   },
   tripCardImage: {
     width: '100%',
     height: 146,
-    backgroundColor: '#F1E7DA'
+    backgroundColor: '#ECECE8'
   },
   tripCardBody: {
     padding: 12
   },
   tripCardTitle: {
-    color: '#4B3A32',
+    color: '#111111',
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
-    marginBottom: 4
+    marginBottom: 4,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
   },
   tripCardLocation: {
-    color: '#A97C50',
+    color: '#6F6F6B',
     fontSize: 12,
-    lineHeight: 16
+    lineHeight: 16,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
   },
   emptyState: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#F7F7F4',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E1E1DC',
     padding: 18,
     alignItems: 'center'
   },
   emptyStateText: {
-    color: '#A8998A',
-    fontWeight: '700'
+    color: '#6F6F6B',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  settingsScreenContent: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 16
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18
+  },
+  settingsTitle: {
+    color: '#111111',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '800',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Display',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  settingsHeaderSpacer: {
+    width: 28,
+    height: 28
+  },
+  settingsSection: {
+    marginBottom: 16
+  },
+  settingsSectionTitle: {
+    color: '#6F6F6B',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingLeft: 4,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E1E1DC',
+    overflow: 'hidden'
+  },
+  settingsRow: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  settingsCopy: {
+    flex: 1
+  },
+  settingsLabel: {
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  settingsLabelDanger: {
+    color: '#B24C4C',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif-medium',
+      default: 'System'
+    })
+  },
+  settingsDetail: {
+    marginTop: 3,
+    color: '#6F6F6B',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Platform.select({
+      ios: 'SF Pro Text',
+      android: 'sans-serif',
+      default: 'System'
+    })
+  },
+  settingsDivider: {
+    height: 1,
+    marginLeft: 16,
+    backgroundColor: '#ECECE8'
   }
 });

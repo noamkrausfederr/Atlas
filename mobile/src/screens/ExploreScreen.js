@@ -13,13 +13,6 @@ import { PublicProfileView } from './ProfileScreen';
 const DAY_RANGE_MIN = 1;
 const DAY_RANGE_MAX = 30;
 const EXPLORE_BATCH_SIZE = 8;
-const PUBLIC_PROFILE_IMAGES = [
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80'
-];
 
 const FILTER_DEFAULTS = {
   country: [],
@@ -130,19 +123,15 @@ function getPublicPlaceSectionIndex(place, placeIndex, sectionCount) {
 
 function getPublicProfileData(ownerName, trips, isFollowing = false) {
   const profileSeed = ownerName.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const uniqueTags = Array.from(new Set(
-    trips.flatMap((trip) => [trip.travelerType, trip.pace, trip.budget, trip.accessibility].filter(Boolean))
-  )).slice(0, 5);
   const baseFollowers = 4200 + (profileSeed % 9000);
 
   return {
-    image: PUBLIC_PROFILE_IMAGES[profileSeed % PUBLIC_PROFILE_IMAGES.length],
+    image: null,
     handle: `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`,
     bio: `Public itineraries for ${trips.map((trip) => trip.location.split(',')[0]).slice(0, 2).join(', ')} and the kind of trips you send straight to friends.`,
     followers: baseFollowers + (isFollowing ? 1 : 0),
     following: 140 + (profileSeed % 360),
-    likes: trips.reduce((sum, trip) => sum + (trip.placesList?.length ?? 0), 0) + trips.length * 7,
-    travelTags: uniqueTags.length > 0 ? uniqueTags : ['Foodie', 'City walks', 'Weekend escapes']
+    likes: trips.reduce((sum, trip) => sum + (trip.placesList?.length ?? 0), 0) + trips.length * 7
   };
 }
 
@@ -757,10 +746,7 @@ function PublicTripDetail({
 
         <View style={styles.publicProfileInline}>
           <TouchableOpacity onPress={onOpenProfile} style={styles.publicProfilePressable}>
-            <Image
-              source={{ uri: PUBLIC_PROFILE_IMAGES[trip.ownerName.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % PUBLIC_PROFILE_IMAGES.length] }}
-              style={styles.publicProfileAvatarImage}
-            />
+            <View style={styles.publicProfileAvatarImage} />
             <View style={styles.publicProfileTextWrap}>
               <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
               <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
@@ -852,7 +838,6 @@ function PublicProfile({ ownerName, trips, isFollowing, onBack, onOpenTrip, onTo
         followers={profile.followers}
         following={profile.following}
         likes={profile.likes}
-        travelTags={profile.travelTags}
         publicBoards={trips}
         onOpenBoard={onOpenTrip}
         showFollowButton

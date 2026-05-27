@@ -12,26 +12,13 @@ import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 
 // Components & Screens
 import { BoardCard } from './src/components/BoardCard';
-import { TripDetailScreen } from './src/screens/TripDetailScreen';
+import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
-import { ProfileScreen } from './src/screens/ProfileScreen';
-
-const INBOX_PROFILE_IMAGES = [
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80',
-  'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80'
-];
+import { ProfileScreen, SettingsScreen } from './src/screens/ProfileScreen';
 
 function formatInboxHandle(ownerName) {
   return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
-}
-
-function getInboxProfileImage(ownerName) {
-  const seed = ownerName.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return INBOX_PROFILE_IMAGES[seed % INBOX_PROFILE_IMAGES.length];
 }
 
 function buildSeedInboxThreads() {
@@ -91,6 +78,7 @@ function InnerApp() {
   const [tripStack, setTripStack] = useState(null);
   const [activeTab, setActiveTab] = useState('Trips');
   const [exploreStack, setExploreStack] = useState(null);
+  const [profileStack, setProfileStack] = useState(null);
   const [exploreResetKey, setExploreResetKey] = useState(0);
   const [likedPublicTripIds, setLikedPublicTripIds] = useState([]);
   const [followedProfileNames, setFollowedProfileNames] = useState([]);
@@ -302,13 +290,14 @@ const upcomingBoards = getUpcomingTrips(boards);
   const isTripsRootView = !selectedBoard && activeTab === 'Trips';
   const isExploreView = activeTab === 'Explore';
   const isInboxView = activeTab === 'Inbox';
+  const isProfileView = activeTab === 'Profile';
   const isTripDetailView = Boolean(selectedBoard);
   const inboxProfileDirectory = hydratedPublicTrips.reduce((profiles, trip) => {
     if (!profiles[trip.ownerName]) {
       profiles[trip.ownerName] = {
         ownerName: trip.ownerName,
         handle: formatInboxHandle(trip.ownerName),
-        image: getInboxProfileImage(trip.ownerName)
+        image: null
       };
     }
     return profiles;
@@ -317,6 +306,29 @@ const upcomingBoards = getUpcomingTrips(boards);
   const updateBoard = (boardId, patch) => {
     setBoards((current) => current.map((board) => (board.id === boardId ? { ...board, ...patch } : board)));
     setSelectedBoard((current) => (current?.id === boardId ? { ...current, ...patch } : current));
+  };
+
+  const duplicateBoard = (board) => {
+    const duplicatedBoard = {
+      ...board,
+      id: `board-${Date.now()}`,
+      title: board.title.includes('Copy') ? board.title : `${board.title} Copy`,
+      isPublic: false,
+      placesList: (board.placesList ?? []).map((place, index) => ({
+        ...place,
+        id: `${place.id || 'p'}-copy-${Date.now()}-${index}`
+      }))
+    };
+
+    setBoards((current) => [duplicatedBoard, ...current]);
+    setSelectedBoard(duplicatedBoard);
+    setTripStack(null);
+  };
+
+  const deleteBoard = (boardId) => {
+    setBoards((current) => current.filter((board) => board.id !== boardId));
+    setSelectedBoard((current) => (current?.id === boardId ? null : current));
+    setTripStack(null);
   };
 
   const openBoard = (board) => {
@@ -333,6 +345,7 @@ const upcomingBoards = getUpcomingTrips(boards);
     setSelectedBoard(null);
     setTripStack(null);
     setExploreStack(null);
+    setProfileStack(null);
     if (tab === 'Explore') {
       setExploreResetKey((current) => current + 1);
     }
@@ -370,6 +383,7 @@ const upcomingBoards = getUpcomingTrips(boards);
     setSelectedBoard(null);
     setTripStack(null);
     setExploreStack(null);
+    setProfileStack(null);
     markInboxThreadRead(ownerName);
   };
 
@@ -392,7 +406,7 @@ const upcomingBoards = getUpcomingTrips(boards);
       const profile = inboxProfileDirectory[ownerName] ?? {
         ownerName,
         handle: formatInboxHandle(ownerName),
-        image: getInboxProfileImage(ownerName)
+        image: null
       };
 
       return {
@@ -701,6 +715,19 @@ const upcomingBoards = getUpcomingTrips(boards);
       );
     }
 
+    if (tripStack?.screen === 'edit') {
+      const board = boards.find((item) => item.id === selectedBoard.id) ?? selectedBoard;
+      return (
+        <TripEditScreen
+          board={board}
+          onBack={() => setTripStack(null)}
+          onSave={(patch) => updateBoard(board.id, patch)}
+          onDuplicateBoard={() => duplicateBoard(board)}
+          onDeleteBoard={() => deleteBoard(board.id)}
+        />
+      );
+    }
+
     return (
       <TripDetailScreen
         board={selectedBoard}
@@ -710,6 +737,7 @@ const upcomingBoards = getUpcomingTrips(boards);
         }}
         onUpdateBoard={(patch) => updateBoard(selectedBoard.id, patch)}
         onOpenRecommendations={() => setTripStack({ screen: 'recommendations' })}
+        onOpenEditTrip={() => setTripStack({ screen: 'edit' })}
       />
     );
   };
@@ -720,12 +748,20 @@ const upcomingBoards = getUpcomingTrips(boards);
     }
 
     if (activeTab === 'Profile') {
+      if (profileStack?.screen === 'settings') {
+        return (
+          <SettingsScreen
+            onBack={() => setProfileStack(null)}
+          />
+        );
+      }
+
       return (
         <ProfileScreen
           boards={boards}
-          likedTrips={likedPublicTrips}
           followingCount={382 + followedProfileNames.length}
           onOpenBoard={openBoard}
+          onOpenSettings={() => setProfileStack({ screen: 'settings' })}
         />
       );
     }
@@ -788,7 +824,11 @@ const upcomingBoards = getUpcomingTrips(boards);
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, (isTripsRootView || isExploreView || isInboxView) && styles.tripsSafeArea, isTripDetailView && styles.detailSafeArea]}
+      style={[
+        styles.safeArea,
+        (isTripsRootView || isExploreView || isInboxView || isProfileView) && styles.tripsSafeArea,
+        isTripDetailView && styles.detailSafeArea
+      ]}
       edges={['top']}
     >
       <StatusBar style="dark" />
@@ -797,14 +837,14 @@ const upcomingBoards = getUpcomingTrips(boards);
           styles.contentWrapper,
           isTripsRootView && styles.tripsContentWrapper,
           isTripDetailView && styles.detailContentWrapper,
-          (isExploreView || isInboxView) && styles.tripsContentWrapper
+          (isExploreView || isInboxView || isProfileView) && styles.tripsContentWrapper
         ]}
       >
         {selectedBoard ? (
           <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: tabBarHeight }]}>
             {renderSelectedBoardContent()}
           </View>
-        ) : activeTab === 'Inbox' ? (
+        ) : activeTab === 'Inbox' || activeTab === 'Profile' ? (
           <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: shouldHideBottomNav ? 0 : tabBarHeight }]}>
             {renderContent()}
           </View>
