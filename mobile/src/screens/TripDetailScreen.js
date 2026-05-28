@@ -2,8 +2,24 @@ import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Mod
 import { useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { autocompleteAccommodation } from '../../data/liveRecommendations';
+
+const ACTIVITY_ICON_COLORS = ['#C8DFF5', '#F5D9C8', '#C8EAD8', '#DDD0F0', '#F5ECC8'];
+
+function getActivityIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (/hotel|hostel|airbnb|check.?in|check.?out/.test(n)) return 'bed-outline';
+  if (/eat|food|restaurant|cafe|coffee|lunch|dinner|breakfast|brunch/.test(n)) return 'restaurant-outline';
+  if (/flight|airport|fly|plane/.test(n)) return 'airplane-outline';
+  if (/walk|hike|stroll/.test(n)) return 'walk-outline';
+  if (/museum|gallery|art|exhibit/.test(n)) return 'business-outline';
+  if (/beach|pool|swim/.test(n)) return 'water-outline';
+  if (/car|drive|taxi|uber/.test(n)) return 'car-outline';
+  if (/shop|market|store|mall/.test(n)) return 'bag-handle-outline';
+  return 'location-outline';
+}
 
 function startOfToday() {
   const d = new Date();
@@ -202,6 +218,8 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               style={styles.editInput}
               placeholder="Trip title"
               placeholderTextColor="#A8A8A2"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
           </View>
 
@@ -213,6 +231,8 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               style={styles.editInput}
               placeholder="City, country"
               placeholderTextColor="#A8A8A2"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
           </View>
 
@@ -271,6 +291,8 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               style={styles.editInput}
               placeholder="Hotel, Airbnb, or address"
               placeholderTextColor="#A8A8A2"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
             />
           </View>
 
@@ -284,6 +306,8 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               placeholderTextColor="#A8A8A2"
               multiline
               textAlignVertical="top"
+              returnKeyType="done"
+              blurOnSubmit
             />
           </View>
 
@@ -356,6 +380,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [isAddressFocused, setIsAddressFocused] = useState(false);
   const addressRequestId = useRef(0);
   const addressBlurTimer = useRef(null);
+  const addActivityScrollRef = useRef(null);
   const [linkInput, setLinkInput] = useState('');
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
@@ -1067,6 +1092,10 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                       </View>
                     ) : (
                       <View style={styles.itineraryItemsList}>
+                        {/* Vertical timeline thread */}
+                        {selectedItinerarySection.places.length > 1 && (
+                          <View style={styles.timelineTrack} pointerEvents="none" />
+                        )}
                         {selectedItinerarySection.places.map((p, placeIndex) => {
                           const isDragged = draggedPlaceId === p.id;
                           const isEditingTime = editingTimePlaceId === p.id;
@@ -1075,6 +1104,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                           const timeValue = isEditingTime
                             ? (timeDrafts[p.id] ?? formatItineraryTimeValue(p.displayTime))
                             : formatItineraryTimeValue(p.displayTime);
+                          const iconBg = ACTIVITY_ICON_COLORS[placeIndex % ACTIVITY_ICON_COLORS.length];
+                          const iconName = getActivityIcon(p.name);
                           return (
                             <Animated.View
                               key={p.id}
@@ -1105,28 +1136,15 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                               {...createPlacePanHandlers(p.id)}
                             >
                               <View style={styles.itineraryRowShell}>
-                                <View style={styles.itineraryTimeTextWrap}>
-                                  <TextInput
-                                    style={[
-                                      styles.itineraryTimeInput,
-                                      isEditingTime && styles.itineraryTimeInputEditing
-                                    ]}
-                                    value={timeValue}
-                                    onFocus={() => startEditingTime(p)}
-                                    onChangeText={(value) => updateTimeDraft(p.id, value)}
-                                    onBlur={() => finishEditingTime(p)}
-                                    onSubmitEditing={() => finishEditingTime(p)}
-                                    keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                                    returnKeyType="done"
-                                    maxLength={5}
-                                    selectTextOnFocus
-                                    placeholder="09:00"
-                                    placeholderTextColor="#A3A39D"
-                                  />
+                                {/* Timeline node dot */}
+                                <View style={styles.timelineNodeCol}>
+                                  <View style={[styles.timelineNodeDot, { borderColor: iconBg }]} />
                                 </View>
+
+                                {/* Card */}
                                 <View style={styles.itineraryRowCard}>
                                   {isEditingActivity ? (
-                                    <View style={styles.itineraryRowPressable}>
+                                    <View style={styles.itineraryEditArea}>
                                       <TextInput
                                         style={styles.itineraryNameInput}
                                         value={activityDraft?.name ?? ''}
@@ -1134,6 +1152,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         placeholder="Activity name"
                                         placeholderTextColor="#A3A39D"
                                         autoFocus
+                                        returnKeyType="done"
+                                        onSubmitEditing={Keyboard.dismiss}
                                       />
                                       <TextInput
                                         style={styles.itineraryNoteInput}
@@ -1142,6 +1162,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         placeholder="Add details"
                                         placeholderTextColor="#A3A39D"
                                         multiline
+                                        returnKeyType="done"
+                                        blurOnSubmit
                                       />
                                       <TouchableOpacity
                                         style={styles.itinerarySaveActivityButton}
@@ -1152,24 +1174,57 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                       </TouchableOpacity>
                                     </View>
                                   ) : (
-                                    <Pressable
-                                      style={styles.itineraryRowPressable}
-                                      delayLongPress={220}
-                                      onLongPress={() => beginHoldingPlace(p.id)}
-                                      onPress={() => {
-                                        if (!suppressPlacePressRef.current) {
-                                          setSelectedPlaceDetail({ place: p, dateLabel: selectedItinerarySection.title });
-                                        }
-                                      }}
-                                      onPressOut={() => {
-                                        if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
-                                          resetDraggingState();
-                                        }
-                                      }}
-                                    >
-                                      <Text style={styles.itineraryName}>{p.name}</Text>
-                                      {p.note && <Text style={styles.itineraryNote}>{p.note}</Text>}
-                                    </Pressable>
+                                    <View style={styles.cardContentRow}>
+                                      {/* Pastel icon box */}
+                                      <View style={[styles.itineraryIconBox, { backgroundColor: iconBg }]}>
+                                        <Ionicons name={iconName} size={15} color="#2B2927" />
+                                      </View>
+
+                                      {/* Activity text — pressable */}
+                                      <Pressable
+                                        style={styles.itineraryTextFlex}
+                                        delayLongPress={220}
+                                        onLongPress={() => beginHoldingPlace(p.id)}
+                                        onPress={() => {
+                                          if (!suppressPlacePressRef.current) {
+                                            setSelectedPlaceDetail({ place: p, dateLabel: selectedItinerarySection.title });
+                                          }
+                                        }}
+                                        onPressOut={() => {
+                                          if (dragReadyPlaceId.current === p.id && !isPanDragging.current) {
+                                            resetDraggingState();
+                                          }
+                                        }}
+                                      >
+                                        <Text style={styles.itineraryName} numberOfLines={2}>{p.name}</Text>
+                                        {p.note ? <Text style={styles.itineraryNote} numberOfLines={1}>{p.note}</Text> : null}
+                                      </Pressable>
+
+                                      {/* Time — right column with divider */}
+                                      <View style={styles.itineraryTimeRight}>
+                                        <View style={styles.itineraryTimeDivider} />
+                                        <View style={styles.itineraryTimeColumn}>
+                                          <TextInput
+                                            style={[
+                                              styles.itineraryTimeInput,
+                                              isEditingTime && styles.itineraryTimeInputEditing
+                                            ]}
+                                            value={timeValue}
+                                            onFocus={() => startEditingTime(p)}
+                                            onChangeText={(value) => updateTimeDraft(p.id, value)}
+                                            onBlur={() => finishEditingTime(p)}
+                                            onSubmitEditing={() => finishEditingTime(p)}
+                                            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                                            returnKeyType="done"
+                                            maxLength={5}
+                                            selectTextOnFocus
+                                            placeholder="09:00"
+                                            placeholderTextColor="#A3A39D"
+                                          />
+                                          <Ionicons name="time-outline" size={11} color="#8C867E" />
+                                        </View>
+                                      </View>
+                                    </View>
                                   )}
                                 </View>
                               </View>
@@ -1194,6 +1249,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 style={styles.linkInput}
                 keyboardType="url"
                 autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={handleAddLink}
               />
               <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink}>
                 <BlurView intensity={28} tint="extraLight" style={styles.detailActionBlur}>
@@ -1218,6 +1275,13 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         dateLabel={selectedPlaceDetail?.dateLabel}
         fallbackImage={board.image}
         onClose={() => setSelectedPlaceDetail(null)}
+        onDelete={() => {
+          if (!selectedPlaceDetail?.place) return;
+          const nextItinerary = itinerary.filter((p) => p.id !== selectedPlaceDetail.place.id);
+          setItinerary(nextItinerary);
+          persistItinerary(nextItinerary);
+          setSelectedPlaceDetail(null);
+        }}
       />
 
       <Modal
@@ -1226,133 +1290,146 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         animationType="fade"
         onRequestClose={() => { setAddActivityModal(null); setShowAddActivityTimePicker(false); }}
       >
-          <Pressable style={[styles.addActivityOverlay, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]} onPress={() => { Keyboard.dismiss(); setAddActivityModal(null); setShowAddActivityTimePicker(false); }}>
+        <KeyboardAvoidingView behavior={undefined} style={styles.addActivityKAV}>
+          <Pressable style={styles.addActivityOverlay} onPress={() => { Keyboard.dismiss(); setAddActivityModal(null); setShowAddActivityTimePicker(false); }}>
             <Pressable style={styles.addActivityCard} onPress={() => {}}>
-              <Text style={styles.addActivityTitle}>New activity</Text>
-              {selectedItinerarySection ? (
-                <Text style={styles.addActivityDate}>{selectedItinerarySection.title}</Text>
-              ) : null}
-              <TextInput
-                style={styles.addActivityNameInput}
-                placeholder="Activity name"
-                placeholderTextColor="#AFAFA9"
-                value={addActivityModal?.name ?? ''}
-                onChangeText={(value) => setAddActivityModal((current) => ({ ...current, name: value }))}
-                autoFocus
-                returnKeyType="done"
-                blurOnSubmit
-              />
-              <TouchableOpacity
-                style={styles.addActivityFieldInput}
-                activeOpacity={0.8}
-                onPress={() => { Keyboard.dismiss(); setShowAddActivityTimePicker((v) => !v); }}
+              <ScrollView
+                ref={addActivityScrollRef}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                automaticallyAdjustKeyboardInsets
+                style={styles.addActivityScroll}
+                contentContainerStyle={styles.addActivityScrollContent}
               >
-                <Text style={addActivityModal?.time ? styles.addActivityFieldValue : styles.addActivityFieldPlaceholder}>
-                  {addActivityModal?.time || 'Time (optional)'}
-                </Text>
-              </TouchableOpacity>
-              {showAddActivityTimePicker && (
-                <View style={styles.addActivityTimePickerWrap}>
-                  <DateTimePicker
-                    value={(() => {
-                      const d = new Date();
-                      const minutes = parseItineraryTimeValue(addActivityModal?.time);
-                      if (minutes !== null) {
-                        d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-                      }
-                      return d;
-                    })()}
-                    mode="time"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    minuteInterval={5}
-                    onChange={(event, selectedDate) => {
-                      if (Platform.OS === 'android') setShowAddActivityTimePicker(false);
-                      if (selectedDate && event.type !== 'dismissed') {
-                        const h = selectedDate.getHours();
-                        const m = selectedDate.getMinutes();
-                        setAddActivityModal((current) => ({
-                          ...current,
-                          time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-                        }));
-                      }
-                    }}
-                  />
-                  {Platform.OS === 'ios' && (
-                    <TouchableOpacity style={styles.addActivityTimePickerDone} onPress={() => setShowAddActivityTimePicker(false)}>
-                      <Text style={styles.addActivityTimePickerDoneText}>Done</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-              <View style={styles.addActivityAddressWrap}>
+                <Text style={styles.addActivityTitle}>New activity</Text>
+                {selectedItinerarySection ? (
+                  <Text style={styles.addActivityDate}>{selectedItinerarySection.title}</Text>
+                ) : null}
                 <TextInput
-                  style={styles.addActivityFieldInput}
-                  placeholder="Address (optional)"
+                  style={styles.addActivityNameInput}
+                  placeholder="Activity name"
                   placeholderTextColor="#AFAFA9"
-                  value={addActivityModal?.address ?? ''}
-                  onChangeText={(value) => setAddActivityModal((current) => ({ ...current, address: value }))}
-                  onFocus={() => {
-                    clearTimeout(addressBlurTimer.current);
-                    setIsAddressFocused(true);
-                  }}
-                  onBlur={() => {
-                    addressBlurTimer.current = setTimeout(() => setIsAddressFocused(false), 180);
-                  }}
-                  returnKeyType="next"
-                  autoCapitalize="words"
-                  autoCorrect={false}
+                  value={addActivityModal?.name ?? ''}
+                  onChangeText={(value) => setAddActivityModal((current) => ({ ...current, name: value }))}
+                  autoFocus
+                  returnKeyType="done"
+                  blurOnSubmit
                 />
-                {isAddressFocused && (addActivityModal?.address?.trim().length ?? 0) >= 2 && (
-                  <View style={styles.addActivityAddressDropdown}>
-                    {addressSuggestions.length > 0 ? (
-                      <>
-                        {addressSuggestions.map((suggestion, index) => (
-                          <TouchableOpacity
-                            key={suggestion.fullAddress + index}
-                            style={[styles.accommodationOption, index < addressSuggestions.length - 1 && styles.accommodationOptionDivider]}
-                            activeOpacity={0.8}
-                            onPressIn={() => clearTimeout(addressBlurTimer.current)}
-                            onPress={() => {
-                              clearTimeout(addressBlurTimer.current);
-                              setAddActivityModal((current) => ({ ...current, address: suggestion.fullAddress }));
-                              setAddressSuggestions([]);
-                              setIsAddressFocused(false);
-                              Keyboard.dismiss();
-                            }}
-                          >
-                            <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
-                            <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
-                          </TouchableOpacity>
-                        ))}
-                        {isSearchingAddress && (
-                          <View style={styles.accommodationDropdownLoadingInline}>
-                            <ActivityIndicator size="small" color="#A97C50" />
-                          </View>
-                        )}
-                      </>
-                    ) : isSearchingAddress ? (
-                      <View style={styles.accommodationDropdownLoading}>
-                        <ActivityIndicator size="small" color="#A97C50" />
-                      </View>
-                    ) : (
-                      <View style={styles.accommodationDropdownLoading}>
-                        <Text style={styles.accommodationNoResults}>No results found</Text>
-                      </View>
+                <TouchableOpacity
+                  style={styles.addActivityFieldInput}
+                  activeOpacity={0.8}
+                  onPress={() => { Keyboard.dismiss(); setShowAddActivityTimePicker((v) => !v); }}
+                >
+                  <Text style={addActivityModal?.time ? styles.addActivityFieldValue : styles.addActivityFieldPlaceholder}>
+                    {addActivityModal?.time || 'Time (optional)'}
+                  </Text>
+                </TouchableOpacity>
+                {showAddActivityTimePicker && (
+                  <View style={styles.addActivityTimePickerWrap}>
+                    <DateTimePicker
+                      value={(() => {
+                        const d = new Date();
+                        const minutes = parseItineraryTimeValue(addActivityModal?.time);
+                        if (minutes !== null) {
+                          d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                        }
+                        return d;
+                      })()}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      minuteInterval={5}
+                      onChange={(event, selectedDate) => {
+                        if (Platform.OS === 'android') setShowAddActivityTimePicker(false);
+                        if (selectedDate && event.type !== 'dismissed') {
+                          const h = selectedDate.getHours();
+                          const m = selectedDate.getMinutes();
+                          setAddActivityModal((current) => ({
+                            ...current,
+                            time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                          }));
+                        }
+                      }}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={styles.addActivityTimePickerDone} onPress={() => setShowAddActivityTimePicker(false)}>
+                        <Text style={styles.addActivityTimePickerDoneText}>Done</Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                 )}
-              </View>
-              <TextInput
-                style={styles.addActivityNoteInput}
-                placeholder="Notes (optional)"
-                placeholderTextColor="#AFAFA9"
-                value={addActivityModal?.note ?? ''}
-                onChangeText={(value) => setAddActivityModal((current) => ({ ...current, note: value }))}
-                multiline
-                textAlignVertical="top"
-                returnKeyType="done"
-                blurOnSubmit
-              />
+                <View style={styles.addActivityAddressWrap}>
+                  <TextInput
+                    style={styles.addActivityFieldInput}
+                    placeholder="Address (optional)"
+                    placeholderTextColor="#AFAFA9"
+                    value={addActivityModal?.address ?? ''}
+                    onChangeText={(value) => setAddActivityModal((current) => ({ ...current, address: value }))}
+                    onFocus={() => {
+                      clearTimeout(addressBlurTimer.current);
+                      setIsAddressFocused(true);
+                      addActivityScrollRef.current?.scrollToEnd({ animated: true });
+                    }}
+                    onBlur={() => {
+                      addressBlurTimer.current = setTimeout(() => setIsAddressFocused(false), 180);
+                    }}
+                    returnKeyType="done"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                  {isAddressFocused && (addActivityModal?.address?.trim().length ?? 0) >= 2 && (
+                    <View style={styles.addActivityAddressDropdown}>
+                      {addressSuggestions.length > 0 ? (
+                        <>
+                          {addressSuggestions.map((suggestion, index) => (
+                            <TouchableOpacity
+                              key={suggestion.fullAddress + index}
+                              style={[styles.accommodationOption, index < addressSuggestions.length - 1 && styles.accommodationOptionDivider]}
+                              activeOpacity={0.8}
+                              onPressIn={() => clearTimeout(addressBlurTimer.current)}
+                              onPress={() => {
+                                clearTimeout(addressBlurTimer.current);
+                                setAddActivityModal((current) => ({ ...current, address: suggestion.fullAddress }));
+                                setAddressSuggestions([]);
+                                setIsAddressFocused(false);
+                                Keyboard.dismiss();
+                              }}
+                            >
+                              <Text style={styles.accommodationOptionPrimary} numberOfLines={1}>{suggestion.primaryName}</Text>
+                              <Text style={styles.accommodationOptionFull} numberOfLines={1}>{suggestion.fullAddress}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          {isSearchingAddress && (
+                            <View style={styles.accommodationDropdownLoadingInline}>
+                              <ActivityIndicator size="small" color="#A97C50" />
+                            </View>
+                          )}
+                        </>
+                      ) : isSearchingAddress ? (
+                        <View style={styles.accommodationDropdownLoading}>
+                          <ActivityIndicator size="small" color="#A97C50" />
+                        </View>
+                      ) : (
+                        <View style={styles.accommodationDropdownLoading}>
+                          <Text style={styles.accommodationNoResults}>No results found</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+                <TextInput
+                  style={styles.addActivityNoteInput}
+                  placeholder="Notes (optional)"
+                  placeholderTextColor="#AFAFA9"
+                  value={addActivityModal?.note ?? ''}
+                  onChangeText={(value) => setAddActivityModal((current) => ({ ...current, note: value }))}
+                  onFocus={() => addActivityScrollRef.current?.scrollToEnd({ animated: true })}
+                  multiline
+                  textAlignVertical="top"
+                  returnKeyType="done"
+                  blurOnSubmit
+                />
+              </ScrollView>
               <View style={styles.addActivityActions}>
                 <TouchableOpacity style={styles.addActivityCancelBtn} activeOpacity={0.8} onPress={() => { setAddActivityModal(null); setShowAddActivityTimePicker(false); }}>
                   <Text style={styles.addActivityCancelText}>Cancel</Text>
@@ -1363,6 +1440,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               </View>
             </Pressable>
           </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1371,7 +1449,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 const styles = StyleSheet.create({
   detailScreen: {
     flex: 1,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   detailScrollContent: {
     paddingHorizontal: 12,
@@ -1384,10 +1462,15 @@ const styles = StyleSheet.create({
     paddingBottom: 28
   },
   detailCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 24,
     padding: 16,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    shadowColor: '#2B2927',
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   editCard: {
     backgroundColor: '#FFFFFF',
@@ -1410,11 +1493,7 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 22,
     lineHeight: 26,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
   editSaveButton: {
@@ -1430,11 +1509,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     lineHeight: 16,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   backButton: {
@@ -1450,11 +1525,7 @@ const styles = StyleSheet.create({
     color: '#4A4A4A',
     fontSize: 26,
     lineHeight: 26,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   headerMenuButton: {
@@ -1471,11 +1542,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 26,
     marginTop: -4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   detailTitle: {
@@ -1483,11 +1550,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
     color: '#111111'
   },
@@ -1495,11 +1558,7 @@ const styles = StyleSheet.create({
     color: '#575757',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: Platform.OS === 'ios' ? '600' : '500',
     marginTop: -2,
     flex: 1
@@ -1523,11 +1582,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#6F6F6B',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     marginBottom: 14,
     textAlign: 'center'
   },
@@ -1577,11 +1632,7 @@ const styles = StyleSheet.create({
   statLabel: {
     color: '#111111',
     fontSize: 12,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
     marginBottom: 8,
     marginLeft: 4
@@ -1589,11 +1640,7 @@ const styles = StyleSheet.create({
   datesValue: {
     fontSize: 16,
     lineHeight: 21,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '400',
     color: '#111111'
   },
@@ -1603,11 +1650,7 @@ const styles = StyleSheet.create({
   },
   accommodationLabel: {
     fontSize: 12,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
     color: '#111111',
     marginBottom: 8,
@@ -1621,11 +1664,7 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     fontSize: 16,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     color: '#111111',
     textAlign: 'left',
     writingDirection: 'ltr'
@@ -1645,7 +1684,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: 'rgba(243,243,241,0.88)'
+    backgroundColor: 'rgba(244,240,235,0.9)',
   },
   glassInputFieldBlur: {
     flex: 1,
@@ -1653,7 +1692,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 0,
     paddingVertical: 0,
-    backgroundColor: 'rgba(243,243,241,0.88)'
+    backgroundColor: 'rgba(244,240,235,0.9)',
   },
   accommodationClearButton: {
     width: 30,
@@ -1667,11 +1706,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 20,
     color: '#6F6F6B',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
   accommodationDropdown: {
@@ -1695,11 +1730,7 @@ const styles = StyleSheet.create({
   accommodationNoResults: {
     fontSize: 13,
     color: '#6F6F6B',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
   accommodationOption: {
@@ -1713,11 +1744,7 @@ const styles = StyleSheet.create({
   accommodationOptionPrimary: {
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '600' : '700',
     color: '#111111'
   },
@@ -1725,11 +1752,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     color: '#6F6F6B',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     marginTop: 2
   },
   detailBody: {
@@ -1738,22 +1761,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
     color: '#111111',
     marginTop: 4
   },
   itinerarySectionCard: {
     marginTop: 4,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E5DF',
-    backgroundColor: '#FCFCFA',
-    padding: 16
+    borderColor: '#E4DED6',
+    backgroundColor: '#F8F5F0',
+    padding: 16,
   },
   itineraryHeaderRow: {
     flexDirection: 'row',
@@ -1770,11 +1789,7 @@ const styles = StyleSheet.create({
     color: '#7A7A74',
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   itineraryAddButton: {
     width: 38,
@@ -1796,11 +1811,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 24,
     marginTop: -1,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '500'
   },
   itineraryDateScroll: {
@@ -1814,27 +1825,23 @@ const styles = StyleSheet.create({
     width: 50,
     minHeight: 60,
     borderRadius: 14,
-    backgroundColor: '#F1F1ED',
+    backgroundColor: '#EEE9E2',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: '#ECECE7'
+    borderColor: '#E4DED6',
   },
   itineraryDateChipActive: {
-    backgroundColor: '#181818',
-    borderColor: '#181818'
+    backgroundColor: '#2B2927',
+    borderColor: '#2B2927',
   },
   itineraryDateChipDayNumber: {
     color: '#111111',
     fontSize: 18,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
   itineraryDateChipWeekday: {
@@ -1842,11 +1849,7 @@ const styles = StyleSheet.create({
     color: '#4F4F4A',
     fontSize: 10,
     lineHeight: 12,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryDateChipMonth: {
@@ -1856,11 +1859,7 @@ const styles = StyleSheet.create({
     lineHeight: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '600'
   },
   itineraryDateChipTextActive: {
@@ -1882,11 +1881,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryEmpty: {
@@ -1894,11 +1889,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   itineraryDaySection: {
     alignItems: 'stretch',
@@ -1916,28 +1907,89 @@ const styles = StyleSheet.create({
     overflow: 'visible'
   },
   itineraryItemsList: {
-    gap: 12
+    gap: 10,
+    position: 'relative',
+  },
+  timelineTrack: {
+    position: 'absolute',
+    left: 13,
+    top: 18,
+    bottom: 18,
+    width: 1.5,
+    backgroundColor: '#E4DED6',
+  },
+  timelineNodeCol: {
+    width: 28,
+    alignItems: 'center',
+    paddingTop: 15,
+    flexShrink: 0,
+  },
+  timelineNodeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFFDF8',
+    borderWidth: 2,
   },
   itineraryRow: {
-    overflow: 'visible'
+    overflow: 'visible',
   },
   itineraryRowShell: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6
+    gap: 0,
   },
   itineraryRowCard: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E5DF',
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden'
+    borderColor: '#E4DED6',
+    backgroundColor: '#FFFDF8',
+    overflow: 'hidden',
   },
-  itineraryRowPressable: {
+  itineraryEditArea: {
     paddingVertical: 12,
     paddingHorizontal: 14,
-    minHeight: 65
+    minHeight: 65,
+  },
+  cardContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 58,
+  },
+  itineraryIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    margin: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  itineraryTextFlex: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingRight: 4,
+    justifyContent: 'center',
+    minHeight: 56,
+  },
+  itineraryTimeRight: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    flexShrink: 0,
+  },
+  itineraryTimeDivider: {
+    width: 1,
+    backgroundColor: '#E4DED6',
+    marginVertical: 10,
+  },
+  itineraryTimeColumn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 50,
+    gap: 3,
   },
   itineraryTextWrap: {
     flex: 1,
@@ -1959,11 +2011,7 @@ const styles = StyleSheet.create({
   itineraryName: {
     fontSize: 16,
     lineHeight: 21,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
     color: '#111111'
   },
@@ -1974,49 +2022,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     marginBottom: 6,
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
-  },
-  itineraryTimeTextWrap: {
-    width: 50,
-    flexShrink: 0,
-    justifyContent: 'flex-start',
-    paddingTop: 11,
-    overflow: 'visible'
   },
   itineraryTimeInput: {
-    color: '#6A6A64',
-    fontSize: 12,
-    lineHeight: 15,
+    color: '#8C867E',
+    fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.2,
-    minHeight: 24,
+    minHeight: 18,
     paddingVertical: 0,
     paddingHorizontal: 0,
-    textAlign: 'left',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+    textAlign: 'center',
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800',
   },
   itineraryTimeInputEditing: {
-    color: '#111111'
+    color: '#2B2927',
   },
   itineraryNote: {
     color: '#6F6F6B',
     fontSize: 14,
     lineHeight: 18,
     marginTop: 2,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   itineraryNoteInput: {
     color: '#6F6F6B',
@@ -2026,11 +2055,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 0,
     textAlignVertical: 'top',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   itinerarySaveActivityButton: {
     alignSelf: 'flex-start',
@@ -2046,11 +2071,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     lineHeight: 14,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editFieldGroup: {
@@ -2062,11 +2083,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: 8,
     marginLeft: 4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   editInput: {
@@ -2080,11 +2097,7 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 16,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   editTextArea: {
     minHeight: 112
@@ -2104,11 +2117,7 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 15,
     lineHeight: 19,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   editCalendarWrap: {
     borderRadius: 16,
@@ -2134,11 +2143,7 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 15,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editPrivacySubtitle: {
@@ -2146,11 +2151,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     marginTop: 3,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   editPrivacyPill: {
     minWidth: 72,
@@ -2168,11 +2169,7 @@ const styles = StyleSheet.create({
     color: '#64645F',
     fontSize: 12,
     lineHeight: 14,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editPrivacyPillTextActive: {
@@ -2195,11 +2192,7 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editDangerAction: {
@@ -2215,11 +2208,7 @@ const styles = StyleSheet.create({
     color: '#B24C4C',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   addLinkFooter: {
@@ -2245,11 +2234,7 @@ const styles = StyleSheet.create({
     borderColor: '#DEDEDA',
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   detailActionButton: {
     borderRadius: 12,
@@ -2267,11 +2252,7 @@ const styles = StyleSheet.create({
   },
   detailActionText: {
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '600' : '700'
   },
   recommendationsButton: {
@@ -2289,12 +2270,11 @@ const styles = StyleSheet.create({
     color: '#111111',
     fontSize: 15,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '600' : '700'
+  },
+  addActivityKAV: {
+    flex: 1
   },
   addActivityOverlay: {
     flex: 1,
@@ -2319,29 +2299,30 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
-    padding: 20
+    maxHeight: '90%',
+    overflow: 'hidden',
+    paddingBottom: 20
+  },
+  addActivityScroll: {
+    flexShrink: 1
+  },
+  addActivityScrollContent: {
+    padding: 20,
+    paddingBottom: 4
   },
   addActivityTitle: {
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '800',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     marginBottom: 4
   },
   addActivityDate: {
     fontSize: 13,
     lineHeight: 16,
     color: '#7A7A74',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     marginBottom: 16
   },
   addActivityNameInput: {
@@ -2356,11 +2337,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#111111',
     textAlign: 'left',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     marginBottom: 10
   },
   addActivityFieldInput: {
@@ -2379,22 +2356,14 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: '#111111',
     textAlign: 'left',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   addActivityFieldPlaceholder: {
     fontSize: 15,
     lineHeight: 19,
     color: '#AFAFA9',
     textAlign: 'left',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   addActivityTimePickerWrap: {
     borderRadius: 12,
@@ -2413,11 +2382,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   addActivityNoteInput: {
     minHeight: 72,
@@ -2432,16 +2397,14 @@ const styles = StyleSheet.create({
     color: '#111111',
     textAlign: 'left',
     textAlignVertical: 'top',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     marginBottom: 18
   },
   addActivityActions: {
     flexDirection: 'row',
-    gap: 10
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 12
   },
   addActivityCancelBtn: {
     flex: 1,
@@ -2457,11 +2420,7 @@ const styles = StyleSheet.create({
     color: '#4A4A4A',
     fontSize: 15,
     fontWeight: '600',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   addActivityDoneBtn: {
     flex: 1,
@@ -2475,10 +2434,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   }
 });

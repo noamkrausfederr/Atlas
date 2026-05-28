@@ -1,14 +1,8 @@
-import { Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 
 const DAY_INDEXES = {
-  Su: 0,
-  Mo: 1,
-  Tu: 2,
-  We: 3,
-  Th: 4,
-  Fr: 5,
-  Sa: 6
+  Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6
 };
 
 function formatAddressFromNominatim(place) {
@@ -48,7 +42,6 @@ function formatStatusTime(value) {
   const hours = Number(hoursRaw);
   const minutes = Number(minutesRaw);
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
-
   const suffix = hours >= 12 ? 'PM' : 'AM';
   const normalizedHours = hours % 12 || 12;
   return `${normalizedHours}:${String(minutes).padStart(2, '0')} ${suffix}`;
@@ -60,16 +53,10 @@ function formatPriceRange(value) {
   if (!normalized) return null;
   if (/^free$/i.test(normalized)) return 'Free';
   if (/^\$+$/.test(normalized)) return normalized;
-
   const amountMatch = normalized.match(/(\d+(?:\.\d+)?)/);
-  if (!amountMatch) {
-    return normalized;
-  }
-
+  if (!amountMatch) return normalized;
   const amount = Number(amountMatch[1]);
-  if (Number.isNaN(amount)) {
-    return normalized;
-  }
+  if (Number.isNaN(amount)) return normalized;
   if (amount <= 10) return '$';
   if (amount <= 30) return '$$';
   if (amount <= 60) return '$$$';
@@ -78,19 +65,12 @@ function formatPriceRange(value) {
 
 function formatWebsiteLabel(value) {
   if (!value) return '';
-
-  return String(value)
-    .replace(/^https?:\/\//i, '')
-    .replace(/\/$/, '');
+  return String(value).replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
 
 function getOpenStatus(openingHours) {
-  if (!openingHours) {
-    return { label: 'Hours unavailable', detail: null, tone: 'muted' };
-  }
-  if (openingHours.trim() === '24/7') {
-    return { label: 'Open now', detail: '24/7', tone: 'open' };
-  }
+  if (!openingHours) return { label: 'Hours unavailable', detail: null, tone: 'muted' };
+  if (openingHours.trim() === '24/7') return { label: 'Open now', detail: '24/7', tone: 'open' };
 
   const now = new Date();
   const todayIndex = now.getDay();
@@ -102,92 +82,68 @@ function getOpenStatus(openingHours) {
     const dayMatch = rule.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?/);
     const dayToken = dayMatch?.[0];
     if (!dayTokenMatchesToday(dayToken, todayIndex)) continue;
-
     const timeMatch = rule.match(/(\d{1,2}:\d{2})-(\d{1,2}:\d{2})/);
     if (!timeMatch) continue;
     const open = parseTimeValue(timeMatch[1]);
     const close = parseTimeValue(timeMatch[2]);
     if (open === null || close === null) continue;
     const formattedRange = `${formatStatusTime(timeMatch[1])} - ${formatStatusTime(timeMatch[2])}`;
-    if (!firstMatchingRange) {
-      firstMatchingRange = formattedRange;
-    }
-
+    if (!firstMatchingRange) firstMatchingRange = formattedRange;
     const isOpen = open <= close
       ? currentMinutes >= open && currentMinutes <= close
       : currentMinutes >= open || currentMinutes <= close;
     if (!isOpen) continue;
-
     const normalizedClose = open <= close || currentMinutes <= close ? close : close + 1440;
     const normalizedCurrent = currentMinutes > normalizedClose ? currentMinutes - 1440 : currentMinutes;
     const minutesUntilClose = normalizedClose - normalizedCurrent;
-
-    if (minutesUntilClose <= 60) {
-      return { label: 'Closing soon', detail: formattedRange, tone: 'warning' };
-    }
-
+    if (minutesUntilClose <= 60) return { label: 'Closing soon', detail: formattedRange, tone: 'warning' };
     return { label: 'Open now', detail: formattedRange, tone: 'open' };
   }
-
   return { label: 'Closed now', detail: firstMatchingRange, tone: 'closed' };
 }
 
 async function fetchLivePlaceDetails(query) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3500);
-
   try {
-    const params = new URLSearchParams({
-      q: query,
-      format: 'jsonv2',
-      limit: '1',
-      addressdetails: '1',
-      extratags: '1'
-    });
+    const params = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1', addressdetails: '1', extratags: '1' });
     const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json'
-      }
+      headers: { Accept: 'application/json' }
     });
     const results = await response.json();
     const result = results?.[0];
     if (!result) return null;
-
     return {
       address: formatAddressFromNominatim(result),
       website: result.extratags?.website || result.extratags?.url || result.extratags?.contact_website,
       openingHours: result.extratags?.opening_hours
     };
-  } catch (error) {
+  } catch {
     return null;
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-function getPlaceDetail(place, tripTitle, location, dateLabel, fallbackImage) {
-  return {
-    category: place.category || place.note?.split('·')[1]?.trim() || 'Itinerary',
-    price: place.price || null,
-    address: place.address || location,
-    sourceUrl: place.sourceUrl || place.url || place.link,
-    website: place.website || place.websiteUrl,
-    openingHours: place.openingHours,
-    dateLabel
-  };
+function Row({ label, children, extraSpacing }) {
+  return (
+    <View style={[styles.row, extraSpacing && styles.rowExtraSpacing]}>
+      <Text style={[styles.rowLabel, extraSpacing && styles.rowLabelExtraSpacing]}>{label}</Text>
+      <View style={styles.rowValue}>{children}</View>
+    </View>
+  );
 }
 
-function PlaceDetailContent({ place, tripTitle, location, dateLabel, fallbackImage, onBack }) {
+function PlaceDetailContent({ place, location, dateLabel, onClose, onDelete }) {
   if (!place) return null;
 
-  const { price, address, sourceUrl, website, openingHours } = getPlaceDetail(
-    place,
-    tripTitle,
-    location,
-    dateLabel,
-    fallbackImage
-  );
+  const address = place.address || location;
+  const sourceUrl = place.sourceUrl || place.url || place.link;
+  const website = place.website || place.websiteUrl;
+  const price = place.price || null;
+  const openingHours = place.openingHours;
+
   const [liveDetails, setLiveDetails] = useState(null);
   const detailAddress = liveDetails?.address || address;
   const detailWebsite = liveDetails?.website || website || sourceUrl;
@@ -196,239 +152,285 @@ function PlaceDetailContent({ place, tripTitle, location, dateLabel, fallbackIma
   const openStatus = useMemo(() => getOpenStatus(detailHours), [detailHours]);
   const directionsQuery = encodeURIComponent(detailAddress || `${place.name || place.title} ${location}`);
   const formattedPrice = formatPriceRange(price);
-  const openingHoursText =
-    openStatus.label === 'Hours unavailable'
-      ? null
-      : openStatus.detail || detailHours || null;
+  const openingHoursText = openStatus.label === 'Hours unavailable' ? null : openStatus.detail || detailHours || null;
 
   useEffect(() => {
     let isActive = true;
     const query = `${place.name || place.title} ${location || ''}`.trim();
-
     fetchLivePlaceDetails(query).then((details) => {
-      if (isActive) {
-        setLiveDetails(details);
-      }
+      if (isActive) setLiveDetails(details);
     });
-
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [location, place.name, place.title]);
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Close</Text>
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardHeaderText}>
+          <Text style={styles.cardTitle} numberOfLines={2}>{place.name || place.title}</Text>
+          {dateLabel ? <Text style={styles.cardDate}>{dateLabel}</Text> : null}
+        </View>
+        <TouchableOpacity style={styles.closeButton} activeOpacity={0.8} onPress={onClose}>
+          <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{place.name || place.title}</Text>
       </View>
 
-      <View style={styles.detailsCard}>
-        {formattedPrice ? (
-          <View style={styles.detailBlock}>
-            <Text style={styles.detailLabel}>Price range</Text>
-            <Text style={styles.detailValue}>{formattedPrice}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
+        {place.note ? (
+          <View style={styles.noteBlock}>
+            <Text style={styles.noteText}>{place.note}</Text>
           </View>
         ) : null}
 
-        <View style={styles.detailBlock}>
-          <Text style={styles.detailLabel}>Website</Text>
-          {detailWebsite ? (
-            <TouchableOpacity onPress={() => Linking.openURL(detailWebsite)}>
-              <Text style={styles.inlineLink}>{detailWebsiteLabel}</Text>
+        <View style={styles.infoCard}>
+          {formattedPrice ? (
+            <Row label="Price range">
+              <Text style={styles.rowValueText}>{formattedPrice}</Text>
+            </Row>
+          ) : null}
+
+          <Row label="Address">
+            {detailAddress
+              ? <Text style={styles.rowValueText}>{detailAddress}</Text>
+              : <Text style={styles.rowValueMuted}>Location unavailable</Text>}
+            <TouchableOpacity activeOpacity={0.8} onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${directionsQuery}`)}>
+              <Text style={styles.directionsText}>Get directions</Text>
             </TouchableOpacity>
-          ) : (
-            <Text style={styles.detailSubValue}>Website unavailable</Text>
-          )}
-        </View>
+          </Row>
 
-        <View style={styles.detailBlock}>
-          <Text style={styles.detailLabel}>Address</Text>
-          {detailAddress ? <Text style={styles.detailValue}>{detailAddress}</Text> : <Text style={styles.detailSubValue}>Location unavailable</Text>}
-          <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${directionsQuery}`)}>
-            <Text style={styles.inlineLink}>Get directions</Text>
-          </TouchableOpacity>
-        </View>
+          <Row label="Website">
+            {detailWebsite
+              ? <TouchableOpacity activeOpacity={0.8} onPress={() => Linking.openURL(detailWebsite)}>
+                  <Text style={styles.linkText} numberOfLines={1}>{detailWebsiteLabel}</Text>
+                </TouchableOpacity>
+              : <Text style={styles.rowValueMuted}>Not available</Text>}
+          </Row>
 
-        <View style={[styles.detailBlock, styles.detailBlockLast]}>
-          <Text style={styles.detailLabel}>Opening hours</Text>
-          <View style={[styles.statusPill, styles[`statusPill${openStatus.tone.charAt(0).toUpperCase()}${openStatus.tone.slice(1)}`]]}>
-            <Text style={[styles.statusPillText, styles[`statusPillText${openStatus.tone.charAt(0).toUpperCase()}${openStatus.tone.slice(1)}`]]}>
-              {openStatus.label}
-            </Text>
-          </View>
-          {openingHoursText ? <Text style={styles.detailValue}>{openingHoursText}</Text> : null}
+          <Row label="Hours" extraSpacing>
+            <View style={[styles.statusPill, styles[`pill_${openStatus.tone}`]]}>
+              <Text style={[styles.statusPillText, styles[`pillText_${openStatus.tone}`]]}>{openStatus.label}</Text>
+            </View>
+            {openingHoursText ? <Text style={styles.rowValueText}>{openingHoursText}</Text> : null}
+          </Row>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      <TouchableOpacity style={styles.deleteButton} activeOpacity={0.8} onPress={onDelete}>
+        <Text style={styles.deleteButtonText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack }) {
+export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack, onDelete }) {
   return (
     <View style={styles.screen}>
       <PlaceDetailContent
         place={place}
-        tripTitle={tripTitle}
         location={location}
         dateLabel={dateLabel}
-        fallbackImage={fallbackImage}
-        onBack={onBack}
+        onClose={onBack}
+        onDelete={onDelete}
       />
     </View>
   );
 }
 
-export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose }) {
+export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose, onDelete }) {
   if (!place) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.card}>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={styles.cardWrap}>
           <PlaceDetailContent
             place={place}
-            tripTitle={tripTitle}
             location={location}
             dateLabel={dateLabel}
-            fallbackImage={fallbackImage}
-            onBack={onClose}
+            onClose={onClose}
+            onDelete={onDelete}
           />
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    paddingBottom: 24
+    flex: 1
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 8, 15, 0.38)',
+    backgroundColor: 'rgba(43,41,39,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 28
+    paddingHorizontal: 20,
+    paddingVertical: 40
+  },
+  cardWrap: {
+    width: '100%',
+    maxWidth: 420
   },
   card: {
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '72%',
-    backgroundColor: '#FFF8F0',
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 22,
+    overflow: 'hidden',
     shadowColor: '#000000',
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10
   },
-  header: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 14
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#F2D8D8'
-  },
-  backButtonText: {
-    color: '#A97C50',
-    fontWeight: '700'
-  },
-  title: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4B3A32',
-    textAlign: 'right',
-    lineHeight: 24,
-    paddingTop: 4
-  },
-  detailsCard: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2D3BF',
-    padding: 16,
-    marginBottom: 4
-  },
-  detailBlock: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 12,
+    gap: 10
+  },
+  cardHeaderText: {
+    flex: 1
+  },
+  cardTitle: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '800',
+    color: '#2B2927',
+    fontFamily: 'Nunito_800ExtraBold'
+  },
+  cardDate: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#8C867E',
+    fontFamily: 'Nunito_400Regular'
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F4F0EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2
+  },
+  closeButtonText: {
+    fontSize: 13,
+    color: '#6F6F6B',
+    fontWeight: '600',
+    lineHeight: 16
+  },
+  scrollArea: {
+    maxHeight: 340
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingBottom: 4
+  },
+  noteBlock: {
     marginBottom: 12
   },
-  detailBlockLast: {
-    paddingBottom: 0,
-    marginBottom: 0
+  noteText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#2B2927',
+    fontWeight: '700',
+    fontFamily: 'Nunito_700Bold'
+  },
+  infoCard: {
+    borderRadius: 16,
+    backgroundColor: '#F8F5F0',
+    overflow: 'hidden',
+    marginBottom: 12
+  },
+  row: {
+    paddingHorizontal: 14,
+    paddingVertical: 11
+  },
+  rowExtraSpacing: {
+    paddingVertical: 15
+  },
+  rowLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#9A9A94',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+    fontFamily: 'Nunito_700Bold'
+  },
+  rowLabelExtraSpacing: {
+    marginBottom: 8
+  },
+  rowValue: {
+    gap: 4
+  },
+  rowValueText: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#2B2927',
+    fontFamily: 'Nunito_400Regular'
+  },
+  rowValueMuted: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#AFAFА9',
+    fontFamily: 'Nunito_400Regular'
+  },
+  linkText: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#3B6EA8',
+    fontWeight: '600',
+    fontFamily: 'Nunito_700Bold'
+  },
+  directionsText: {
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#2B2927',
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold'
   },
   statusPill: {
     alignSelf: 'flex-start',
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 12
+    paddingVertical: 4,
+    marginBottom: 4
   },
-  statusPillOpen: {
-    backgroundColor: '#DCFCE7'
-  },
-  statusPillWarning: {
-    backgroundColor: '#FEF3C7'
-  },
-  statusPillClosed: {
-    backgroundColor: '#FEE2E2'
-  },
-  statusPillMuted: {
-    backgroundColor: '#E5E7EB'
-  },
+  pill_open: { backgroundColor: '#DCFCE7' },
+  pill_warning: { backgroundColor: '#FEF3C7' },
+  pill_closed: { backgroundColor: '#FEE2E2' },
+  pill_muted: { backgroundColor: '#F4F0EB' },
   statusPillText: {
     fontSize: 12,
-    fontWeight: '800'
+    fontWeight: '700',
+    fontFamily: 'Nunito_700Bold'
   },
-  statusPillTextOpen: {
-    color: '#166534'
+  pillText_open: { color: '#166534' },
+  pillText_warning: { color: '#92400E' },
+  pillText_closed: { color: '#991B1B' },
+  pillText_muted: { color: '#6F6F6B' },
+  deleteButton: {
+    alignSelf: 'flex-end',
+    marginRight: 18,
+    marginTop: 4,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F0DADA',
+    backgroundColor: '#FFF5F5',
+    paddingHorizontal: 24,
+    paddingVertical: 11
   },
-  statusPillTextWarning: {
-    color: '#92400E'
-  },
-  statusPillTextClosed: {
-    color: '#991B1B'
-  },
-  statusPillTextMuted: {
-    color: '#4B5563'
-  },
-  detailLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#7F7063',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 6
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#6B5A4C',
-    lineHeight: 22,
-    marginBottom: 6
-  },
-  detailSubValue: {
-    color: '#6B5A4C',
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 6
-  },
-  inlineLink: {
-    color: '#6B5A4C',
+  deleteButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    lineHeight: 20
+    color: '#C0392B',
+    fontFamily: 'Nunito_700Bold'
   }
 });

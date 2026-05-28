@@ -5,6 +5,16 @@ import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, ScrollView, S
 import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useFonts } from 'expo-font';
+import {
+  Nunito_400Regular,
+  Nunito_500Medium,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+  Nunito_900Black
+} from '@expo-google-fonts/nunito';
+import { colors, fonts, radius, shadow } from './src/theme';
 
 import { publicTrips as publicTripMetadata, sampleBoards } from './data/trips';
 import { getPastTrips, getUpcomingTrips } from './data/tripUtils';
@@ -12,6 +22,9 @@ import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 
 // Components & Screens
 import { BoardCard } from './src/components/BoardCard';
+import { IllustratedTripCard } from './src/components/IllustratedTripCard';
+import { IllustratedHero } from './src/components/IllustratedHero';
+import { StatsDashboard } from './src/components/StatsDashboard';
 import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
@@ -69,7 +82,17 @@ function buildSeedInboxThreads() {
   ]);
 }
 
+
 function InnerApp() {
+  const [fontsLoaded] = useFonts({
+    Nunito_400Regular,
+    Nunito_500Medium,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+    Nunito_900Black
+  });
+
   const createBoardFormRef = useRef(null);
   const createBoardLocationInputRef = useRef(null);
   const [boards, setBoards] = useState(sampleBoards);
@@ -281,6 +304,8 @@ function InnerApp() {
   
   const insets = useSafeAreaInsets();
   const tabBarHeight = 62 + Math.max(insets.bottom, 6);
+
+  if (!fontsLoaded) return null;
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
   const shouldHideBottomNav = isInboxChatOpen && isKeyboardVisible;
   
@@ -784,37 +809,70 @@ const upcomingBoards = getUpcomingTrips(boards);
       );
     }
 
+    const totalPlaces = boards.reduce((sum, b) => sum + (b.placesList?.length ?? 0), 0);
+    const countrySet = new Set(boards.map((b) => (b.location || '').split(',').pop().trim()).filter(Boolean));
+
     return (
       <>
-        <View style={styles.sectionHeader}>
-          <View style={styles.logoWrap}>
-            <BlurView intensity={28} tint="light" style={styles.logoBlur}>
-              <Text style={styles.logoText}>
-                Atlas
-                <Text style={styles.logoDot}>.</Text>
-              </Text>
-            </BlurView>
+        {/* Illustrated hero header */}
+        <IllustratedHero />
+
+        {/* Stats dashboard */}
+        <StatsDashboard
+          trips={boards.length}
+          countries={countrySet.size}
+          places={totalPlaces}
+          upcoming={upcomingBoards.length}
+        />
+
+        {/* Upcoming trips */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeaderTitle}>Upcoming</Text>
+          <View style={[styles.sectionHeaderPill, { backgroundColor: '#D8EAF8' }]}>
+            <Text style={[styles.sectionHeaderPillText, { color: '#1A508A' }]}>{upcomingBoards.length}</Text>
           </View>
         </View>
 
-        <View style={styles.tripSectionHeader}>
-          <Text style={styles.tripSectionTitle}>Upcoming trips</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
-          {upcomingBoards.map((board) => (
-            <BoardCard key={board.id} board={board} onPress={openBoard} />
-          ))}
-        </ScrollView>
+        {upcomingBoards.length > 0 ? (
+          <View style={styles.tripStack}>
+            {/* Featured first trip */}
+            <IllustratedTripCard
+              key={upcomingBoards[0].id}
+              board={upcomingBoards[0]}
+              onPress={openBoard}
+              featured
+              style={styles.featuredCard}
+            />
+            {/* Mini grid for the rest */}
+            {upcomingBoards.length > 1 && (
+              <View style={styles.miniGrid}>
+                {upcomingBoards.slice(1).map((board) => (
+                  <IllustratedTripCard key={board.id} board={board} onPress={openBoard} />
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptySection}>
+            <Ionicons name="airplane-outline" size={28} color={colors.textMuted} style={{ marginBottom: 8 }} />
+            <Text style={styles.emptySectionText}>No upcoming trips yet.</Text>
+          </View>
+        )}
 
-        <View style={styles.tripSectionHeader}>
-          <Text style={styles.tripSectionTitle}>Past trips</Text>
+        {/* Past trips */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 8 }]}>
+          <Text style={styles.sectionHeaderTitle}>Past trips</Text>
+          <View style={[styles.sectionHeaderPill, { backgroundColor: '#EEE9E2' }]}>
+            <Text style={[styles.sectionHeaderPillText, { color: '#5C5650' }]}>{pastTrips.length}</Text>
+          </View>
         </View>
+
         {pastTrips.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalCards}>
+          <View style={styles.miniGrid}>
             {pastTrips.map((board) => (
-              <BoardCard key={board.id} board={board} onPress={openBoard} />
+              <IllustratedTripCard key={board.id} board={board} onPress={openBoard} />
             ))}
-          </ScrollView>
+          </View>
         ) : (
           <View style={styles.emptyTrips} />
         )}
@@ -870,13 +928,13 @@ const upcomingBoards = getUpcomingTrips(boards);
                 style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
                 onPress={() => openTab('Trips')}
               >
-                <Ionicons name="home-outline" size={28} color={activeTab === 'Trips' ? '#555555' : '#AAAAAA'} />
+                <Ionicons name={activeTab === 'Trips' ? 'home' : 'home-outline'} size={26} color={activeTab === 'Trips' ? colors.accent : '#AAAAAA'} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
                 onPress={() => openTab('Explore')}
               >
-                <Ionicons name="search-outline" size={28} color={activeTab === 'Explore' ? '#555555' : '#AAAAAA'} />
+                <Ionicons name={activeTab === 'Explore' ? 'search' : 'search-outline'} size={26} color={activeTab === 'Explore' ? colors.accent : '#AAAAAA'} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
                 <Text style={styles.createTripNavButtonText}>+</Text>
@@ -885,13 +943,13 @@ const upcomingBoards = getUpcomingTrips(boards);
                 style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
                 onPress={() => openTab('Inbox')}
               >
-                <Ionicons name="chatbubbles-outline" size={28} color={activeTab === 'Inbox' ? '#555555' : '#AAAAAA'} />
+                <Ionicons name={activeTab === 'Inbox' ? 'chatbubbles' : 'chatbubbles-outline'} size={26} color={activeTab === 'Inbox' ? colors.accent : '#AAAAAA'} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
                 onPress={() => openTab('Profile')}
               >
-                <Ionicons name="person-outline" size={28} color={activeTab === 'Profile' ? '#555555' : '#AAAAAA'} />
+                <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={26} color={activeTab === 'Profile' ? colors.accent : '#AAAAAA'} />
               </TouchableOpacity>
             </View>
             <View style={{ height: Math.max(insets.bottom, 6) }} />
@@ -913,42 +971,43 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F6EFE5'
+    backgroundColor: '#F4F0EB'
   },
   tripsSafeArea: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   detailSafeArea: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   container: {
     padding: 20,
     paddingBottom: 92
   },
   tripsContainer: {
-    backgroundColor: '#F3F3F1',
-    paddingHorizontal: 12,
-    paddingTop: 8
+    backgroundColor: '#F4F0EB',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 100
   },
   exploreContainer: {
     paddingHorizontal: 12,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   contentWrapper: {
     flex: 1,
     position: 'relative'
   },
   tripsContentWrapper: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   detailContentWrapper: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   tripsScrollView: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   exploreScrollView: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   heroCard: {
     backgroundColor: '#FFF8F0',
@@ -993,56 +1052,66 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15
   },
-  sectionHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16
+    gap: 8,
+    marginBottom: 14,
+    paddingLeft: 2,
   },
-  tripSectionHeader: {
+  sectionHeaderTitle: {
+    fontSize: 20,
+    lineHeight: 24,
+    color: colors.text,
+    fontFamily: fonts.extraBold,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sectionHeaderPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  sectionHeaderPillText: {
+    fontSize: 12,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+  },
+  tripStack: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  featuredCard: {
+    marginBottom: 0,
+  },
+  miniGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingLeft: 8
-  },
-  tripSectionTitle: {
-    fontSize: 24,
-    lineHeight: 28,
-    color: '#111111',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
-    fontWeight: '800',
-    textTransform: 'lowercase'
-  },
-  logoWrap: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    overflow: 'hidden'
-  },
-  logoBlur: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.82)'
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111111'
-  },
-  logoDot: {
-    color: '#555555'
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 4,
   },
   horizontalCards: {
-    marginBottom: 12
+    marginBottom: 20
   },
   emptyTrips: {
     height: 18,
     marginBottom: 12
+  },
+  emptySection: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  emptySectionText: {
+    color: colors.textMuted,
+    fontFamily: fonts.semiBold,
+    fontWeight: '600',
+    fontSize: 14
   },
   createTripButton: {
     width: 44,
@@ -1074,9 +1143,6 @@ const styles = StyleSheet.create({
   sectionAction: {
     color: '#A97C50',
     fontWeight: '700'
-  },
-  horizontalCards: {
-    marginBottom: 24
   },
   mapCard: {
     backgroundColor: '#FFF8F0',
@@ -1121,40 +1187,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20
   },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#F1E7DA',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center'
-  },
-  statLabel: {
-    color: '#A8998A',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontWeight: '500'
-  },
-  statValue: {
-    marginTop: 2,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4B3A32'
-  },
   bottomNav: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(243,243,241,0.82)',
+    backgroundColor: 'rgba(244,240,235,0.94)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(215,215,210,0.95)',
+    borderTopColor: 'rgba(228,222,214,0.9)',
     zIndex: 20,
     elevation: 10,
     overflow: 'hidden'
@@ -1175,9 +1215,9 @@ const styles = StyleSheet.create({
   },
   navButtonActive: {},
   createTripNavButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#111111',
+    width: 52,
+    height: 52,
+    backgroundColor: '#2B2927',
     borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1227,7 +1267,8 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111111',
+    fontFamily: fonts.extraBold,
+    color: colors.text,
     marginBottom: 18
   },
   modalForm: {
@@ -1237,13 +1278,14 @@ const styles = StyleSheet.create({
     paddingBottom: 0
   },
   modalLabel: {
-    color: '#111111',
+    color: colors.text,
     fontSize: 13,
     marginBottom: 8,
-    fontWeight: '600'
+    fontWeight: '700',
+    fontFamily: fonts.bold
   },
   modalInput: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
@@ -1288,7 +1330,7 @@ const styles = StyleSheet.create({
   cityDropdown: {
     marginTop: -6,
     marginBottom: 14,
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(215,215,210,0.95)',
@@ -1302,24 +1344,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   cityDropdownStatusText: {
-    color: '#7F7063',
+    color: colors.textMuted,
     fontSize: 13,
-    fontWeight: '600'
+    fontWeight: '600',
+    fontFamily: fonts.semiBold
   },
   cityOption: {
     paddingVertical: 13,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#EDE3D6'
+    borderBottomColor: colors.border
   },
   cityOptionText: {
-    color: '#4B3A32',
+    color: colors.text,
     fontSize: 14,
-    fontWeight: '600'
+    fontWeight: '600',
+    fontFamily: fonts.semiBold
   },
   cityDropdownEmpty: {
-    color: '#7F7063',
+    color: colors.textMuted,
     fontSize: 13,
+    fontFamily: fonts.regular,
     paddingVertical: 12,
     paddingHorizontal: 14
   },
@@ -1339,25 +1384,27 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCancelButton: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderWidth: 1,
     borderColor: 'rgba(215,215,210,0.95)'
   },
   modalCancelText: {
-    color: '#111111',
-    fontWeight: '700'
+    color: colors.text,
+    fontWeight: '700',
+    fontFamily: fonts.bold
   },
   modalSaveButton: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: colors.text,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)'
+    borderColor: colors.text
   },
   modalSaveButtonDisabled: {
-    opacity: 0.72
+    opacity: 0.55
   },
   modalSaveText: {
-    color: '#111111',
-    fontWeight: '700'
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: fonts.bold
   },
   detailContainer: {
     flex: 1,
@@ -1365,7 +1412,7 @@ const styles = StyleSheet.create({
     paddingTop: 0
   },
   tripDetailContainer: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   exploreStackContainer: {
     paddingBottom: 120

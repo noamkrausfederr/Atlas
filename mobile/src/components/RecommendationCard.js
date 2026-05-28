@@ -10,19 +10,19 @@ export function RecommendationCard({ rec, onPress }) {
         ) : null}
       </View>
       <Text style={styles.recTitle}>{rec.title}</Text>
-      <Text style={styles.recReason} numberOfLines={2}>
-        {rec.reason}
-      </Text>
+      {rec.reason ? (
+        <Text style={styles.recReason} numberOfLines={2}>{rec.reason}</Text>
+      ) : null}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   recCard: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFFDF8',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E4DED6',
     padding: 14,
     marginBottom: 10
   },
@@ -30,33 +30,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 8
+    marginBottom: 6
   },
   recCategory: {
     fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#A8998A',
-    flexShrink: 1
-  },
-  recTitle: {
-    fontSize: 16,
     fontWeight: '700',
-    color: '#4B3A32',
-    marginBottom: 6
-  },
-  recReason: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#7F7063'
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: '#9A9A94',
+    flexShrink: 1,
+    fontFamily: 'Nunito_700Bold'
   },
   recDistance: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#A8998A',
+    color: '#9A9A94',
     textAlign: 'right',
     marginLeft: 10,
-    flexShrink: 0
+    flexShrink: 0,
+    fontFamily: 'Nunito_700Bold'
   },
+  recTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '800',
+    color: '#2B2927',
+    marginBottom: 4,
+    fontFamily: 'Nunito_800ExtraBold'
+  },
+  recReason: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#8C867E',
+    fontFamily: 'Nunito_400Regular'
+  }
 });

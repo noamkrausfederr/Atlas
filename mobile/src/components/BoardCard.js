@@ -1,11 +1,30 @@
-import { useEffect, useState } from 'react';
-import { Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors, fonts, radius, shadow } from '../theme';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=800&q=80';
 const CARD_GAP = 12;
 const PAGE_PADDING = 12;
 const CARD_WIDTH = Math.floor((Dimensions.get('window').width - PAGE_PADDING * 2 - CARD_GAP) / 2);
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.42);
+
+// Soft pastel accent strips — deterministic by id hash
+const CARD_ACCENTS = [
+  '#C8DFF5', // soft blue
+  '#F5D9C8', // soft peach
+  '#C8EAD8', // soft mint
+  '#DDD0F0', // soft lavender
+  '#F5ECC8', // soft butter
+  '#F0D0E5', // soft blush
+  '#C8F0F5', // soft ice
+  '#D0F5CC', // soft lime
+];
+
+function getAccent(board) {
+  const hash = (board.id || board.title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return CARD_ACCENTS[hash % CARD_ACCENTS.length];
+}
 
 function formatShortDate(dateValue) {
   if (!dateValue) return '';
@@ -17,23 +36,23 @@ function formatShortDate(dateValue) {
 function formatBoardDates(board) {
   const start = formatShortDate(board.startDate);
   const end = formatShortDate(board.endDate);
-  if (start && end) return `${start} - ${end}`;
+  if (start && end) return `${start} – ${end}`;
   return start || end;
 }
 
 function getBoardLocation(board) {
   const knownLocations = {
     'Venice Streets': 'Venice, Italy',
-    'Golden Gate': 'San Francisco, United States',
+    'Golden Gate': 'San Francisco, US',
     'Kyoto Morning': 'Kyoto, Japan',
     'Paris Weekend': 'Paris, France'
   };
-
   return board.location || knownLocations[board.title] || board.subtitle;
 }
 
 export function BoardCard({ board, onPress, style }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     setImageFailed(false);
@@ -42,94 +61,117 @@ export function BoardCard({ board, onPress, style }) {
   const imageUri = imageFailed || !board.image ? FALLBACK_IMAGE : board.image;
   const locationText = getBoardLocation(board);
   const dateText = formatBoardDates(board);
+  const accentColor = getAccent(board);
+
+  const handlePressIn = () => {
+    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 2 }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
+  };
 
   return (
-    <TouchableOpacity style={[styles.boardCard, style]} onPress={() => onPress(board)}>
-      <Image source={{ uri: imageUri }} style={styles.cardImage} onError={() => setImageFailed(true)} />
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={2}>{board.title}</Text>
-        {locationText ? <Text style={styles.cardLocation}>{locationText}</Text> : null}
-        {dateText ? <Text style={styles.cardDates} numberOfLines={1}>{dateText}</Text> : null}
-        {board.description ? <Text style={styles.cardDescription} numberOfLines={3}>{board.description}</Text> : null}
-      </View>
-    </TouchableOpacity>
+    <Animated.View style={[styles.card, style, { transform: [{ scale }] }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => onPress(board)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={styles.pressArea}
+      >
+        {/* Top: destination photo */}
+        <View style={styles.photoSection}>
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.photo}
+            onError={() => setImageFailed(true)}
+          />
+          {/* Warm fade at bottom of photo into info panel */}
+          <View style={styles.photoFade} />
+        </View>
+
+        {/* Bottom: warm cream info panel */}
+        <View style={styles.infoPanel}>
+          <Text style={styles.cardTitle} numberOfLines={2}>{board.title}</Text>
+          {locationText ? (
+            <Text style={styles.cardLocation} numberOfLines={1}>{locationText}</Text>
+          ) : null}
+          {dateText ? (
+            <View style={[styles.datePill, { backgroundColor: accentColor }]}>
+              <Text style={styles.datePillText}>{dateText}</Text>
+            </View>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  boardCard: {
+  card: {
     width: CARD_WIDTH,
-    minHeight: 253,
+    height: CARD_HEIGHT,
     marginRight: CARD_GAP,
-    borderRadius: 8,
+    borderRadius: radius.xxl,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    shadowColor: '#000000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2
+    backgroundColor: colors.surface,
+    ...shadow.md,
   },
-  cardImage: {
+  pressArea: {
+    flex: 1,
+  },
+  photoSection: {
+    flex: 58,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  photo: {
     width: '100%',
-    height: 100
+    height: '100%',
   },
-  cardContent: {
-    paddingTop: 12,
+  photoFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 32,
+    backgroundColor: 'rgba(255,253,248,0.2)',
+  },
+  infoPanel: {
+    flex: 42,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingTop: 10,
     paddingBottom: 12,
-    paddingLeft: 12,
-    paddingRight: 10,
-    minHeight: 135,
-    justifyContent: 'flex-start'
+    justifyContent: 'space-between',
   },
   cardTitle: {
-    fontSize: 19,
-    lineHeight: 24,
-    color: '#111111',
-    marginBottom: 3,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontSize: 14,
+    lineHeight: 18,
+    color: colors.text,
+    fontFamily: fonts.extraBold,
     fontWeight: '800',
-    textTransform: 'lowercase'
+    marginBottom: 2,
+    flexShrink: 1,
   },
   cardLocation: {
-    fontSize: 13,
-    lineHeight: 17,
-    color: '#575757',
-    marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
-    fontWeight: Platform.OS === 'ios' ? '600' : '500'
-  },
-  cardDates: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#7A7A7A',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
-    fontWeight: '400'
-  },
-  cardDescription: {
     fontSize: 11,
-    lineHeight: 15,
-    color: '#9A9A9A',
-    marginTop: 6,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
-    fontWeight: '400'
-  }
+    lineHeight: 14,
+    color: colors.textMuted,
+    fontFamily: fonts.semiBold,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  datePill: {
+    alignSelf: 'flex-start',
+    borderRadius: radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  datePillText: {
+    fontSize: 10,
+    color: colors.text,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+  },
 });

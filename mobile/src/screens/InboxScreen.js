@@ -271,6 +271,8 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
             value={draftMessage}
             onChangeText={setDraftMessage}
             style={styles.chatInput}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
           />
         </View>
         <TouchableOpacity style={styles.sendButton} activeOpacity={0.9} onPress={sendMessage}>
@@ -339,11 +341,11 @@ export function InboxScreen({
 const styles = StyleSheet.create({
   inboxScreen: {
     flex: 1,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   threadListScroll: {
     flex: 1,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   threadListContent: {
     flexGrow: 1,
@@ -356,15 +358,11 @@ const styles = StyleSheet.create({
     paddingLeft: 8
   },
   title: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   threadList: {
     gap: 12
@@ -372,29 +370,29 @@ const styles = StyleSheet.create({
   threadCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E8E8E3',
+    borderColor: '#E4DED6',
     padding: 14,
     minHeight: 92
   },
   threadCardActive: {
-    borderColor: '#E8E8E3',
-    backgroundColor: '#FFFFFF'
+    borderColor: '#E4DED6',
+    backgroundColor: '#FFFDF8'
   },
   threadAvatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#ECECE8',
+    backgroundColor: '#E4DED6',
     alignSelf: 'center'
   },
   threadAvatarImage: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#ECECE8',
+    backgroundColor: '#E4DED6',
     alignSelf: 'center'
   },
   threadBody: {
@@ -408,16 +406,12 @@ const styles = StyleSheet.create({
     paddingRight: 0
   },
   threadName: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 16,
     fontWeight: '800',
     flex: 1,
     paddingRight: 8,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   threadMeta: {
     position: 'absolute',
@@ -441,75 +435,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(216,216,210,0.9)',
+    borderColor: '#E4DED6',
     backgroundColor: 'transparent'
   },
   unreadBadgeBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.82)'
+    backgroundColor: 'rgba(244,240,235,0.82)'
   },
   unreadBadgeText: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 11,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   threadHandle: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   threadPreview: {
     flex: 1,
     minWidth: 0,
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   emptyState: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E1E1DC',
+    borderColor: '#E4DED6',
     padding: 22,
     alignItems: 'center'
   },
   emptyStateTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 6,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   emptyStateText: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   chatHeader: {
     flexDirection: 'row',
@@ -521,7 +495,7 @@ const styles = StyleSheet.create({
   },
   chatScreen: {
     flex: 1,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   chatScroll: {
     flex: 1
@@ -545,11 +519,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 26,
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   chatHeaderText: {
     flex: 1,
@@ -559,34 +529,26 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ECECE8'
+    backgroundColor: '#E4DED6'
   },
   chatProfileAvatarFallback: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ECECE8'
+    backgroundColor: '#E4DED6'
   },
   chatTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 22,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   chatHandle: {
     marginTop: 2,
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 13,
     fontWeight: '600',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   chatMessages: {
     gap: 9,
@@ -602,37 +564,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(216,216,210,0.9)',
+    borderColor: '#E4DED6',
     backgroundColor: 'transparent',
     overflow: 'hidden'
   },
   chatDayBadgeBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.82)'
+    backgroundColor: 'rgba(244,240,235,0.82)'
   },
   chatDayBadgeText: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   emptyChatState: {
     alignItems: 'center',
     paddingTop: 28
   },
   emptyChatText: {
-    color: '#8A8A84',
+    color: '#8C867E',
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   chatBubbleRow: {
     flexDirection: 'row'
@@ -679,28 +633,20 @@ const styles = StyleSheet.create({
   chatBubbleText: {
     fontSize: 14,
     lineHeight: 20,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   chatBubbleTextIncoming: {
-    color: '#111111'
+    color: '#2B2927'
   },
   chatBubbleTextOutgoing: {
-    color: '#111111'
+    color: '#2B2927'
   },
   chatMessageTime: {
     marginTop: 5,
-    color: '#8A8A84',
+    color: '#8C867E',
     fontSize: 11,
     lineHeight: 14,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   chatMessageTimeLeft: {
     paddingLeft: 10,
@@ -726,26 +672,22 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(216,216,210,0.9)',
+    borderColor: '#E4DED6',
     backgroundColor: 'transparent'
   },
   chatInputBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.82)'
+    backgroundColor: 'rgba(244,240,235,0.82)'
   },
   chatInput: {
     paddingLeft: 18,
     paddingRight: 16,
     paddingVertical: 14,
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   sendButton: {
     borderRadius: 18,
@@ -753,22 +695,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(216,216,210,0.9)',
+    borderColor: '#E4DED6',
     backgroundColor: 'transparent'
   },
   sendButtonBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.82)'
+    backgroundColor: 'rgba(244,240,235,0.82)'
   },
   sendButtonText: {
-    color: '#8A8A84',
+    color: '#8C867E',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   }
 });

@@ -173,7 +173,7 @@ function SettingsToggleRow({ label, value, onValueChange, detail = '' }) {
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#D9D9D3', true: '#111111' }}
+        trackColor={{ false: '#CCC5BB', true: '#2B2927' }}
         thumbColor="#FFFFFF"
         ios_backgroundColor="#D9D9D3"
       />
@@ -277,7 +277,7 @@ export function SettingsScreen({ onBack }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   screenContent: {
     flexGrow: 1,
@@ -290,15 +290,11 @@ const styles = StyleSheet.create({
     paddingLeft: 8
   },
   headerTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   topActions: {
     flexDirection: 'row',
@@ -324,44 +320,32 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     marginBottom: 8,
-    backgroundColor: '#ECECE8'
+    backgroundColor: '#E4DED6'
   },
   profileName: {
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
-    color: '#1A1A1A',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    color: '#2B2927',
+    fontFamily: 'Nunito_800ExtraBold'
   },
   profileHandle: {
     marginTop: 5,
     fontSize: 13,
     fontWeight: '700',
-    color: '#5E5E59',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    color: '#5C5650',
+    fontFamily: 'Nunito_400Regular'
   },
   profileBio: {
     marginTop: 8,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-    color: '#555550',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    color: '#5C5650',
+    fontFamily: 'Nunito_400Regular'
   },
   followButton: {
-    backgroundColor: '#111111',
+    backgroundColor: '#2B2927',
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 30,
@@ -369,14 +353,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   followButtonText: {
-    color: '#FFFFFF',
+    color: '#FFFDF8',
     fontSize: 15,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   profileActionRow: {
     marginTop: 10,
@@ -385,32 +365,28 @@ const styles = StyleSheet.create({
     gap: 10
   },
   followButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderWidth: 1,
-    borderColor: '#D8D8D2'
+    borderColor: '#E4DED6'
   },
   followButtonTextActive: {
-    color: '#111111'
+    color: '#2B2927'
   },
   headerMessageButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#D8D8D2',
+    borderColor: '#E4DED6',
     justifyContent: 'center'
   },
   headerMessageButtonText: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 15,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   statsRow: {
     flexDirection: 'row',
@@ -421,7 +397,7 @@ const styles = StyleSheet.create({
   },
   profileDivider: {
     height: 1,
-    backgroundColor: '#DDDDD7',
+    backgroundColor: '#E4DED6',
     marginHorizontal: 8,
     marginBottom: 8
   },
@@ -432,33 +408,25 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   statValue: {
-    color: '#1A1A1A',
+    color: '#2B2927',
     fontSize: 14,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   statLabel: {
     marginTop: 2,
-    color: '#666661',
+    color: '#8C867E',
     fontSize: 8,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   sectionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E1E1DC',
+    borderColor: '#E4DED6',
     padding: 18,
     marginBottom: 12
   },
@@ -473,24 +441,16 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 20,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   sectionMeta: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 13,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   tripGrid: {
     flexDirection: 'row',
@@ -500,59 +460,47 @@ const styles = StyleSheet.create({
   },
   tripCard: {
     width: '48%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E1E1DC'
+    borderColor: '#E4DED6'
   },
   tripCardImage: {
     width: '100%',
     height: 146,
-    backgroundColor: '#ECECE8'
+    backgroundColor: '#E4DED6'
   },
   tripCardBody: {
     padding: 12
   },
   tripCardTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 14,
     lineHeight: 18,
     fontWeight: '800',
     marginBottom: 4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   tripCardLocation: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 12,
     lineHeight: 16,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   emptyState: {
-    backgroundColor: '#F7F7F4',
+    backgroundColor: '#F4F0EB',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E1E1DC',
+    borderColor: '#E4DED6',
     padding: 18,
     alignItems: 'center'
   },
   emptyStateText: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   settingsScreenContent: {
     paddingHorizontal: 12,
@@ -566,15 +514,11 @@ const styles = StyleSheet.create({
     marginBottom: 18
   },
   settingsTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   settingsHeaderSpacer: {
     width: 28,
@@ -584,24 +528,20 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   settingsSectionTitle: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 8,
     paddingLeft: 4,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   settingsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E1E1DC',
+    borderColor: '#E4DED6',
     overflow: 'hidden'
   },
   settingsRow: {
@@ -617,39 +557,27 @@ const styles = StyleSheet.create({
     flex: 1
   },
   settingsLabel: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 15,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   settingsLabelDanger: {
     color: '#B24C4C',
     fontSize: 15,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   settingsDetail: {
     marginTop: 3,
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   settingsDivider: {
     height: 1,
     marginLeft: 16,
-    backgroundColor: '#ECECE8'
+    backgroundColor: '#E4DED6'
   }
 });

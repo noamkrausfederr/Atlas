@@ -593,6 +593,8 @@ function CountryMultiSelect({
         onChangeText={onSearchChange}
         onFocus={onFocusSearch}
         placeholderTextColor="#AAAAAA"
+        returnKeyType="done"
+        onSubmitEditing={Keyboard.dismiss}
       />
 
       {selectedCountries.length > 0 && (
@@ -803,7 +805,7 @@ function PublicTripDetail({
           onPress={() => onAddPublicTrip(trip)}
           disabled={alreadyAdded}
         >
-          <Text style={styles.addPublicTripButtonText}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
+          <Text style={[styles.addPublicTripButtonText, alreadyAdded && styles.addPublicTripButtonTextDone]}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -966,21 +968,66 @@ export function ExploreMoreScreen({ board, onBack }) {
     : 16;
 
   return (
-    <View style={[styles.exploreSubScreen, { flex: 1, paddingBottom: 0 }]}>
-      <View style={styles.exploreSubHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <View style={styles.exploreSubHeaderText}>
-          <Text style={styles.exploreSubTitle}>{board.title}</Text>
+    <View style={styles.recScreen}>
+      <View style={styles.recCard}>
+        <View style={styles.recPageHeader}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerMenuButton} disabled>
+            <Text style={styles.headerMenuButtonText} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.recTitleGroup}>
+          <Text style={styles.recPageTitle}>{board.title}</Text>
           {board.location ? (
-            <Text style={[styles.exploreSubMeta, { color: '#887462', marginBottom: 2, marginTop: 2 }]}>
-              {board.location}
-            </Text>
+            <Text style={styles.recPageLocation}>{board.location}</Text>
           ) : null}
-          <Text style={styles.exploreSubMeta}>
-            {hasSearched ? `${formatDateRange(board)} · ${recommendations.length} activities` : formatDateRange(board)}
+          <Text style={styles.recPageMeta}>
+            {hasSearched ? `${formatDateRange(board)} · ${recommendations.length} results` : formatDateRange(board)}
           </Text>
+        </View>
+
+        <ScrollView
+          style={styles.recommendationsListContainer}
+          contentContainerStyle={styles.recommendationsListContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {hasSearched ? (
+            <View style={styles.userQueryBubbleRow}>
+              <View style={styles.userQueryBubble}>
+                <Text style={styles.userQueryBubbleText}>{activeSearchQuery}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {isLoading ? (
+            <View style={styles.recommendationStateCard}>
+              <ActivityIndicator color="#111111" />
+              <Text style={styles.recommendationStateText}>Finding {activeSearchQuery.toLowerCase()}...</Text>
+            </View>
+          ) : null}
+
+          {!isLoading && !hasSearched ? (
+            <View style={styles.recommendationStateCard}>
+              <Text style={styles.recommendationStateText}>
+                Search for museums, cafes, shopping, concerts and more.
+              </Text>
+            </View>
+          ) : null}
+
+          {!isLoading && hasSearched && !recommendations.length ? (
+            <View style={styles.recommendationStateCard}>
+              <Text style={styles.recommendationStateText}>{`No results for "${activeSearchQuery}".`}</Text>
+            </View>
+          ) : null}
+
+          {recommendations.map((rec) => (
+            <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
+          ))}
+
           {hasSearched && sourceMeta.providersUsed?.length ? (
             <Text style={styles.recommendationSourceMeta}>
               {`Live from ${sourceMeta.providersUsed
@@ -988,73 +1035,28 @@ export function ExploreMoreScreen({ board, onBack }) {
                 .join(', ')}.`}
             </Text>
           ) : null}
-          {hasSearched && sourceMeta.error ? (
-            <Text style={styles.recommendationErrorMeta}>
-              {sourceMeta.error}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+        </ScrollView>
 
-      <ScrollView
-        style={styles.recommendationsListContainer}
-        contentContainerStyle={styles.recommendationsListContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {hasSearched ? (
-          <View style={styles.userQueryBubbleRow}>
-            <View style={styles.userQueryBubble}>
-              <Text style={styles.userQueryBubbleText}>{activeSearchQuery}</Text>
-            </View>
+        <View style={[styles.recommendationSearchComposer, { marginBottom: bottomMargin }]}>
+          <View style={styles.recommendationSearchRow}>
+            <TextInput
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Museums, cafes, shopping, concerts..."
+              placeholderTextColor="#AFAFA9"
+              style={styles.recommendationSearchInput}
+              returnKeyType="search"
+              onSubmitEditing={runSearch}
+              textAlign="left"
+            />
+            <TouchableOpacity
+              onPress={runSearch}
+              style={[styles.recommendationSearchButton, !searchInput.trim() && styles.recommendationSearchButtonDisabled]}
+              disabled={!searchInput.trim()}
+            >
+              <Text style={styles.recommendationSearchButtonText}>Search</Text>
+            </TouchableOpacity>
           </View>
-        ) : null}
-
-        {isLoading ? (
-          <View style={styles.recommendationStateCard}>
-            <ActivityIndicator color="#A97C50" />
-            <Text style={styles.recommendationStateText}>Finding {activeSearchQuery.toLowerCase()}...</Text>
-          </View>
-        ) : null}
-
-        {!isLoading && !hasSearched ? (
-          <View style={styles.recommendationStateCard}>
-            <Text style={styles.recommendationStateText}>
-              Start with a search like museums, cafes, shopping, or concerts.
-            </Text>
-          </View>
-        ) : null}
-
-        {!isLoading && hasSearched && !recommendations.length ? (
-          <View style={styles.recommendationStateCard}>
-            <Text style={styles.recommendationStateText}>{`No results yet for "${activeSearchQuery}".`}</Text>
-          </View>
-        ) : null}
-
-        {recommendations.map((rec) => (
-          <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
-        ))}
-      </ScrollView>
-
-      <View style={[styles.recommendationSearchComposer, { marginBottom: bottomMargin }]}>
-        <Text style={styles.recommendationSearchLabel}>What are we looking for?</Text>
-        <View style={styles.recommendationSearchRow}>
-          <TextInput
-            value={searchInput}
-            onChangeText={setSearchInput}
-            placeholder="Museums, cafes, shopping, concerts..."
-            placeholderTextColor="#B1A294"
-            style={styles.recommendationSearchInput}
-            returnKeyType="search"
-            onSubmitEditing={runSearch}
-          />
-          <TouchableOpacity
-            onPress={runSearch}
-            style={[styles.recommendationSearchButton, !searchInput.trim() && styles.recommendationSearchButtonDisabled]}
-            disabled={!searchInput.trim()}
-          >
-            <Text style={styles.recommendationSearchButtonText}>Search</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -1080,14 +1082,10 @@ const styles = StyleSheet.create({
     gap: 12
   },
   explorePageTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
     textTransform: 'lowercase',
     marginLeft: 12
@@ -1108,7 +1106,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1118,8 +1116,8 @@ const styles = StyleSheet.create({
   exploreSearchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#111111',
-    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    color: '#2B2927',
+    fontFamily: 'Nunito_400Regular',
     includeFontPadding: false
   },
   filterButton: {
@@ -1129,10 +1127,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   filterPanel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     padding: 18,
     marginBottom: 16
   },
@@ -1140,7 +1138,7 @@ const styles = StyleSheet.create({
     marginTop: 20
   },
   filterLabel: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 10
@@ -1151,39 +1149,39 @@ const styles = StyleSheet.create({
   },
   filterDateButton: {
     flex: 1,
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 12,
     paddingVertical: 10
   },
   filterDateButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderColor: '#B8B8B2'
   },
   filterDateButtonLabel: {
-    color: '#7A7A7A',
+    color: '#8C867E',
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'lowercase',
     marginBottom: 3
   },
   filterDateButtonText: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 13,
     fontWeight: '700'
   },
   filterDatePlaceholder: {
-    color: '#AAAAAA',
+    color: '#8C867E',
     fontWeight: '400'
   },
   filterCalendarWrap: {
     width: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E4DED6',
+    backgroundColor: '#FFFDF8',
     overflow: 'hidden',
     marginTop: 10
   },
@@ -1200,34 +1198,34 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   selectedCountryBubble: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 11,
     paddingVertical: 7
   },
   selectedCountryBubbleText: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 12,
     fontWeight: '700'
   },
   countryDropdownPanel: {
     marginTop: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF8',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     padding: 10
   },
   countrySearchInput: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#111111',
+    color: '#2B2927',
     marginBottom: 0
   },
   countryOptionList: {
@@ -1238,34 +1236,34 @@ const styles = StyleSheet.create({
   countryOption: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    backgroundColor: '#F3F3F1',
+    borderColor: '#E4DED6',
+    backgroundColor: '#F4F0EB',
     paddingHorizontal: 10,
     paddingVertical: 7
   },
   countryOptionSelected: {
-    backgroundColor: '#E8E8E8',
-    borderColor: '#B8B8B2'
+    backgroundColor: '#EEF3FA',
+    borderColor: '#6B94C8'
   },
   countryOptionText: {
-    color: '#575757',
+    color: '#5C5650',
     fontSize: 12,
     fontWeight: '700'
   },
   countryOptionTextSelected: {
-    color: '#111111'
+    color: '#1A508A'
   },
   daysRangeContainer: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10
   },
   daysRangeValue: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 18
@@ -1278,14 +1276,14 @@ const styles = StyleSheet.create({
   daysRangeTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(215,215,210,0.95)'
+    backgroundColor: '#E4DED6'
   },
   daysRangeFill: {
     position: 'absolute',
     top: 12,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#B8B8B2'
+    backgroundColor: '#6B94C8'
   },
   daysRangeThumb: {
     position: 'absolute',
@@ -1295,7 +1293,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#555555',
     borderWidth: 3,
-    borderColor: '#FFFFFF'
+    borderColor: '#FFFDF8'
   },
   daysRangeThumbMin: {
     zIndex: 2
@@ -1310,7 +1308,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   daysRangeEndLabel: {
-    color: '#7A7A7A',
+    color: '#8C867E',
     fontSize: 11,
     fontWeight: '700'
   },
@@ -1324,23 +1322,23 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   filterChipActive: {
-    backgroundColor: '#E8E8E8',
-    borderColor: '#B8B8B2'
+    backgroundColor: '#EEF3FA',
+    borderColor: '#6B94C8'
   },
   filterChipText: {
-    color: '#AAAAAA',
+    color: '#8C867E',
     fontSize: 12,
     fontWeight: '700'
   },
   filterChipTextActive: {
-    color: '#111111'
+    color: '#1A508A'
   },
   clearFiltersButton: {
     marginTop: 22,
@@ -1362,19 +1360,19 @@ const styles = StyleSheet.create({
   },
   publicTripCard: {
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
-    shadowColor: '#000000',
-    shadowOpacity: 0.05,
+    borderColor: '#E4DED6',
+    shadowColor: '#2B2927',
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2
   },
   publicTripImage: {
     width: '100%',
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   publicTripBody: {
     paddingTop: 12,
@@ -1385,30 +1383,30 @@ const styles = StyleSheet.create({
   publicTripTitle: {
     fontSize: 19,
     lineHeight: 24,
-    color: '#111111',
+    color: '#2B2927',
     marginBottom: 3,
-    fontFamily: Platform.select({ ios: 'SF Pro Display', android: 'sans-serif-medium', default: 'System' }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
     textTransform: 'lowercase'
   },
   publicTripDates: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#7A7A7A',
+    color: '#8C867E',
     marginBottom: 4,
-    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '400'
   },
   publicTripDescription: {
     fontSize: 11,
     lineHeight: 15,
-    color: '#9A9A9A',
+    color: '#8C867E',
     marginTop: 4,
-    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: '400'
   },
   publicTripOwner: {
-    color: '#575757',
+    color: '#5C5650',
     fontSize: 11,
     fontWeight: '600'
   },
@@ -1419,9 +1417,9 @@ const styles = StyleSheet.create({
   publicTripMeta: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#575757',
+    color: '#5C5650',
     marginBottom: 4,
-    fontFamily: Platform.select({ ios: 'SF Pro Text', android: 'sans-serif', default: 'System' }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: Platform.OS === 'ios' ? '600' : '500'
   },
   publicTripTagRow: {
@@ -1432,66 +1430,65 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   publicTripTag: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#F4F0EB',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: '#E4DED6',
     paddingHorizontal: 9,
     paddingVertical: 6
   },
   publicTripTagText: {
-    color: '#AAAAAA',
+    color: '#8C867E',
     fontSize: 11,
     fontWeight: '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   addPublicTripButton: {
-    backgroundColor: '#F3F3F1',
+    backgroundColor: '#2B2927',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    paddingVertical: 13,
+    borderColor: '#2B2927',
+    paddingVertical: 14,
     alignItems: 'center'
   },
   addPublicTripButtonDone: {
-    backgroundColor: '#F3F3F1',
-    borderColor: '#DEDEDA'
+    backgroundColor: '#F4F0EB',
+    borderColor: '#E4DED6'
+  },
+  addPublicTripButtonTextDone: {
+    color: '#8C867E'
   },
   addPublicTripButtonText: {
-    color: '#111111',
-    fontWeight: Platform.OS === 'ios' ? '600' : '700',
+    color: '#FFFDF8',
+    fontWeight: '700',
     fontSize: 15,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   emptyPublicTrips: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#F4F0EB',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E4DED6',
     padding: 18,
     alignItems: 'center'
   },
   emptyPublicTripsText: {
-    color: '#7F7063',
+    color: '#8C867E',
     fontWeight: '700'
   },
   publicDetailScreen: {
-    backgroundColor: '#F3F3F1'
+    backgroundColor: '#F4F0EB'
   },
   publicDetailCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 24,
     padding: 16,
     marginBottom: 20,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    shadowColor: '#2B2927',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }
   },
   publicDetailHeader: {
     flexDirection: 'row',
@@ -1513,24 +1510,16 @@ const styles = StyleSheet.create({
   publicDetailTitle: {
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#111111',
+    color: '#2B2927',
     textTransform: 'lowercase'
   },
   publicDetailLocation: {
-    color: '#575757',
+    color: '#5C5650',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: Platform.OS === 'ios' ? '600' : '500',
     marginTop: 4
   },
@@ -1563,25 +1552,17 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   publicProfileName: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 15,
     fontWeight: '800',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_700Bold'
   },
   publicProfileSubtext: {
     marginTop: 2,
-    color: '#575757',
+    color: '#5C5650',
     fontSize: 12,
     fontWeight: Platform.OS === 'ios' ? '600' : '700',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   publicHeartButton: {
     minWidth: 28,
@@ -1611,26 +1592,18 @@ const styles = StyleSheet.create({
     color: '#FF3B30'
   },
   publicDetailMeta: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_400Regular',
     fontWeight: Platform.OS === 'ios' ? '600' : '500',
     marginTop: 4
   },
   publicDetailDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#6F6F6B',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    }),
+    color: '#8C867E',
+    fontFamily: 'Nunito_400Regular',
     marginBottom: 12,
     textAlign: 'center'
   },
@@ -1639,14 +1612,10 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   publicDetailSectionTitle: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 24,
     lineHeight: 28,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
   publicItineraryDaySection: {
@@ -1661,13 +1630,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#B8B8B2',
+    backgroundColor: '#6B94C8',
     marginTop: 6
   },
   publicItineraryDayLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#E1E1DC',
+    backgroundColor: '#E4DED6',
     marginTop: 4
   },
   publicItineraryDayContent: {
@@ -1676,26 +1645,18 @@ const styles = StyleSheet.create({
   },
   publicItineraryDayTitle: {
     marginBottom: 14,
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
   publicItineraryEmpty: {
-    color: '#6F6F6B',
+    color: '#8C867E',
     marginBottom: 10,
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   publicPlaceGroup: {
     position: 'relative',
@@ -1707,33 +1668,25 @@ const styles = StyleSheet.create({
   },
   publicPlaceGroupGlass: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(243,243,241,0.88)'
+    backgroundColor: 'rgba(244,240,235,0.90)'
   },
   publicPlaceRow: {
     paddingVertical: 10,
     paddingHorizontal: 12
   },
   publicPlaceName: {
-    color: '#111111',
+    color: '#2B2927',
     fontSize: 16,
     lineHeight: 21,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   publicPlaceNote: {
     marginTop: 4,
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_400Regular'
   },
   publicDetailAddButton: {
     marginTop: 4
@@ -1772,6 +1725,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center'
   },
+  recScreen: {
+    paddingBottom: 24
+  },
+  recCard: {
+    backgroundColor: '#FFFDF8',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#2B2927',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 }
+  },
+  recPageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10
+  },
+  recTitleGroup: {
+    marginBottom: 16
+  },
+  recPageTitle: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800',
+    color: '#2B2927',
+    textTransform: 'lowercase'
+  },
+  recPageLocation: {
+    color: '#5C5650',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: Platform.OS === 'ios' ? '600' : '500',
+    marginTop: 4
+  },
+  recPageMeta: {
+    color: '#8C867E',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: Platform.OS === 'ios' ? '600' : '500',
+    marginTop: 4
+  },
+  headerMenuButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    minWidth: 28,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    height: 28
+  },
+  headerMenuButtonText: {
+    color: '#5C5650',
+    fontSize: 22
+  },
   exploreSubScreen: {
     paddingBottom: 24
   },
@@ -1796,14 +1808,10 @@ const styles = StyleSheet.create({
     height: 28
   },
   backButtonText: {
-    color: '#4A4A4A',
+    color: '#5C5650',
     fontSize: 26,
     lineHeight: 26,
-    fontFamily: Platform.select({
-      ios: 'SF Pro Text',
-      android: 'sans-serif-medium',
-      default: 'System'
-    }),
+    fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   exploreSubHeaderText: {
@@ -1819,13 +1827,9 @@ const styles = StyleSheet.create({
   exploreSubTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#111111',
+    color: '#2B2927',
     textTransform: 'lowercase',
-    fontFamily: Platform.select({
-      ios: 'SF Pro Display',
-      android: 'sans-serif-medium',
-      default: 'System'
-    })
+    fontFamily: 'Nunito_800ExtraBold'
   },
   publicDetailHeaderTitle: {
     textAlign: 'right'
@@ -1838,13 +1842,13 @@ const styles = StyleSheet.create({
   recommendationSourceMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#A97C50',
+    color: '#8C867E',
     lineHeight: 18
   },
   recommendationFallbackMeta: {
     marginTop: 4,
     fontSize: 12,
-    color: '#A8998A',
+    color: '#8C867E',
     lineHeight: 18
   },
   recommendationErrorMeta: {
@@ -1854,10 +1858,10 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   recommendationStateCard: {
-    backgroundColor: '#FFF8F0',
-    borderRadius: 18,
+    backgroundColor: '#F4F0EB',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E4DED6',
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -1866,7 +1870,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   recommendationStateText: {
-    color: '#7F7063',
+    color: '#8C867E',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center'
@@ -1874,14 +1878,14 @@ const styles = StyleSheet.create({
   recommendationSearchComposer: {
     marginTop: 18,
     marginBottom: 16,
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#EFEBE4',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E4DED6',
     padding: 14
   },
   recommendationSearchLabel: {
-    color: '#7F7063',
+    color: '#8C867E',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -1896,27 +1900,27 @@ const styles = StyleSheet.create({
   recommendationSearchInput: {
     flex: 1,
     minHeight: 48,
-    backgroundColor: '#F1E7DA',
+    backgroundColor: '#FFFDF8',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#E4DED6',
     paddingHorizontal: 14,
-    color: '#4B3A32',
+    color: '#2B2927',
     fontSize: 14
   },
   recommendationSearchButton: {
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#2B2927',
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center'
   },
   recommendationSearchButtonDisabled: {
-    backgroundColor: '#DCC8CC'
+    backgroundColor: '#CCC5BB'
   },
   recommendationSearchButtonText: {
-    color: '#FFF8F0',
+    color: '#FFFDF8',
     fontSize: 13,
     fontWeight: '800'
   },
@@ -1940,14 +1944,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#E6A6B3',
-    borderWidth: 1,
-    borderColor: '#DCC8CC'
+    backgroundColor: '#2B2927'
   },
   userQueryBubbleText: {
     fontSize: 15,
     lineHeight: 20,
-    color: '#FFF8F0',
-    fontWeight: '600'
+    color: '#FFFDF8',
+    fontWeight: '600',
+    fontFamily: 'Nunito_400Regular'
   }
 });
