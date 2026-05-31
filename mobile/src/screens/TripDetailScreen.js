@@ -217,7 +217,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               onChangeText={setTitle}
               style={styles.editInput}
               placeholder="Trip title"
-              placeholderTextColor="#A8A8A2"
+              placeholderTextColor="#8C867E"
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
@@ -230,7 +230,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               onChangeText={setLocation}
               style={styles.editInput}
               placeholder="City, country"
-              placeholderTextColor="#A8A8A2"
+              placeholderTextColor="#8C867E"
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
@@ -290,7 +290,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               onChangeText={setAccommodation}
               style={styles.editInput}
               placeholder="Hotel, Airbnb, or address"
-              placeholderTextColor="#A8A8A2"
+              placeholderTextColor="#8C867E"
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
@@ -303,7 +303,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               onChangeText={setDescription}
               style={[styles.editInput, styles.editTextArea]}
               placeholder="Add a short description"
-              placeholderTextColor="#A8A8A2"
+              placeholderTextColor="#8C867E"
               multiline
               textAlignVertical="top"
               returnKeyType="done"
@@ -861,15 +861,30 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         scrollEnabled={!isDraggingItinerary}
         keyboardShouldPersistTaps="always"
       >
-        <View style={styles.detailCard}>
-          <View style={styles.detailHeader}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>←</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerMenuButton} onPress={onOpenEditTrip} activeOpacity={0.85}>
-              <Text style={styles.headerMenuButtonText}>...</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Full-bleed hero image */}
+        <View style={styles.heroSection}>
+          {board.image ? (
+            <Image source={{ uri: board.image }} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <Ionicons name="airplane-outline" size={64} color="rgba(255,255,255,0.35)" />
+            </View>
+          )}
+          <View style={styles.heroGradient} />
+          <TouchableOpacity onPress={onBack} style={styles.heroBackBtn} activeOpacity={0.8}>
+            <View style={styles.heroBtnInner}>
+              <Ionicons name="chevron-back" size={20} color="#2c2b28" />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenEditTrip} style={styles.heroMenuBtn} activeOpacity={0.8}>
+            <View style={styles.heroBtnInner}>
+              <Ionicons name="ellipsis-horizontal" size={18} color="#2c2b28" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Floating content card */}
+        <View style={styles.floatingCard}>
           <View style={styles.detailTitleGroup}>
             <View style={styles.detailTitleRow}>
               <Text style={styles.detailTitle} numberOfLines={2}>
@@ -882,8 +897,13 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               </Text>
             ) : null}
           </View>
-
-          {board.image ? <Image source={{ uri: board.image }} style={styles.detailImage} /> : null}
+          <View style={styles.detailMetaRow}>
+            <View style={styles.planningPill}>
+              <View style={styles.planningDot} />
+              <Text style={styles.planningPillText}>Planning</Text>
+            </View>
+            <Text style={styles.placesCountText}>{board.placesList?.length ?? 0} places</Text>
+          </View>
 
           {board.description ? (
             <Text style={styles.detailDescription}>{board.description}</Text>
@@ -945,7 +965,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                     Keyboard.dismiss();
                   }}
                   placeholder="Hotel, Airbnb, or address..."
-                  placeholderTextColor="#AFAFA9"
+                  placeholderTextColor="#8C867E"
                   style={styles.accommodationInput}
                   returnKeyType="done"
                   autoCorrect={false}
@@ -1004,13 +1024,13 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                     ))}
                     {isSearchingAccommodation && (
                       <View style={styles.accommodationDropdownLoadingInline}>
-                        <ActivityIndicator size="small" color="#A97C50" />
+                        <ActivityIndicator size="small" color="#D97A50" />
                       </View>
                     )}
                   </>
                 ) : isSearchingAccommodation ? (
                   <View style={styles.accommodationDropdownLoading}>
-                    <ActivityIndicator size="small" color="#A97C50" />
+                    <ActivityIndicator size="small" color="#D97A50" />
                   </View>
                 ) : (
                   <View style={styles.accommodationDropdownLoading}>
@@ -1150,7 +1170,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         value={activityDraft?.name ?? ''}
                                         onChangeText={(value) => updateActivityDraft(p.id, 'name', value)}
                                         placeholder="Activity name"
-                                        placeholderTextColor="#A3A39D"
+                                        placeholderTextColor="#8C867E"
                                         autoFocus
                                         returnKeyType="done"
                                         onSubmitEditing={Keyboard.dismiss}
@@ -1160,7 +1180,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         value={activityDraft?.note ?? ''}
                                         onChangeText={(value) => updateActivityDraft(p.id, 'note', value)}
                                         placeholder="Add details"
-                                        placeholderTextColor="#A3A39D"
+                                        placeholderTextColor="#8C867E"
                                         multiline
                                         returnKeyType="done"
                                         blurOnSubmit
@@ -1219,7 +1239,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                             maxLength={5}
                                             selectTextOnFocus
                                             placeholder="09:00"
-                                            placeholderTextColor="#A3A39D"
+                                            placeholderTextColor="#8C867E"
                                           />
                                           <Ionicons name="time-outline" size={11} color="#8C867E" />
                                         </View>
@@ -1251,17 +1271,14 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 autoCapitalize="none"
                 returnKeyType="done"
                 onSubmitEditing={handleAddLink}
+                placeholderTextColor="#8a8987"
               />
-              <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink}>
-                <BlurView intensity={28} tint="extraLight" style={styles.detailActionBlur}>
-                  <Text style={styles.detailActionText}>Add</Text>
-                </BlurView>
+              <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink} activeOpacity={0.85}>
+                <Text style={styles.detailActionText}>Add</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.recommendationsButton} onPress={onOpenRecommendations}>
-              <BlurView intensity={28} tint="extraLight" style={styles.recommendationsButtonBlur}>
-                <Text style={styles.recommendationsButtonText}>Personal Recommendations</Text>
-              </BlurView>
+            <TouchableOpacity style={styles.recommendationsButton} onPress={onOpenRecommendations} activeOpacity={0.85}>
+              <Text style={styles.recommendationsButtonText}>Personal Recommendations</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1309,7 +1326,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 <TextInput
                   style={styles.addActivityNameInput}
                   placeholder="Activity name"
-                  placeholderTextColor="#AFAFA9"
+                  placeholderTextColor="#8C867E"
                   value={addActivityModal?.name ?? ''}
                   onChangeText={(value) => setAddActivityModal((current) => ({ ...current, name: value }))}
                   autoFocus
@@ -1362,7 +1379,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                   <TextInput
                     style={styles.addActivityFieldInput}
                     placeholder="Address (optional)"
-                    placeholderTextColor="#AFAFA9"
+                    placeholderTextColor="#8C867E"
                     value={addActivityModal?.address ?? ''}
                     onChangeText={(value) => setAddActivityModal((current) => ({ ...current, address: value }))}
                     onFocus={() => {
@@ -1401,13 +1418,13 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                           ))}
                           {isSearchingAddress && (
                             <View style={styles.accommodationDropdownLoadingInline}>
-                              <ActivityIndicator size="small" color="#A97C50" />
+                              <ActivityIndicator size="small" color="#D97A50" />
                             </View>
                           )}
                         </>
                       ) : isSearchingAddress ? (
                         <View style={styles.accommodationDropdownLoading}>
-                          <ActivityIndicator size="small" color="#A97C50" />
+                          <ActivityIndicator size="small" color="#D97A50" />
                         </View>
                       ) : (
                         <View style={styles.accommodationDropdownLoading}>
@@ -1420,7 +1437,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 <TextInput
                   style={styles.addActivityNoteInput}
                   placeholder="Notes (optional)"
-                  placeholderTextColor="#AFAFA9"
+                  placeholderTextColor="#8C867E"
                   value={addActivityModal?.note ?? ''}
                   onChangeText={(value) => setAddActivityModal((current) => ({ ...current, note: value }))}
                   onFocus={() => addActivityScrollRef.current?.scrollToEnd({ animated: true })}
@@ -1449,31 +1466,123 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 const styles = StyleSheet.create({
   detailScreen: {
     flex: 1,
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f0efed'
   },
   detailScrollContent: {
-    paddingHorizontal: 12,
-    paddingTop: 20,
-    paddingBottom: 20
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 28
   },
   editScrollContent: {
     paddingHorizontal: 12,
     paddingTop: 20,
     paddingBottom: 28
   },
-  detailCard: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 24,
-    padding: 16,
+
+  // Hero section
+  heroSection: {
+    height: 240,
+    position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#2B2927',
+  },
+  heroImage: {
+    width: '100%',
+    height: 240,
+  },
+  heroPlaceholder: {
+    width: '100%',
+    height: 240,
+    backgroundColor: '#7a6ab8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  heroBackBtn: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+  },
+  heroMenuBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  heroBtnInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+
+  // Floating content card
+  floatingCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -24,
+    padding: 20,
+    paddingBottom: 8,
+    flex: 1,
+    shadowColor: '#2c2b28',
     shadowOpacity: 0.06,
     shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -4 },
     elevation: 3,
   },
+
+  detailMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+    marginTop: 2,
+  },
+  planningPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#eef3e4',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  planningDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#6b8a48',
+  },
+  planningPillText: {
+    fontSize: 11,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
+    color: '#6b8a48',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  placesCountText: {
+    fontSize: 13,
+    fontFamily: 'Nunito_600SemiBold',
+    fontWeight: '600',
+    color: '#8a8987',
+  },
+
   editCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 16
   },
@@ -1490,7 +1599,7 @@ const styles = StyleSheet.create({
     marginBottom: 22
   },
   editHeaderTitle: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 22,
     lineHeight: 26,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1500,13 +1609,13 @@ const styles = StyleSheet.create({
     minWidth: 54,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#111111',
+    backgroundColor: '#ffba30',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14
   },
   editSaveButtonText: {
-    color: '#FFFFFF',
+    color: '#2c2b28',
     fontSize: 13,
     lineHeight: 16,
     fontFamily: 'Nunito_700Bold',
@@ -1522,7 +1631,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   backButtonText: {
-    color: '#4A4A4A',
+    color: '#7a7770',
     fontSize: 26,
     lineHeight: 26,
     fontFamily: 'Nunito_700Bold',
@@ -1538,7 +1647,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   headerMenuButtonText: {
-    color: '#4A4A4A',
+    color: '#7a7770',
     fontSize: 26,
     lineHeight: 26,
     marginTop: -4,
@@ -1552,10 +1661,10 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#111111'
+    color: '#2c2b28'
   },
   detailLocation: {
-    color: '#575757',
+    color: '#7a7770',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
@@ -1581,7 +1690,7 @@ const styles = StyleSheet.create({
   detailDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     marginBottom: 14,
     textAlign: 'center'
@@ -1611,15 +1720,15 @@ const styles = StyleSheet.create({
     marginRight: 0
   },
   dateBoxActive: {
-    borderColor: '#B8B8B2',
-    backgroundColor: '#FFFFFF'
+    borderColor: '#CCC5BB',
+    backgroundColor: '#ffffff'
   },
   inlineCalendarWrap: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#DEDEDA',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#ffffff',
     overflow: 'hidden',
     marginBottom: 12
   },
@@ -1630,7 +1739,7 @@ const styles = StyleSheet.create({
     marginVertical: Platform.OS === 'ios' ? -12 : 0
   },
   statLabel: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 12,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
@@ -1642,7 +1751,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontFamily: 'Nunito_400Regular',
     fontWeight: '400',
-    color: '#111111'
+    color: '#2c2b28'
   },
   accommodationSection: {
     marginTop: 4,
@@ -1652,7 +1761,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    color: '#111111',
+    color: '#2c2b28',
     marginBottom: 8,
     marginLeft: 4
   },
@@ -1665,7 +1774,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular',
-    color: '#111111',
+    color: '#2c2b28',
     textAlign: 'left',
     writingDirection: 'ltr'
   },
@@ -1677,7 +1786,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   accommodationInputFocused: {
-    borderColor: '#8F8F8B'
+    borderColor: '#CCC5BB'
   },
   glassDateFieldBlur: {
     flex: 1,
@@ -1705,16 +1814,16 @@ const styles = StyleSheet.create({
   accommodationClearButtonText: {
     fontSize: 18,
     lineHeight: 20,
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
   accommodationDropdown: {
     marginTop: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEDEDA',
+    borderColor: '#e8e5e0',
     overflow: 'hidden'
   },
   accommodationDropdownLoading: {
@@ -1725,11 +1834,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#ECECE8'
+    borderTopColor: '#e8e5e0'
   },
   accommodationNoResults: {
     fontSize: 13,
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
@@ -1739,19 +1848,19 @@ const styles = StyleSheet.create({
   },
   accommodationOptionDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: '#ECECE8'
+    borderBottomColor: '#e8e5e0'
   },
   accommodationOptionPrimary: {
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '600' : '700',
-    color: '#111111'
+    color: '#2c2b28'
   },
   accommodationOptionFull: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     marginTop: 2
   },
@@ -1763,15 +1872,15 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#111111',
+    color: '#2c2b28',
     marginTop: 4
   },
   itinerarySectionCard: {
     marginTop: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E4DED6',
-    backgroundColor: '#F8F5F0',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#faf8f5',
     padding: 16,
   },
   itineraryHeaderRow: {
@@ -1786,7 +1895,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   itinerarySubheading: {
-    color: '#7A7A74',
+    color: '#8a8987',
     fontSize: 12,
     lineHeight: 16,
     fontFamily: 'Nunito_400Regular'
@@ -1807,7 +1916,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(243,243,241,0.86)'
   },
   itineraryAddButtonText: {
-    color: '#4A4A4A',
+    color: '#7a7770',
     fontSize: 24,
     lineHeight: 24,
     marginTop: -1,
@@ -1831,14 +1940,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
   },
   itineraryDateChipActive: {
-    backgroundColor: '#2B2927',
-    borderColor: '#2B2927',
+    backgroundColor: '#ffba30',
+    borderColor: '#ffba30',
   },
   itineraryDateChipDayNumber: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 18,
     lineHeight: 20,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1846,7 +1955,7 @@ const styles = StyleSheet.create({
   },
   itineraryDateChipWeekday: {
     marginTop: 2,
-    color: '#4F4F4A',
+    color: '#7a7770',
     fontSize: 10,
     lineHeight: 12,
     fontFamily: 'Nunito_700Bold',
@@ -1854,7 +1963,7 @@ const styles = StyleSheet.create({
   },
   itineraryDateChipMonth: {
     marginTop: 1,
-    color: '#8A8A84',
+    color: '#8a8987',
     fontSize: 9,
     lineHeight: 10,
     textTransform: 'uppercase',
@@ -1863,7 +1972,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   itineraryDateChipTextActive: {
-    color: '#FFFFFF'
+    color: '#2c2b28'
   },
   itineraryList: {
     overflow: 'visible'
@@ -1871,13 +1980,13 @@ const styles = StyleSheet.create({
   itineraryEmptyState: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ECECE7',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 16,
     paddingVertical: 18
   },
   itineraryEmptyTitle: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 16,
     lineHeight: 20,
     marginBottom: 4,
@@ -1885,7 +1994,7 @@ const styles = StyleSheet.create({
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryEmpty: {
-    color: '#6F6F6B',
+    color: '#8a8987',
     marginBottom: 0,
     fontSize: 14,
     lineHeight: 18,
@@ -1916,7 +2025,7 @@ const styles = StyleSheet.create({
     top: 18,
     bottom: 18,
     width: 1.5,
-    backgroundColor: '#E4DED6',
+    backgroundColor: '#e8e5e0',
   },
   timelineNodeCol: {
     width: 28,
@@ -1928,7 +2037,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
   },
   itineraryRow: {
@@ -1943,8 +2052,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4DED6',
-    backgroundColor: '#FFFDF8',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#ffffff',
     overflow: 'hidden',
   },
   itineraryEditArea: {
@@ -1980,7 +2089,7 @@ const styles = StyleSheet.create({
   },
   itineraryTimeDivider: {
     width: 1,
-    backgroundColor: '#E4DED6',
+    backgroundColor: '#e8e5e0',
     marginVertical: 10,
   },
   itineraryTimeColumn: {
@@ -1996,14 +2105,14 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   itineraryRowDragging: {
-    backgroundColor: '#EFEFEC',
+    backgroundColor: '#f0efed',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#CFCFC9',
+    borderColor: '#CCC5BB',
     opacity: 0.96,
     zIndex: 10,
     elevation: 6,
-    shadowColor: '#000000',
+    shadowColor: '#2c2b28',
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 }
@@ -2013,7 +2122,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    color: '#111111'
+    color: '#2c2b28'
   },
   itineraryNameInput: {
     fontSize: 16,
@@ -2021,12 +2130,12 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 0,
     marginBottom: 6,
-    color: '#111111',
+    color: '#2c2b28',
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryTimeInput: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 11,
     lineHeight: 14,
     letterSpacing: 0.2,
@@ -2038,17 +2147,17 @@ const styles = StyleSheet.create({
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
   },
   itineraryTimeInputEditing: {
-    color: '#2B2927',
+    color: '#2c2b28',
   },
   itineraryNote: {
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontSize: 14,
     lineHeight: 18,
     marginTop: 2,
     fontFamily: 'Nunito_400Regular'
   },
   itineraryNoteInput: {
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontSize: 14,
     lineHeight: 18,
     minHeight: 38,
@@ -2063,12 +2172,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#111111',
+    backgroundColor: '#2c2b28',
     alignItems: 'center',
     justifyContent: 'center'
   },
   itinerarySaveActivityButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 12,
     lineHeight: 14,
     fontFamily: 'Nunito_700Bold',
@@ -2078,7 +2187,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   editLabel: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 12,
     lineHeight: 16,
     marginBottom: 8,
@@ -2090,11 +2199,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 14,
     paddingVertical: 13,
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 16,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular'
@@ -2114,7 +2223,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   editDateValue: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 15,
     lineHeight: 19,
     fontFamily: 'Nunito_400Regular'
@@ -2122,8 +2231,8 @@ const styles = StyleSheet.create({
   editCalendarWrap: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E5DF',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#ffffff',
     overflow: 'hidden',
     marginBottom: 16
   },
@@ -2133,21 +2242,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginTop: 2
   },
   editPrivacyTitle: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 15,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editPrivacySubtitle: {
-    color: '#6F6F6B',
+    color: '#8a8987',
     fontSize: 12,
     lineHeight: 16,
     marginTop: 3,
@@ -2160,20 +2269,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
-    backgroundColor: '#ECECE7'
+    backgroundColor: '#e8e5e0'
   },
   editPrivacyPillActive: {
-    backgroundColor: '#111111'
+    backgroundColor: '#2c2b28'
   },
   editPrivacyPillText: {
-    color: '#64645F',
+    color: '#7a7770',
     fontSize: 12,
     lineHeight: 14,
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editPrivacyPillTextActive: {
-    color: '#FFFFFF'
+    color: '#ffffff'
   },
   editActionsSection: {
     marginTop: 22,
@@ -2183,13 +2292,13 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E5DF',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     alignItems: 'center',
     justifyContent: 'center'
   },
   editSecondaryActionText: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
@@ -2199,13 +2308,13 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E9D2D2',
-    backgroundColor: '#FFF9F9',
+    borderColor: '#F0DADA',
+    backgroundColor: '#FFF5F5',
     alignItems: 'center',
     justifyContent: 'center'
   },
   editDangerActionText: {
-    color: '#B24C4C',
+    color: '#C9524E',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
@@ -2231,47 +2340,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: '#DEDEDA',
+    borderColor: '#e8e5e0',
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular'
   },
   detailActionButton: {
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    width: 104,
-    overflow: 'hidden'
-  },
-  detailActionBlur: {
-    paddingVertical: 10,
+    height: 44,
     paddingHorizontal: 18,
+    backgroundColor: '#ffba30',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(243,243,241,0.88)'
   },
   detailActionText: {
-    color: '#111111',
+    color: '#2c2b28',
     fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '600' : '700'
+    fontWeight: '700',
+    fontSize: 14,
   },
   recommendationsButton: {
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    overflow: 'hidden'
-  },
-  recommendationsButtonBlur: {
-    paddingVertical: 13,
+    height: 50,
+    backgroundColor: '#ffba30',
     alignItems: 'center',
-    backgroundColor: 'rgba(243,243,241,0.88)'
+    justifyContent: 'center',
+    marginTop: 4,
   },
   recommendationsButtonText: {
-    color: '#111111',
+    color: '#2c2b28',
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '600' : '700'
+    fontWeight: '700',
   },
   addActivityKAV: {
     flex: 1
@@ -2289,15 +2390,15 @@ const styles = StyleSheet.create({
   addActivityAddressDropdown: {
     marginTop: 4,
     marginBottom: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DEDEDA',
+    borderColor: '#e8e5e0',
     overflow: 'hidden'
   },
   addActivityCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ffffff',
     borderRadius: 22,
     maxHeight: '90%',
     overflow: 'hidden',
@@ -2314,14 +2415,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '800',
-    color: '#111111',
+    color: '#2c2b28',
     fontFamily: 'Nunito_800ExtraBold',
     marginBottom: 4
   },
   addActivityDate: {
     fontSize: 13,
     lineHeight: 16,
-    color: '#7A7A74',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     marginBottom: 16
   },
@@ -2329,13 +2430,13 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
     lineHeight: 20,
-    color: '#111111',
+    color: '#2c2b28',
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular',
     marginBottom: 10
@@ -2344,8 +2445,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 14,
     paddingVertical: 11,
     justifyContent: 'center',
@@ -2354,22 +2455,22 @@ const styles = StyleSheet.create({
   addActivityFieldValue: {
     fontSize: 15,
     lineHeight: 19,
-    color: '#111111',
+    color: '#2c2b28',
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular'
   },
   addActivityFieldPlaceholder: {
     fontSize: 15,
     lineHeight: 19,
-    color: '#AFAFA9',
+    color: '#8a8987',
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular'
   },
   addActivityTimePickerWrap: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     overflow: 'hidden',
     marginBottom: 10
   },
@@ -2381,20 +2482,20 @@ const styles = StyleSheet.create({
   addActivityTimePickerDoneText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111111',
+    color: '#2c2b28',
     fontFamily: 'Nunito_700Bold'
   },
   addActivityNoteInput: {
     minHeight: 72,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E8E8E2',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 15,
     lineHeight: 19,
-    color: '#111111',
+    color: '#2c2b28',
     textAlign: 'left',
     textAlignVertical: 'top',
     fontFamily: 'Nunito_400Regular',
@@ -2411,13 +2512,13 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E5DF',
-    backgroundColor: '#F7F7F4',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     alignItems: 'center',
     justifyContent: 'center'
   },
   addActivityCancelText: {
-    color: '#4A4A4A',
+    color: '#7a7770',
     fontSize: 15,
     fontWeight: '600',
     fontFamily: 'Nunito_700Bold'
@@ -2426,12 +2527,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#111111',
+    backgroundColor: '#ffba30',
     alignItems: 'center',
     justifyContent: 'center'
   },
   addActivityDoneText: {
-    color: '#FFFFFF',
+    color: '#2c2b28',
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'

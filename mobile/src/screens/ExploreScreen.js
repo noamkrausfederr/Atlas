@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RecommendationCard } from '../components/RecommendationCard';
+import { RecommendationGroup } from '../components/RecommendationCard';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { formatDateRange } from '../../data/recommendations';
 import { fetchBoardRecommendations } from '../../data/liveRecommendations';
@@ -373,15 +373,16 @@ export function ExploreScreen({
   return (
     <View>
       <View style={styles.exploreHeader}>
-        <Text style={styles.explorePageTitle}>Explore</Text>
+        <Text style={styles.explorePageTitle}>Discover Trips</Text>
+        <Text style={styles.explorePageSubtitle}>Browse journeys shared by travelers</Text>
       </View>
       <View style={styles.exploreSearchRow}>
         <View style={styles.exploreSearchBar}>
-          <Ionicons name="search-outline" size={16} color="#AAAAAA" />
+          <Ionicons name="search-outline" size={16} color="#8a8987" />
           <TextInput
             style={styles.exploreSearchInput}
             placeholder="Search"
-            placeholderTextColor="#AAAAAA"
+            placeholderTextColor="#8a8987"
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
@@ -390,10 +391,10 @@ export function ExploreScreen({
         </View>
         <View style={styles.exploreIconGroup}>
           <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
-            <Ionicons name="funnel-outline" size={22} color="#AAAAAA" />
+            <Ionicons name="funnel-outline" size={22} color="#8a8987" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.filterButton} onPress={handleRefresh}>
-            <Ionicons name="swap-vertical-outline" size={22} color="#AAAAAA" />
+            <Ionicons name="swap-vertical-outline" size={22} color="#8a8987" />
           </TouchableOpacity>
         </View>
       </View>
@@ -403,11 +404,12 @@ export function ExploreScreen({
           <View key={column} style={styles.publicTripMasonryColumn}>
             {tripsToShow
               .filter((_, index) => index % 2 === column)
-              .map((trip, index) => (
+              .map((trip) => (
                 <PublicTripCard
                   key={trip.id}
                   trip={trip}
-                  variantIndex={index * 2 + column}
+                  isLiked={likedPublicTripIds.includes(trip.id)}
+                  onToggleLike={() => onToggleLikePublicTrip(trip.id)}
                   onOpenTrip={() => openPublicTrip(trip)}
                   onOpenProfile={() => openPublicProfile(trip.ownerName)}
                 />
@@ -425,24 +427,35 @@ export function ExploreScreen({
   );
 }
 
-function PublicTripCard({ trip, onOpenTrip, onOpenProfile, variantIndex = 0 }) {
-  const imageHeights = [100, 80, 110, 85, 95, 80];
-  const imageHeight = imageHeights[variantIndex % imageHeights.length];
-
+function PublicTripCard({ trip, onOpenTrip, onOpenProfile, isLiked, onToggleLike }) {
   return (
     <View style={styles.publicTripCard}>
-      <TouchableOpacity activeOpacity={0.88} onPress={onOpenTrip}>
-        <Image source={{ uri: trip.image }} style={[styles.publicTripImage, { height: imageHeight }]} />
+      <TouchableOpacity activeOpacity={0.88} onPress={onOpenTrip} style={styles.publicTripImageWrap}>
+        {trip.image
+          ? <Image source={{ uri: trip.image }} style={styles.publicTripImage} />
+          : <View style={[styles.publicTripImage, styles.publicTripImagePlaceholder]}>
+              <Ionicons name="image-outline" size={28} color="#d4cfc9" />
+            </View>
+        }
+        <TouchableOpacity style={styles.publicTripHeartBtn} onPress={onToggleLike} activeOpacity={0.8}>
+          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#ff3b30' : '#ffffff'} />
+        </TouchableOpacity>
       </TouchableOpacity>
       <View style={styles.publicTripBody}>
         <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
           <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
-          <Text style={styles.publicTripMeta} numberOfLines={2}>{trip.location}</Text>
-          <Text style={styles.publicTripDates} numberOfLines={1}>{formatDateRange(trip)}</Text>
-          {trip.description ? <Text style={styles.publicTripDescription} numberOfLines={3}>{trip.description}</Text> : null}
+          {trip.location ? (
+            <View style={styles.publicTripLocationRow}>
+              <Ionicons name="location-outline" size={10} color="#8a8987" />
+              <Text style={styles.publicTripMeta} numberOfLines={1}>{trip.location}</Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripOwnerButton}>
-          <Text style={styles.publicTripOwner} numberOfLines={1}>By {trip.ownerName}</Text>
+        <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripAuthorRow} activeOpacity={0.75}>
+          <View style={styles.publicTripAuthorAvatar}>
+            <Text style={styles.publicTripAuthorAvatarText}>{trip.ownerName?.[0]?.toUpperCase() ?? '?'}</Text>
+          </View>
+          <Text style={styles.publicTripOwner} numberOfLines={1}>{trip.ownerName}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -592,7 +605,7 @@ function CountryMultiSelect({
         value={searchValue}
         onChangeText={onSearchChange}
         onFocus={onFocusSearch}
-        placeholderTextColor="#AAAAAA"
+        placeholderTextColor="#8a8987"
         returnKeyType="done"
         onSubmitEditing={Keyboard.dismiss}
       />
@@ -887,6 +900,16 @@ function FilterChips({ label, options, value, onChange, compact = false }) {
   );
 }
 
+function groupRecommendations(recs) {
+  const groups = {};
+  recs.forEach((rec) => {
+    const cat = rec.category || 'Places';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(rec);
+  });
+  return Object.entries(groups);
+}
+
 export function ExploreMoreScreen({ board, onBack }) {
   const [recommendations, setRecommendations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -904,7 +927,7 @@ export function ExploreMoreScreen({ board, onBack }) {
 
   const hasSearched = Boolean(activeSearchQuery);
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 8 + 44 + Math.max(insets.bottom, 6) + 8;
+  const tabBarHeight = Math.max(insets.bottom, 6);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -1005,7 +1028,7 @@ export function ExploreMoreScreen({ board, onBack }) {
 
           {isLoading ? (
             <View style={styles.recommendationStateCard}>
-              <ActivityIndicator color="#111111" />
+              <ActivityIndicator color="#ffba30" />
               <Text style={styles.recommendationStateText}>Finding {activeSearchQuery.toLowerCase()}...</Text>
             </View>
           ) : null}
@@ -1024,8 +1047,13 @@ export function ExploreMoreScreen({ board, onBack }) {
             </View>
           ) : null}
 
-          {recommendations.map((rec) => (
-            <RecommendationCard key={rec.id} rec={rec} onPress={(item) => setSelectedRecommendation(item)} />
+          {groupRecommendations(recommendations).map(([category, recs]) => (
+            <RecommendationGroup
+              key={category}
+              category={category}
+              recs={recs}
+              onPress={(item) => setSelectedRecommendation(item)}
+            />
           ))}
 
           {hasSearched && sourceMeta.providersUsed?.length ? (
@@ -1043,7 +1071,7 @@ export function ExploreMoreScreen({ board, onBack }) {
               value={searchInput}
               onChangeText={setSearchInput}
               placeholder="Museums, cafes, shopping, concerts..."
-              placeholderTextColor="#AFAFA9"
+              placeholderTextColor="#8a8987"
               style={styles.recommendationSearchInput}
               returnKeyType="search"
               onSubmitEditing={runSearch}
@@ -1075,48 +1103,50 @@ export function ExploreMoreScreen({ board, onBack }) {
 
 const styles = StyleSheet.create({
   exploreHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 12
+    flexDirection: 'column',
+    marginBottom: 14,
+    paddingHorizontal: 2
   },
   explorePageTitle: {
-    color: '#2B2927',
-    fontSize: 24,
-    lineHeight: 28,
+    color: '#2c2b28',
+    fontSize: 26,
+    lineHeight: 30,
     fontFamily: 'Nunito_800ExtraBold',
-    fontWeight: '800',
-    textTransform: 'lowercase',
-    marginLeft: 12
+    fontWeight: '800'
+  },
+  explorePageSubtitle: {
+    color: '#8a8987',
+    fontSize: 13,
+    fontFamily: 'Nunito_400Regular',
+    marginTop: 3
   },
   exploreSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 0,
-    paddingRight: 10
+    marginBottom: 14,
+    gap: 8
   },
   exploreIconGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 10
+    gap: 2
   },
   exploreSearchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFDF8',
-    borderRadius: 999,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
-    marginLeft: 6
+    borderWidth: 1,
+    borderColor: '#e8e5e0'
   },
   exploreSearchInput: {
     flex: 1,
-    fontSize: 15,
-    color: '#2B2927',
+    fontSize: 14,
+    color: '#2c2b28',
     fontFamily: 'Nunito_400Regular',
     includeFontPadding: false
   },
@@ -1127,10 +1157,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   filterPanel: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 18,
     marginBottom: 16
   },
@@ -1138,7 +1168,7 @@ const styles = StyleSheet.create({
     marginTop: 20
   },
   filterLabel: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 10
@@ -1149,39 +1179,39 @@ const styles = StyleSheet.create({
   },
   filterDateButton: {
     flex: 1,
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 12,
     paddingVertical: 10
   },
   filterDateButtonActive: {
-    backgroundColor: '#FFFDF8',
-    borderColor: '#B8B8B2'
+    backgroundColor: '#eef3e4',
+    borderColor: '#bac98e'
   },
   filterDateButtonLabel: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'lowercase',
     marginBottom: 3
   },
   filterDateButtonText: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 13,
     fontWeight: '700'
   },
   filterDatePlaceholder: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontWeight: '400'
   },
   filterCalendarWrap: {
     width: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4DED6',
-    backgroundColor: '#FFFDF8',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#ffffff',
     overflow: 'hidden',
     marginTop: 10
   },
@@ -1198,34 +1228,34 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   selectedCountryBubble: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 11,
     paddingVertical: 7
   },
   selectedCountryBubbleText: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 12,
     fontWeight: '700'
   },
   countryDropdownPanel: {
     marginTop: 10,
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 10
   },
   countrySearchInput: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#2B2927',
+    color: '#2c2b28',
     marginBottom: 0
   },
   countryOptionList: {
@@ -1236,34 +1266,34 @@ const styles = StyleSheet.create({
   countryOption: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E4DED6',
-    backgroundColor: '#F4F0EB',
+    borderColor: '#e8e5e0',
+    backgroundColor: '#f0efed',
     paddingHorizontal: 10,
     paddingVertical: 7
   },
   countryOptionSelected: {
-    backgroundColor: '#EEF3FA',
-    borderColor: '#6B94C8'
+    backgroundColor: '#eef3e4',
+    borderColor: '#bac98e'
   },
   countryOptionText: {
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 12,
     fontWeight: '700'
   },
   countryOptionTextSelected: {
-    color: '#1A508A'
+    color: '#6b8a48'
   },
   daysRangeContainer: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10
   },
   daysRangeValue: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 18
@@ -1276,14 +1306,14 @@ const styles = StyleSheet.create({
   daysRangeTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#E4DED6'
+    backgroundColor: '#e8e5e0'
   },
   daysRangeFill: {
     position: 'absolute',
     top: 12,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#6B94C8'
+    backgroundColor: '#ffba30'
   },
   daysRangeThumb: {
     position: 'absolute',
@@ -1291,9 +1321,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 999,
-    backgroundColor: '#555555',
+    backgroundColor: '#2c2b28',
     borderWidth: 3,
-    borderColor: '#FFFDF8'
+    borderColor: '#ffffff'
   },
   daysRangeThumbMin: {
     zIndex: 2
@@ -1308,7 +1338,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   daysRangeEndLabel: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 11,
     fontWeight: '700'
   },
@@ -1322,23 +1352,23 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 12,
     paddingVertical: 8
   },
   filterChipActive: {
-    backgroundColor: '#EEF3FA',
-    borderColor: '#6B94C8'
+    backgroundColor: '#eef3e4',
+    borderColor: '#bac98e'
   },
   filterChipText: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 12,
     fontWeight: '700'
   },
   filterChipTextActive: {
-    color: '#1A508A'
+    color: '#6b8a48'
   },
   clearFiltersButton: {
     marginTop: 22,
@@ -1346,7 +1376,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   clearFiltersText: {
-    color: '#555555',
+    color: '#2c2b28',
     fontWeight: '700'
   },
   publicTripMasonry: {
@@ -1356,71 +1386,103 @@ const styles = StyleSheet.create({
   },
   publicTripMasonryColumn: {
     flex: 1,
-    gap: 14
+    gap: 10
   },
   publicTripCard: {
     overflow: 'hidden',
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4DED6',
-    shadowColor: '#2B2927',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    borderColor: '#e8e5e0',
+    shadowColor: '#2c2b28',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2
+  },
+  publicTripImageWrap: {
+    position: 'relative'
   },
   publicTripImage: {
     width: '100%',
-    backgroundColor: '#F4F0EB'
+    height: 120,
+    backgroundColor: '#f0efed'
+  },
+  publicTripImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  publicTripHeartBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(44,43,40,0.38)',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   publicTripBody: {
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingLeft: 12,
-    paddingRight: 10
+    padding: 10
   },
   publicTripTitle: {
-    fontSize: 19,
-    lineHeight: 24,
-    color: '#2B2927',
-    marginBottom: 3,
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#2c2b28',
+    marginBottom: 4,
     fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800'
+  },
+  publicTripLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 2
+  },
+  publicTripMeta: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#8a8987',
+    fontFamily: 'Nunito_400Regular',
+    flex: 1
+  },
+  publicTripAuthorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8
+  },
+  publicTripAuthorAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff4d9',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  publicTripAuthorAvatarText: {
+    fontSize: 9,
     fontWeight: '800',
-    textTransform: 'lowercase'
+    color: '#c48a00'
+  },
+  publicTripOwner: {
+    color: '#7a7770',
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1
   },
   publicTripDates: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#8C867E',
-    marginBottom: 4,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: '400'
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#8a8987',
+    fontFamily: 'Nunito_400Regular'
   },
   publicTripDescription: {
     fontSize: 11,
     lineHeight: 15,
-    color: '#8C867E',
-    marginTop: 4,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: '400'
-  },
-  publicTripOwner: {
-    color: '#5C5650',
-    fontSize: 11,
-    fontWeight: '600'
-  },
-  publicTripOwnerButton: {
-    alignSelf: 'flex-start',
-    marginTop: 10
-  },
-  publicTripMeta: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#5C5650',
-    marginBottom: 4,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: Platform.OS === 'ios' ? '600' : '500'
+    color: '#8a8987',
+    fontFamily: 'Nunito_400Regular'
   },
   publicTripTagRow: {
     flexDirection: 'row',
@@ -1430,62 +1492,62 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   publicTripTag: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 9,
     paddingVertical: 6
   },
   publicTripTagText: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
   },
   addPublicTripButton: {
-    backgroundColor: '#2B2927',
+    backgroundColor: '#ffba30',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2B2927',
+    borderColor: '#ffba30',
     paddingVertical: 14,
     alignItems: 'center'
   },
   addPublicTripButtonDone: {
-    backgroundColor: '#F4F0EB',
-    borderColor: '#E4DED6'
+    backgroundColor: '#f0efed',
+    borderColor: '#e8e5e0'
   },
   addPublicTripButtonTextDone: {
-    color: '#8C867E'
+    color: '#8a8987'
   },
   addPublicTripButtonText: {
-    color: '#FFFDF8',
+    color: '#2c2b28',
     fontWeight: '700',
     fontSize: 15,
     fontFamily: 'Nunito_700Bold'
   },
   emptyPublicTrips: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 18,
     alignItems: 'center'
   },
   emptyPublicTripsText: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontWeight: '700'
   },
   publicDetailScreen: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f0efed'
   },
   publicDetailCard: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 24,
     padding: 16,
     marginBottom: 20,
     overflow: 'hidden',
-    shadowColor: '#2B2927',
+    shadowColor: '#2c2b28',
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 }
@@ -1512,11 +1574,11 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#2B2927',
+    color: '#2c2b28',
     textTransform: 'lowercase'
   },
   publicDetailLocation: {
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
@@ -1552,14 +1614,14 @@ const styles = StyleSheet.create({
     minWidth: 0
   },
   publicProfileName: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 15,
     fontWeight: '800',
     fontFamily: 'Nunito_700Bold'
   },
   publicProfileSubtext: {
     marginTop: 2,
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 12,
     fontWeight: Platform.OS === 'ios' ? '600' : '700',
     fontFamily: 'Nunito_400Regular'
@@ -1592,7 +1654,7 @@ const styles = StyleSheet.create({
     color: '#FF3B30'
   },
   publicDetailMeta: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
@@ -1602,7 +1664,7 @@ const styles = StyleSheet.create({
   publicDetailDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#8C867E',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
     marginBottom: 12,
     textAlign: 'center'
@@ -1612,7 +1674,7 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   publicDetailSectionTitle: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 24,
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1630,13 +1692,13 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#6B94C8',
+    backgroundColor: '#ffba30',
     marginTop: 6
   },
   publicItineraryDayLine: {
     flex: 1,
     width: 2,
-    backgroundColor: '#E4DED6',
+    backgroundColor: '#e8e5e0',
     marginTop: 4
   },
   publicItineraryDayContent: {
@@ -1645,14 +1707,14 @@ const styles = StyleSheet.create({
   },
   publicItineraryDayTitle: {
     marginBottom: 14,
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 18,
     lineHeight: 22,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
   publicItineraryEmpty: {
-    color: '#8C867E',
+    color: '#8a8987',
     marginBottom: 10,
     fontSize: 14,
     lineHeight: 18,
@@ -1668,14 +1730,14 @@ const styles = StyleSheet.create({
   },
   publicPlaceGroupGlass: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(244,240,235,0.90)'
+    backgroundColor: 'rgba(240,239,237,0.90)'
   },
   publicPlaceRow: {
     paddingVertical: 10,
     paddingHorizontal: 12
   },
   publicPlaceName: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 16,
     lineHeight: 21,
     fontFamily: 'Nunito_700Bold',
@@ -1683,7 +1745,7 @@ const styles = StyleSheet.create({
   },
   publicPlaceNote: {
     marginTop: 4,
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular'
@@ -1692,10 +1754,10 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   publicProfileHeader: {
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#eef3e4',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E2D3BF',
+    borderColor: '#bac98e',
     padding: 20,
     alignItems: 'center',
     marginBottom: 16
@@ -1704,24 +1766,24 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#F2D8D8',
+    backgroundColor: '#fff4d9',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12
   },
   publicProfileAvatarLargeText: {
-    color: '#A97C50',
+    color: '#c48a00',
     fontSize: 30,
     fontWeight: '800'
   },
   publicProfileHeaderName: {
-    color: '#4B3A32',
+    color: '#2c2b28',
     fontSize: 22,
     fontWeight: '800'
   },
   publicProfileBio: {
     marginTop: 6,
-    color: '#7F7063',
+    color: '#7a7770',
     fontSize: 14,
     textAlign: 'center'
   },
@@ -1729,15 +1791,13 @@ const styles = StyleSheet.create({
     paddingBottom: 24
   },
   recCard: {
-    backgroundColor: '#FFFDF8',
-    borderRadius: 24,
-    padding: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 20,
     overflow: 'hidden',
-    shadowColor: '#2B2927',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }
+    borderWidth: 1,
+    borderColor: '#e8e5e0'
   },
   recPageHeader: {
     flexDirection: 'row',
@@ -1753,11 +1813,11 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#2B2927',
+    color: '#2c2b28',
     textTransform: 'lowercase'
   },
   recPageLocation: {
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
@@ -1765,7 +1825,7 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   recPageMeta: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
@@ -1781,7 +1841,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   headerMenuButtonText: {
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 22
   },
   exploreSubScreen: {
@@ -1808,7 +1868,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   backButtonText: {
-    color: '#5C5650',
+    color: '#7a7770',
     fontSize: 26,
     lineHeight: 26,
     fontFamily: 'Nunito_700Bold',
@@ -1827,7 +1887,7 @@ const styles = StyleSheet.create({
   exploreSubTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#2B2927',
+    color: '#2c2b28',
     textTransform: 'lowercase',
     fontFamily: 'Nunito_800ExtraBold'
   },
@@ -1837,18 +1897,18 @@ const styles = StyleSheet.create({
   exploreSubMeta: {
     marginTop: 4,
     fontSize: 13,
-    color: '#7F7063'
+    color: '#8a8987'
   },
   recommendationSourceMeta: {
     marginTop: 6,
     fontSize: 12,
-    color: '#8C867E',
+    color: '#8a8987',
     lineHeight: 18
   },
   recommendationFallbackMeta: {
     marginTop: 4,
     fontSize: 12,
-    color: '#8C867E',
+    color: '#8a8987',
     lineHeight: 18
   },
   recommendationErrorMeta: {
@@ -1858,10 +1918,10 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   recommendationStateCard: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -1870,7 +1930,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   recommendationStateText: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center'
@@ -1878,14 +1938,14 @@ const styles = StyleSheet.create({
   recommendationSearchComposer: {
     marginTop: 18,
     marginBottom: 16,
-    backgroundColor: '#EFEBE4',
+    backgroundColor: '#f0efed',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 14
   },
   recommendationSearchLabel: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -1900,27 +1960,27 @@ const styles = StyleSheet.create({
   recommendationSearchInput: {
     flex: 1,
     minHeight: 48,
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     paddingHorizontal: 14,
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 14
   },
   recommendationSearchButton: {
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: '#2B2927',
+    backgroundColor: '#ffba30',
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center'
   },
   recommendationSearchButtonDisabled: {
-    backgroundColor: '#CCC5BB'
+    backgroundColor: '#d4cfc9'
   },
   recommendationSearchButtonText: {
-    color: '#FFFDF8',
+    color: '#2c2b28',
     fontSize: 13,
     fontWeight: '800'
   },
@@ -1944,12 +2004,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#2B2927'
+    backgroundColor: '#2c2b28'
   },
   userQueryBubbleText: {
     fontSize: 15,
     lineHeight: 20,
-    color: '#FFFDF8',
+    color: '#ffffff',
     fontWeight: '600',
     fontFamily: 'Nunito_400Regular'
   }

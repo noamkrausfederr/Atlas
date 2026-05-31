@@ -38,7 +38,7 @@ function buildSeedInboxThreads() {
   const now = Date.now();
   const minute = 60 * 1000;
 
-  const createThread = (ownerName, unreadCount, messages) => {
+  const createThread = (ownerName, unreadCount, tripName, messages) => {
     const normalizedMessages = messages.map((message, index) => ({
       id: `${ownerName}-${index + 1}`,
       author: message.incoming ? ownerName : 'You',
@@ -54,6 +54,7 @@ function buildSeedInboxThreads() {
       {
         ownerName,
         handle: formatInboxHandle(ownerName),
+        tripName,
         messages: normalizedMessages,
         unreadCount,
         lastMessageText: lastMessage.text,
@@ -63,21 +64,21 @@ function buildSeedInboxThreads() {
   };
 
   return Object.fromEntries([
-    createThread('Maya R.', 2, [
+    createThread('Maya R.', 2, 'London Food Map', [
       { incoming: true, text: 'I finally posted the London food map.', minutesAgo: 180 },
       { incoming: false, text: 'Need it immediately. Which market should I start with?', minutesAgo: 164 },
-      { incoming: true, text: 'Borough first, then walk toward Neal’s Yard if you still have energy.', minutesAgo: 22 },
+      { incoming: true, text: 'Borough first, then walk toward Neal\'s Yard if you still have energy.', minutesAgo: 22 },
       { incoming: true, text: 'Also save room for dinner in Soho.', minutesAgo: 6 }
     ]),
-    createThread('Nina K.', 0, [
+    createThread('Nina K.', 0, 'Tokyo Cafés', [
       { incoming: false, text: 'Your Tokyo cafés list is unreal.', minutesAgo: 250 },
       { incoming: true, text: 'Ahh thank you. I can send my quiet study spots too.', minutesAgo: 238 },
       { incoming: false, text: 'Yes please, especially around Shibuya.', minutesAgo: 210 }
     ]),
-    createThread('Daniel C.', 1, [
+    createThread('Daniel C.', 1, 'Lisbon Tram Route', [
       { incoming: true, text: 'If you do the Lisbon tram route early, the photos come out so much better.', minutesAgo: 95 },
       { incoming: false, text: 'That is exactly the kind of tip I needed.', minutesAgo: 74 },
-      { incoming: true, text: 'I’ll send you the breakfast stop I paired with it.', minutesAgo: 9 }
+      { incoming: true, text: 'I\'ll send you the breakfast stop I paired with it.', minutesAgo: 9 }
     ])
   ]);
 }
@@ -108,7 +109,7 @@ function InnerApp() {
   const [selectedInboxProfileName, setSelectedInboxProfileName] = useState(null);
   const [isInboxThreadOpen, setIsInboxThreadOpen] = useState(false);
   const [inboxThreads, setInboxThreads] = useState(() => buildSeedInboxThreads());
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [isCreateBoardVisible, setIsCreateBoardVisible] = useState(false);
   const [cityOptions, setCityOptions] = useState([]);
   const [isCitySearchLoading, setIsCitySearchLoading] = useState(false);
@@ -193,17 +194,6 @@ function InnerApp() {
     }
   };
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSubscription = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     const query = draftBoard.location.trim();
@@ -303,11 +293,10 @@ function InnerApp() {
   }, []);
   
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 62 + Math.max(insets.bottom, 6);
+  const topNavHeight = 54;
 
   if (!fontsLoaded) return null;
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
-  const shouldHideBottomNav = isInboxChatOpen && isKeyboardVisible;
   
 const upcomingBoards = getUpcomingTrips(boards);
   const pastTrips = getPastTrips(boards);
@@ -327,6 +316,8 @@ const upcomingBoards = getUpcomingTrips(boards);
     }
     return profiles;
   }, {});
+
+  const inboxUnreadCount = Object.values(inboxThreads).reduce((sum, t) => sum + (t.unreadCount ?? 0), 0);
 
   const updateBoard = (boardId, patch) => {
     setBoards((current) => current.map((board) => (board.id === boardId ? { ...board, ...patch } : board)));
@@ -601,7 +592,7 @@ const upcomingBoards = getUpcomingTrips(boards);
               <View style={styles.cityDropdown}>
                 {isCitySearchLoading && (
                   <View style={styles.cityDropdownStatus}>
-                    <ActivityIndicator size="small" color="#A97C50" />
+                    <ActivityIndicator size="small" color={colors.accent} />
                     <Text style={styles.cityDropdownStatusText}>Searching cities</Text>
                   </View>
                 )}
@@ -805,6 +796,7 @@ const upcomingBoards = getUpcomingTrips(boards);
           }}
           onCloseThread={() => setIsInboxThreadOpen(false)}
           onSendMessage={sendInboxMessage}
+          onNavigateToTab={openTab}
         />
       );
     }
@@ -814,23 +806,24 @@ const upcomingBoards = getUpcomingTrips(boards);
 
     return (
       <>
-        {/* Illustrated hero header */}
-        <IllustratedHero />
+        {/* Greeting + week date picker */}
+        <IllustratedHero
+          userName="Noam"
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+        />
 
-        {/* Stats dashboard */}
+        {/* Compact stats */}
         <StatsDashboard
           trips={boards.length}
           countries={countrySet.size}
           places={totalPlaces}
-          upcoming={upcomingBoards.length}
         />
 
         {/* Upcoming trips */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>Upcoming</Text>
-          <View style={[styles.sectionHeaderPill, { backgroundColor: '#D8EAF8' }]}>
-            <Text style={[styles.sectionHeaderPillText, { color: '#1A508A' }]}>{upcomingBoards.length}</Text>
-          </View>
+          <Text style={styles.sectionHeaderSeeAll}>See all</Text>
         </View>
 
         {upcomingBoards.length > 0 ? (
@@ -861,16 +854,14 @@ const upcomingBoards = getUpcomingTrips(boards);
 
         {/* Past trips */}
         <View style={[styles.sectionHeaderRow, { marginTop: 8 }]}>
-          <Text style={styles.sectionHeaderTitle}>Past trips</Text>
-          <View style={[styles.sectionHeaderPill, { backgroundColor: '#EEE9E2' }]}>
-            <Text style={[styles.sectionHeaderPillText, { color: '#5C5650' }]}>{pastTrips.length}</Text>
-          </View>
+          <Text style={styles.sectionHeaderTitle}>Past Trips</Text>
+          <Text style={styles.sectionHeaderSeeAll}>See all</Text>
         </View>
 
         {pastTrips.length > 0 ? (
-          <View style={styles.miniGrid}>
+          <View>
             {pastTrips.map((board) => (
-              <IllustratedTripCard key={board.id} board={board} onPress={openBoard} />
+              <IllustratedTripCard key={board.id} board={board} onPress={openBoard} compact />
             ))}
           </View>
         ) : (
@@ -879,6 +870,8 @@ const upcomingBoards = getUpcomingTrips(boards);
       </>
     );
   };
+
+  const showTopNav = !selectedBoard && !isInboxChatOpen;
 
   return (
     <SafeAreaView
@@ -890,6 +883,38 @@ const upcomingBoards = getUpcomingTrips(boards);
       edges={['top']}
     >
       <StatusBar style="dark" />
+
+      {/* Top navigation bar */}
+      {showTopNav && (
+        <View style={styles.topNav}>
+          <View style={styles.topNavInner}>
+            <View style={styles.topNavBrand}>
+              <Ionicons name="flash" size={16} color={colors.accent} />
+              <Text style={styles.topNavBrandText}>Atlas</Text>
+            </View>
+            <View style={styles.topNavIcons}>
+              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Trips')}>
+                <Ionicons name={activeTab === 'Trips' ? 'briefcase' : 'briefcase-outline'} size={22} color="#888480" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Explore')}>
+                <Ionicons name={activeTab === 'Explore' ? 'compass' : 'compass-outline'} size={22} color="#888480" />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.topNavButton, styles.topNavButtonRelative]} onPress={() => openTab('Inbox')}>
+                <Ionicons name={activeTab === 'Inbox' ? 'mail' : 'mail-outline'} size={22} color="#888480" />
+                {inboxUnreadCount > 0 && (
+                  <View style={styles.topNavBadge}>
+                    <Text style={styles.topNavBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Profile')}>
+                <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={22} color="#888480" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
       <View
         style={[
           styles.contentWrapper,
@@ -899,11 +924,11 @@ const upcomingBoards = getUpcomingTrips(boards);
         ]}
       >
         {selectedBoard ? (
-          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: tabBarHeight }]}>
+          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: 24 }]}>
             {renderSelectedBoardContent()}
           </View>
         ) : activeTab === 'Inbox' || activeTab === 'Profile' ? (
-          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: shouldHideBottomNav ? 0 : tabBarHeight }]}>
+          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: 0 }]}>
             {renderContent()}
           </View>
         ) : (
@@ -921,41 +946,14 @@ const upcomingBoards = getUpcomingTrips(boards);
           </ScrollView>
         )}
         {renderCreateBoardModal()}
-        {!shouldHideBottomNav && (
-          <BlurView intensity={40} tint="light" style={styles.bottomNav}>
-            <View style={styles.navRow}>
-              <TouchableOpacity
-                style={[styles.navButton, activeTab === 'Trips' && styles.navButtonActive]}
-                onPress={() => openTab('Trips')}
-              >
-                <Ionicons name={activeTab === 'Trips' ? 'home' : 'home-outline'} size={26} color={activeTab === 'Trips' ? colors.accent : '#AAAAAA'} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.navButton, activeTab === 'Explore' && styles.navButtonActive]}
-                onPress={() => openTab('Explore')}
-              >
-                <Ionicons name={activeTab === 'Explore' ? 'search' : 'search-outline'} size={26} color={activeTab === 'Explore' ? colors.accent : '#AAAAAA'} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.createTripNavButton} onPress={openNewBoard}>
-                <Text style={styles.createTripNavButtonText}>+</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.navButton, activeTab === 'Inbox' && styles.navButtonActive]}
-                onPress={() => openTab('Inbox')}
-              >
-                <Ionicons name={activeTab === 'Inbox' ? 'chatbubbles' : 'chatbubbles-outline'} size={26} color={activeTab === 'Inbox' ? colors.accent : '#AAAAAA'} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.navButton, activeTab === 'Profile' && styles.navButtonActive]}
-                onPress={() => openTab('Profile')}
-              >
-                <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={26} color={activeTab === 'Profile' ? colors.accent : '#AAAAAA'} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ height: Math.max(insets.bottom, 6) }} />
-          </BlurView>
-        )}
       </View>
+
+      {/* Floating create FAB — only on trips root */}
+      {isTripsRootView && (
+        <TouchableOpacity style={styles.floatingFAB} onPress={openNewBoard} activeOpacity={0.85}>
+          <Ionicons name="add" size={26} color={colors.text} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -971,43 +969,43 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   tripsSafeArea: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   detailSafeArea: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   container: {
     padding: 20,
-    paddingBottom: 92
+    paddingBottom: 32
   },
   tripsContainer: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f3f2ef',
     paddingHorizontal: 14,
     paddingTop: 12,
-    paddingBottom: 100
+    paddingBottom: 80
   },
   exploreContainer: {
     paddingHorizontal: 12,
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   contentWrapper: {
     flex: 1,
     position: 'relative'
   },
   tripsContentWrapper: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   detailContentWrapper: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   tripsScrollView: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   exploreScrollView: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   heroCard: {
     backgroundColor: '#FFF8F0',
@@ -1055,9 +1053,9 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 14,
-    paddingLeft: 2,
+    paddingHorizontal: 2,
   },
   sectionHeaderTitle: {
     fontSize: 20,
@@ -1067,15 +1065,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
-  sectionHeaderPill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  sectionHeaderPillText: {
-    fontSize: 12,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
+  sectionHeaderSeeAll: {
+    fontSize: 13,
+    fontFamily: fonts.semiBold,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   tripStack: {
     gap: 10,
@@ -1099,7 +1093,7 @@ const styles = StyleSheet.create({
   },
   emptySection: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 20,
@@ -1187,65 +1181,78 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20
   },
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(244,240,235,0.94)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(228,222,214,0.9)',
-    zIndex: 20,
-    elevation: 10,
-    overflow: 'hidden'
+  topNav: {
+    backgroundColor: '#f3f2ef',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e6e3df',
+    zIndex: 20
   },
-  navRow: {
+  topNavInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 6
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 10
   },
-  navButton: {
-    width: 48,
+  topNavBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  topNavBrandText: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold',
+    color: colors.text,
+    letterSpacing: -0.3
+  },
+  topNavIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2
+  },
+  topNavButton: {
+    width: 40,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center'
   },
-  navButtonActive: {},
-  createTripNavButton: {
+  topNavButtonRelative: {
+    position: 'relative'
+  },
+  topNavBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EFCE7B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3
+  },
+  topNavBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.text
+  },
+  floatingFAB: {
+    position: 'absolute',
+    right: 20,
+    bottom: Math.max(20, 20),
     width: 52,
     height: 52,
-    backgroundColor: '#2B2927',
-    borderRadius: 999,
-    justifyContent: 'center',
+    borderRadius: 26,
+    backgroundColor: colors.accent,
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6
-  },
-  createTripNavButtonText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    lineHeight: 30,
-    fontWeight: '300'
-  },
-  navText: {
-    color: '#AAAAAA',
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    textAlign: 'center',
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  navTextActive: {
-    color: '#555555',
-    fontWeight: '600'
+    justifyContent: 'center',
+    shadowColor: colors.accent,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 30
   },
   modalOverlay: {
     flex: 1,
@@ -1254,8 +1261,8 @@ const styles = StyleSheet.create({
     padding: 20
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
     padding: 22,
     maxHeight: '92%',
     shadowColor: '#000',
@@ -1285,7 +1292,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold
   },
   modalInput: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f3f2ef',
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
@@ -1330,7 +1337,7 @@ const styles = StyleSheet.create({
   cityDropdown: {
     marginTop: -6,
     marginBottom: 14,
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f3f2ef',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(215,215,210,0.95)',
@@ -1384,7 +1391,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCancelButton: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f3f2ef',
     borderWidth: 1,
     borderColor: 'rgba(215,215,210,0.95)'
   },
@@ -1394,15 +1401,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold
   },
   modalSaveButton: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     borderWidth: 1,
-    borderColor: colors.text
+    borderColor: colors.accent
   },
   modalSaveButtonDisabled: {
     opacity: 0.55
   },
   modalSaveText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
     fontFamily: fonts.bold
   },
@@ -1412,7 +1419,7 @@ const styles = StyleSheet.create({
     paddingTop: 0
   },
   tripDetailContainer: {
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f3f2ef'
   },
   exploreStackContainer: {
     paddingBottom: 120

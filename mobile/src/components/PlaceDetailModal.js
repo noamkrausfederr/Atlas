@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDF8',
     borderRadius: 22,
     overflow: 'hidden',
-    shadowColor: '#000000',
+    shadowColor: '#2B2927',
     shadowOpacity: 0.12,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 13,
-    color: '#6F6F6B',
+    color: '#8C867E',
     fontWeight: '600',
     lineHeight: 16
   },
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '700',
-    color: '#9A9A94',
+    color: '#8C867E',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 4,
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   pillText_open: { color: '#166534' },
   pillText_warning: { color: '#92400E' },
   pillText_closed: { color: '#991B1B' },
-  pillText_muted: { color: '#6F6F6B' },
+  pillText_muted: { color: '#8C867E' },
   deleteButton: {
     alignSelf: 'flex-end',
     marginRight: 18,

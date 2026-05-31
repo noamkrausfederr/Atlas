@@ -54,24 +54,30 @@ export function PublicProfileView({
     >
       {showScreenHeader ? (
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>profile</Text>
-        </View>
-      ) : null}
-
-      {showSettingsButton ? (
-        <View style={styles.topActions}>
-          <TouchableOpacity style={styles.settingsButton} activeOpacity={0.85} onPress={onSettingsPress}>
-            <Ionicons name="settings-outline" size={22} color="#555555" />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+          {showSettingsButton ? (
+            <TouchableOpacity style={styles.settingsButton} activeOpacity={0.85} onPress={onSettingsPress}>
+              <Ionicons name="settings-outline" size={22} color="#8a8987" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
       <View style={styles.profileHero}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.profilePhoto} />
-        ) : (
-          <View style={styles.profilePhoto} />
-        )}
+        <View style={styles.profileAvatarWrap}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.profilePhoto} />
+          ) : (
+            <View style={styles.profilePhotoPlaceholder}>
+              <Text style={styles.profilePhotoInitial}>{name?.[0]?.toUpperCase() ?? 'A'}</Text>
+            </View>
+          )}
+          {showSettingsButton ? (
+            <TouchableOpacity style={styles.profileAvatarCamera} activeOpacity={0.8} onPress={onSettingsPress}>
+              <Ionicons name="camera-outline" size={14} color="#ffffff" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <Text style={styles.profileName}>{name}</Text>
         <Text style={styles.profileHandle}>{handle}</Text>
 
@@ -84,7 +90,7 @@ export function PublicProfileView({
             <Text style={styles.statValue}>{formatSocialCount(following)}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, styles.statCardLast]}>
             <Text style={styles.statValue}>{formatSocialCount(likes)}</Text>
             <Text style={styles.statLabel}>Likes</Text>
           </View>
@@ -156,6 +162,7 @@ export function ProfileScreen({ boards, followingCount, onOpenBoard, onOpenSetti
       publicBoards={publicBoards}
       onOpenBoard={onOpenBoard}
       hideTripsSection
+      showScreenHeader
       showSettingsButton
       onSettingsPress={onOpenSettings}
       showFollowButton={false}
@@ -173,9 +180,9 @@ function SettingsToggleRow({ label, value, onValueChange, detail = '' }) {
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#CCC5BB', true: '#2B2927' }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor="#D9D9D3"
+        trackColor={{ false: '#d4cfc9', true: '#ffba30' }}
+        thumbColor="#ffffff"
+        ios_backgroundColor="#d4cfc9"
       />
     </View>
   );
@@ -190,7 +197,7 @@ function SettingsLinkRow({ label, detail = '', onPress, tone = 'default' }) {
         <Text style={labelStyle}>{label}</Text>
         {detail ? <Text style={styles.settingsDetail}>{detail}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={tone === 'danger' ? '#B24C4C' : '#8A8A84'} />
+      <Ionicons name="chevron-forward" size={18} color={tone === 'danger' ? '#C9524E' : '#8a8987'} />
     </TouchableOpacity>
   );
 }
@@ -277,7 +284,7 @@ export function SettingsScreen({ onBack }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F4F0EB'
+    backgroundColor: '#f0efed'
   },
   screenContent: {
     flexGrow: 1,
@@ -286,21 +293,18 @@ const styles = StyleSheet.create({
     paddingBottom: 12
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
-    paddingLeft: 8
+    paddingHorizontal: 8
   },
   headerTitle: {
-    color: '#2B2927',
-    fontSize: 24,
-    lineHeight: 28,
+    color: '#2c2b28',
+    fontSize: 26,
+    lineHeight: 30,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
-  },
-  topActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginRight: 6,
-    marginBottom: 2
   },
   settingsButton: {
     width: 40,
@@ -310,30 +314,60 @@ const styles = StyleSheet.create({
   },
   profileHero: {
     backgroundColor: 'transparent',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     alignItems: 'center',
     marginBottom: 8
   },
+  profileAvatarWrap: {
+    position: 'relative',
+    marginBottom: 12
+  },
   profilePhoto: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    marginBottom: 8,
-    backgroundColor: '#E4DED6'
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#e8e5e0'
+  },
+  profilePhotoPlaceholder: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#fff4d9',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  profilePhotoInitial: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#c48a00',
+    fontFamily: 'Nunito_800ExtraBold'
+  },
+  profileAvatarCamera: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#2c2b28',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#f0efed'
   },
   profileName: {
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: '800',
-    color: '#2B2927',
+    color: '#2c2b28',
     fontFamily: 'Nunito_800ExtraBold'
   },
   profileHandle: {
-    marginTop: 5,
+    marginTop: 4,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#5C5650',
+    fontWeight: '600',
+    color: '#8a8987',
     fontFamily: 'Nunito_400Regular'
   },
   profileBio: {
@@ -341,11 +375,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-    color: '#5C5650',
-    fontFamily: 'Nunito_400Regular'
+    color: '#7a7770',
+    fontFamily: 'Nunito_400Regular',
+    maxWidth: 280
   },
   followButton: {
-    backgroundColor: '#2B2927',
+    backgroundColor: '#ffba30',
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 30,
@@ -353,80 +388,85 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   followButtonText: {
-    color: '#FFFDF8',
+    color: '#2c2b28',
     fontSize: 15,
     fontWeight: '800',
     fontFamily: 'Nunito_700Bold'
   },
   profileActionRow: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10
   },
   followButtonActive: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#f0efed',
     borderWidth: 1,
-    borderColor: '#E4DED6'
+    borderColor: '#e8e5e0'
   },
   followButtonTextActive: {
-    color: '#2B2927'
+    color: '#7a7770'
   },
   headerMessageButton: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     justifyContent: 'center'
   },
   headerMessageButtonText: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
   },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    alignSelf: 'stretch',
-    marginTop: 6,
-    paddingTop: 8
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 0,
+    marginTop: 12,
+    paddingHorizontal: 8
   },
   profileDivider: {
     height: 1,
-    backgroundColor: '#E4DED6',
+    backgroundColor: '#e8e5e0',
     marginHorizontal: 8,
     marginBottom: 8
   },
   statCard: {
-    flex: 1,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-    alignItems: 'center'
+    paddingVertical: 4,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#e8e5e0'
+  },
+  statCardLast: {
+    borderRightWidth: 0
   },
   statValue: {
-    color: '#2B2927',
-    fontSize: 14,
+    color: '#2c2b28',
+    fontSize: 16,
     fontWeight: '800',
-    fontFamily: 'Nunito_700Bold'
+    fontFamily: 'Nunito_800ExtraBold'
   },
   statLabel: {
     marginTop: 2,
-    color: '#8C867E',
-    fontSize: 8,
+    color: '#8a8987',
+    fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     fontFamily: 'Nunito_400Regular'
   },
   sectionCard: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 18,
     marginBottom: 12
   },
@@ -441,13 +481,13 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 20,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
   sectionMeta: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 13,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -460,44 +500,49 @@ const styles = StyleSheet.create({
   },
   tripCard: {
     width: '48%',
-    backgroundColor: '#FFFDF8',
-    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E4DED6'
+    borderColor: '#e8e5e0',
+    shadowColor: '#2c2b28',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1
   },
   tripCardImage: {
     width: '100%',
-    height: 146,
-    backgroundColor: '#E4DED6'
+    height: 120,
+    backgroundColor: '#e8e5e0'
   },
   tripCardBody: {
-    padding: 12
+    padding: 10
   },
   tripCardTitle: {
-    color: '#2B2927',
-    fontSize: 14,
-    lineHeight: 18,
+    color: '#2c2b28',
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 3,
     fontFamily: 'Nunito_700Bold'
   },
   tripCardLocation: {
-    color: '#8C867E',
-    fontSize: 12,
-    lineHeight: 16,
+    color: '#8a8987',
+    fontSize: 11,
+    lineHeight: 15,
     fontFamily: 'Nunito_400Regular'
   },
   emptyState: {
-    backgroundColor: '#F4F0EB',
+    backgroundColor: '#f0efed',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     padding: 18,
     alignItems: 'center'
   },
   emptyStateText: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 14,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -514,7 +559,7 @@ const styles = StyleSheet.create({
     marginBottom: 18
   },
   settingsTitle: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
@@ -528,7 +573,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   settingsSectionTitle: {
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -538,10 +583,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   settingsCard: {
-    backgroundColor: '#FFFDF8',
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E4DED6',
+    borderColor: '#e8e5e0',
     overflow: 'hidden'
   },
   settingsRow: {
@@ -557,20 +602,20 @@ const styles = StyleSheet.create({
     flex: 1
   },
   settingsLabel: {
-    color: '#2B2927',
+    color: '#2c2b28',
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
   },
   settingsLabelDanger: {
-    color: '#B24C4C',
+    color: '#C9524E',
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
   },
   settingsDetail: {
     marginTop: 3,
-    color: '#8C867E',
+    color: '#8a8987',
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular'
@@ -578,6 +623,6 @@ const styles = StyleSheet.create({
   settingsDivider: {
     height: 1,
     marginLeft: 16,
-    backgroundColor: '#E4DED6'
+    backgroundColor: '#e8e5e0'
   }
 });
