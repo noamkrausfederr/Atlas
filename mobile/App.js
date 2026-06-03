@@ -23,8 +23,6 @@ import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 // Components & Screens
 import { BoardCard } from './src/components/BoardCard';
 import { IllustratedTripCard } from './src/components/IllustratedTripCard';
-import { IllustratedHero } from './src/components/IllustratedHero';
-import { StatsDashboard } from './src/components/StatsDashboard';
 import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
@@ -109,7 +107,7 @@ function InnerApp() {
   const [selectedInboxProfileName, setSelectedInboxProfileName] = useState(null);
   const [isInboxThreadOpen, setIsInboxThreadOpen] = useState(false);
   const [inboxThreads, setInboxThreads] = useState(() => buildSeedInboxThreads());
-  const [selectedDate, setSelectedDate] = useState(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
+  const [isExploreFilterHeaderHidden, setIsExploreFilterHeaderHidden] = useState(false);
   const [isCreateBoardVisible, setIsCreateBoardVisible] = useState(false);
   const [cityOptions, setCityOptions] = useState([]);
   const [isCitySearchLoading, setIsCitySearchLoading] = useState(false);
@@ -293,7 +291,6 @@ function InnerApp() {
   }, []);
   
   const insets = useSafeAreaInsets();
-  const topNavHeight = 54;
 
   if (!fontsLoaded) return null;
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
@@ -716,6 +713,7 @@ const upcomingBoards = getUpcomingTrips(boards);
         onToggleLikePublicTrip={toggleLikedPublicTrip}
         onToggleFollowProfile={toggleFollowedProfile}
         onMessageProfile={openInboxThread}
+        onFilterPageVisibilityChange={setIsExploreFilterHeaderHidden}
       />
     );
   };
@@ -801,25 +799,8 @@ const upcomingBoards = getUpcomingTrips(boards);
       );
     }
 
-    const totalPlaces = boards.reduce((sum, b) => sum + (b.placesList?.length ?? 0), 0);
-    const countrySet = new Set(boards.map((b) => (b.location || '').split(',').pop().trim()).filter(Boolean));
-
     return (
       <>
-        {/* Greeting + week date picker */}
-        <IllustratedHero
-          userName="Noam"
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-        />
-
-        {/* Compact stats */}
-        <StatsDashboard
-          trips={boards.length}
-          countries={countrySet.size}
-          places={totalPlaces}
-        />
-
         {/* Upcoming trips */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>Upcoming</Text>
@@ -871,7 +852,8 @@ const upcomingBoards = getUpcomingTrips(boards);
     );
   };
 
-  const showTopNav = !selectedBoard && !isInboxChatOpen;
+  const showTabBar = !selectedBoard && !isInboxChatOpen;
+  const floatingFabBottom = (showTabBar ? 88 : 20) + insets.bottom;
 
   return (
     <SafeAreaView
@@ -884,32 +866,14 @@ const upcomingBoards = getUpcomingTrips(boards);
     >
       <StatusBar style="dark" />
 
-      {/* Top navigation bar */}
-      {showTopNav && (
-        <View style={styles.topNav}>
-          <View style={styles.topNavInner}>
-            <View style={styles.topNavBrand}>
-              <Ionicons name="flash" size={16} color={colors.accent} />
-              <Text style={styles.topNavBrandText}>Atlas</Text>
-            </View>
-            <View style={styles.topNavIcons}>
-              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Trips')}>
-                <Ionicons name={activeTab === 'Trips' ? 'briefcase' : 'briefcase-outline'} size={22} color="#888480" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Explore')}>
-                <Ionicons name={activeTab === 'Explore' ? 'compass' : 'compass-outline'} size={22} color="#888480" />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.topNavButton, styles.topNavButtonRelative]} onPress={() => openTab('Inbox')}>
-                <Ionicons name={activeTab === 'Inbox' ? 'mail' : 'mail-outline'} size={22} color="#888480" />
-                {inboxUnreadCount > 0 && (
-                  <View style={styles.topNavBadge}>
-                    <Text style={styles.topNavBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.topNavButton} onPress={() => openTab('Profile')}>
-                <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={22} color="#888480" />
-              </TouchableOpacity>
+      {showTabBar && !isExploreFilterHeaderHidden && (
+        <View style={styles.appHeader}>
+          <View style={styles.appHeaderInner}>
+            <View style={styles.appHeaderBrand}>
+              <Text style={styles.appHeaderBrandText}>
+                Atlas
+                <Text style={styles.appHeaderBrandTextDot}>.</Text>
+              </Text>
             </View>
           </View>
         </View>
@@ -950,9 +914,37 @@ const upcomingBoards = getUpcomingTrips(boards);
 
       {/* Floating create FAB — only on trips root */}
       {isTripsRootView && (
-        <TouchableOpacity style={styles.floatingFAB} onPress={openNewBoard} activeOpacity={0.85}>
-          <Ionicons name="add" size={26} color={colors.text} />
+        <TouchableOpacity
+          style={[styles.floatingFAB, { bottom: floatingFabBottom }]}
+          onPress={openNewBoard}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={26} color="#ffffff" />
         </TouchableOpacity>
+      )}
+
+      {showTabBar && (
+        <View style={[styles.bottomTabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.bottomTabBarInner}>
+            <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Trips')}>
+              <Ionicons name={activeTab === 'Trips' ? 'briefcase' : 'briefcase-outline'} size={22} color="#888480" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Explore')}>
+              <Ionicons name={activeTab === 'Explore' ? 'compass' : 'compass-outline'} size={22} color="#888480" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.bottomTabButton, styles.bottomTabButtonRelative]} onPress={() => openTab('Inbox')}>
+              <Ionicons name={activeTab === 'Inbox' ? 'mail' : 'mail-outline'} size={22} color="#888480" />
+              {inboxUnreadCount > 0 && (
+                <View style={styles.bottomTabBadge}>
+                  <Text style={styles.bottomTabBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Profile')}>
+              <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={22} color="#888480" />
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -983,12 +975,13 @@ const styles = StyleSheet.create({
   },
   tripsContainer: {
     backgroundColor: '#f3f2ef',
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
     paddingTop: 12,
-    paddingBottom: 80
+    paddingBottom: 24
   },
   exploreContainer: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 18,
+    paddingTop: 8,
     backgroundColor: '#f3f2ef'
   },
   contentWrapper: {
@@ -1058,12 +1051,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   sectionHeaderTitle: {
-    fontSize: 20,
-    lineHeight: 24,
-    color: colors.text,
+    fontSize: 16,
+    lineHeight: 20,
+    color: colors.textMuted,
     fontFamily: fonts.extraBold,
     fontWeight: '800',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   sectionHeaderSeeAll: {
     fontSize: 13,
@@ -1181,46 +1174,57 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20
   },
-  topNav: {
+  appHeader: {
     backgroundColor: '#f3f2ef',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e6e3df',
     zIndex: 20
   },
-  topNavInner: {
+  appHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 18,
     paddingVertical: 10
   },
-  topNavBrand: {
+  appHeaderBrand: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(211,182,211,0.30)'
   },
-  topNavBrandText: {
-    fontSize: 18,
+  appHeaderBrandText: {
+    fontSize: 22,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold',
-    color: colors.text,
-    letterSpacing: -0.3
+    color: '#D3B6D3',
+    letterSpacing: -0.4
   },
-  topNavIcons: {
+  appHeaderBrandTextDot: {
+    color: '#D3B6D3'
+  },
+  bottomTabBar: {
+    backgroundColor: '#f3f2ef',
+    borderTopWidth: 1,
+    borderTopColor: '#e6e3df',
+    zIndex: 20
+  },
+  bottomTabBarInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2
+    justifyContent: 'space-around',
+    paddingHorizontal: 18,
+    paddingTop: 10
   },
-  topNavButton: {
+  bottomTabButton: {
     width: 40,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center'
   },
-  topNavButtonRelative: {
+  bottomTabButtonRelative: {
     position: 'relative'
   },
-  topNavBadge: {
+  bottomTabBadge: {
     position: 'absolute',
     top: 4,
     right: 4,
@@ -1232,7 +1236,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 3
   },
-  topNavBadgeText: {
+  bottomTabBadgeText: {
     fontSize: 9,
     fontWeight: '800',
     color: colors.text
@@ -1240,14 +1244,13 @@ const styles = StyleSheet.create({
   floatingFAB: {
     position: 'absolute',
     right: 20,
-    bottom: Math.max(20, 20),
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.accent,
+    backgroundColor: '#EFCE7B',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accent,
+    shadowColor: '#EFCE7B',
     shadowOpacity: 0.4,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },

@@ -4,12 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { colors, fonts, shadow } from '../theme';
 
 const W = Dimensions.get('window').width;
-const CONTENT_W = W - 28;
+const CONTENT_W = W - 36;
 const CARD_GAP = 10;
 const MINI_W = Math.floor((CONTENT_W - CARD_GAP) / 2);
-const FEATURED_IMG_H = 220;
-const MINI_IMG_H = 120;
-const COMPACT_H = 80;
+const FEATURED_IMG_H = 188;
+const MINI_IMG_H = 84;
+const COMPACT_H = 78;
+const LOCATION_ACCENTS = [
+  { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
+  { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
+  { bg: 'rgba(109,184,190,0.40)', text: '#6DB8BE' },
+  { bg: 'rgba(165,187,26,0.30)', text: '#A5BB1A' },
+];
 
 function fmtDate(d) {
   if (!d) return '';
@@ -22,6 +28,12 @@ function dateRange(board) {
 }
 function getLocation(board) {
   return board.location || board.subtitle || '';
+}
+
+function getLocationAccent(board) {
+  const key = `${board.id || ''}${board.title || ''}${board.location || ''}`;
+  const index = key.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return LOCATION_ACCENTS[index % LOCATION_ACCENTS.length];
 }
 
 function getPlaceholderTheme(board) {
@@ -54,10 +66,7 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
   const imageUri = !imageFailed && board.image ? board.image : null;
   const dateText = dateRange(board);
   const loc = getLocation(board);
-  const isPast = board.endDate && new Date(board.endDate) < new Date();
-  const statusLabel = isPast ? 'Completed' : 'Upcoming';
-  const statusColor = isPast ? colors.textMuted : colors.accentDark;
-  const statusBg = isPast ? colors.pastSoft : colors.accentSoft;
+  const locationAccent = getLocationAccent(board);
 
   // ── Compact horizontal card (past trips list) ──────────────────────────────
   if (compact) {
@@ -72,9 +81,13 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
           </View>
           <View style={styles.compactInfo}>
             <Text style={styles.compactTitle} numberOfLines={1}>{board.title}</Text>
-            {loc ? <Text style={styles.compactLoc} numberOfLines={1}>{loc}</Text> : null}
-            {board.description ? <Text style={styles.compactDesc} numberOfLines={1}>{board.description}</Text> : null}
+            {loc ? (
+              <View style={[styles.compactLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+                <Text style={[styles.compactLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
+              </View>
+            ) : null}
             {dateText ? <Text style={styles.compactDate}>{dateText}</Text> : null}
+            {board.description ? <Text style={styles.compactDesc} numberOfLines={1}>{board.description}</Text> : null}
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -95,9 +108,8 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
           <View style={styles.featuredContent}>
             <Text style={styles.featuredTitle} numberOfLines={2}>{board.title}</Text>
             {loc ? (
-              <View style={styles.featuredLocRow}>
-                <Ionicons name="location-outline" size={11} color={colors.textMuted} />
-                <Text style={styles.featuredLoc} numberOfLines={1}>{loc}</Text>
+              <View style={[styles.featuredLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+                <Text style={[styles.featuredLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
               </View>
             ) : null}
             {dateText ? <Text style={styles.featuredDate}>{dateText}</Text> : null}
@@ -120,9 +132,13 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
         </View>
         <View style={styles.miniInfo}>
           <Text style={styles.miniTitle} numberOfLines={1}>{board.title}</Text>
-          {loc ? <Text style={styles.miniLoc} numberOfLines={1}>{loc}</Text> : null}
-          {board.description ? <Text style={styles.miniDesc} numberOfLines={2}>{board.description}</Text> : null}
+          {loc ? (
+            <View style={[styles.miniLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+              <Text style={[styles.miniLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
+            </View>
+          ) : null}
           {dateText ? <Text style={styles.miniDate}>{dateText}</Text> : null}
+          {board.description ? <Text style={styles.miniDesc} numberOfLines={2}>{board.description}</Text> : null}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -133,7 +149,7 @@ const styles = StyleSheet.create({
   // ── Compact ──
   compactCard: {
     backgroundColor: colors.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 10,
     ...shadow.sm,
@@ -146,8 +162,8 @@ const styles = StyleSheet.create({
   compactThumb: {
     width: COMPACT_H,
     height: COMPACT_H,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
     overflow: 'hidden',
     flexShrink: 0,
   },
@@ -157,34 +173,42 @@ const styles = StyleSheet.create({
   },
   compactInfo: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 4,
   },
   compactTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
     fontFamily: fonts.extraBold,
     fontWeight: '800',
     color: colors.text,
   },
-  compactLoc: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontFamily: fonts.semiBold,
-    fontWeight: '600',
-    color: colors.textSecondary,
+  compactLocPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  compactDesc: {
+  compactLoc: {
     fontSize: 11,
     lineHeight: 14,
+    fontFamily: fonts.semiBold,
+    fontWeight: '600',
+  },
+  compactDesc: {
+    fontSize: 10,
+    lineHeight: 13,
     fontFamily: fonts.regular,
     color: colors.textMuted,
+    marginTop: 1,
   },
   compactDate: {
-    fontSize: 11,
-    fontFamily: fonts.regular,
-    color: colors.textMuted,
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    color: colors.text,
   },
   completedPill: {
     marginRight: 12,
@@ -204,7 +228,7 @@ const styles = StyleSheet.create({
 
   // ── Featured ──
   featuredCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     ...shadow.md,
@@ -212,45 +236,45 @@ const styles = StyleSheet.create({
   featuredImgWrap: {
     height: FEATURED_IMG_H,
     overflow: 'hidden',
-    borderRadius: 20,
+    borderRadius: 16,
   },
   featuredContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 12,
+    gap: 4,
   },
   featuredTitle: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 21,
     fontFamily: fonts.extraBold,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 4,
+  },
+  featuredLocPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   featuredDate: {
-    fontSize: 13,
-    fontFamily: fonts.semiBold,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginBottom: 2,
-  },
-  featuredLocRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    color: colors.text,
   },
   featuredLoc: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: fonts.semiBold,
     fontWeight: '600',
-    color: colors.textMuted,
   },
   featuredDesc: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     fontFamily: fonts.regular,
     color: colors.textSecondary,
-    marginTop: 6,
+    marginTop: 1,
   },
   statusPill: {
     flexDirection: 'row',
@@ -275,46 +299,54 @@ const styles = StyleSheet.create({
 
   // ── Mini ──
   miniCard: {
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     ...shadow.sm,
   },
   miniImgWrap: {
     overflow: 'hidden',
-    borderRadius: 16,
+    borderRadius: 14,
   },
   miniInfo: {
     backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 12,
-    gap: 3,
+    paddingHorizontal: 9,
+    paddingTop: 8,
+    paddingBottom: 9,
+    gap: 4,
   },
   miniTitle: {
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 15,
     fontFamily: fonts.extraBold,
     fontWeight: '800',
     color: colors.text,
   },
+  miniLocPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   miniLoc: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 10,
+    lineHeight: 12,
     fontFamily: fonts.semiBold,
     fontWeight: '600',
-    color: colors.textSecondary,
   },
   miniDesc: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 13,
     fontFamily: fonts.regular,
     color: colors.textMuted,
+    marginTop: 1,
   },
   miniDate: {
-    fontSize: 11,
-    fontFamily: fonts.regular,
-    color: colors.textMuted,
+    fontSize: 10,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    color: colors.text,
   },
   miniStatusPill: {
     alignSelf: 'flex-start',

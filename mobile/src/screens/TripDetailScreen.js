@@ -6,7 +6,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { autocompleteAccommodation } from '../../data/liveRecommendations';
 
-const ACTIVITY_ICON_COLORS = ['#C8DFF5', '#F5D9C8', '#C8EAD8', '#DDD0F0', '#F5ECC8'];
+const ACTIVITY_ICON_COLORS = [
+  { bg: 'rgba(184,206,232,0.30)', icon: '#B8CEE8' },
+  { bg: 'rgba(211,182,211,0.30)', icon: '#D3B6D3' },
+  { bg: 'rgba(109,184,190,0.40)', icon: '#6DB8BE' },
+  { bg: 'rgba(165,187,26,0.30)', icon: '#A5BB1A' },
+];
+const LOCATION_ACCENTS = [
+  { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
+  { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
+  { bg: 'rgba(109,184,190,0.40)', text: '#6DB8BE' },
+  { bg: 'rgba(165,187,26,0.30)', text: '#A5BB1A' },
+];
 
 function getActivityIcon(name) {
   const n = (name || '').toLowerCase();
@@ -62,6 +73,19 @@ function formatTripHeaderDate(date) {
   const day = date.getDate();
   const year = date.getFullYear();
   return `${weekday}, ${month} ${day}, ${year}`;
+}
+
+function formatTripDateRangeWithYear(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const opts = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}, ${end.getFullYear()}`;
+}
+
+function getLocationAccent(board) {
+  const key = `${board.id || ''}${board.title || ''}${board.location || ''}`;
+  const index = key.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return LOCATION_ACCENTS[index % LOCATION_ACCENTS.length];
 }
 
 function getSafeDate(value, fallback = new Date()) {
@@ -389,6 +413,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [isSearchingAccommodation, setIsSearchingAccommodation] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [accommodationY, setAccommodationY] = useState(0);
+  const locationAccent = getLocationAccent(board);
   const scrollViewRef = useRef(null);
   const accommodationInputRef = useRef(null);
   const accommodationBlurTimer = useRef(null);
@@ -881,6 +906,18 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               <Ionicons name="ellipsis-horizontal" size={18} color="#2c2b28" />
             </View>
           </TouchableOpacity>
+          <View style={styles.heroInfoCard}>
+            <BlurView intensity={22} tint="light" style={styles.heroInfoCardBlur}>
+              <Text style={styles.heroInfoTitle} numberOfLines={2}>
+                {board.title}
+              </Text>
+              <Text style={styles.heroInfoMeta} numberOfLines={1}>
+                {board.location
+                  ? `${board.location} · ${formatTripDateRangeWithYear(startDate, endDate)}`
+                  : formatTripDateRangeWithYear(startDate, endDate)}
+              </Text>
+            </BlurView>
+          </View>
         </View>
 
         {/* Floating content card */}
@@ -892,41 +929,20 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
               </Text>
             </View>
             {board.location ? (
-              <Text style={styles.detailLocation} numberOfLines={1}>
-                {board.location}
-              </Text>
+              <View style={[styles.detailLocationPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+                <Text style={[styles.detailLocation, { color: locationAccent.text }]} numberOfLines={1}>
+                  {board.location}
+                </Text>
+              </View>
             ) : null}
-          </View>
-          <View style={styles.detailMetaRow}>
-            <View style={styles.planningPill}>
-              <View style={styles.planningDot} />
-              <Text style={styles.planningPillText}>Planning</Text>
-            </View>
-            <Text style={styles.placesCountText}>{board.placesList?.length ?? 0} places</Text>
+            <Text style={styles.detailDatesInline}>
+              {formatTripDateRangeWithYear(startDate, endDate)}
+            </Text>
           </View>
 
           {board.description ? (
             <Text style={styles.detailDescription}>{board.description}</Text>
           ) : null}
-
-          <View style={styles.datesTopRow}>
-            <View style={styles.dateField}>
-              <Text style={styles.statLabel}>Start</Text>
-              <View style={styles.dateBox}>
-                <BlurView intensity={28} tint="extraLight" style={styles.glassDateFieldBlur}>
-                  <Text style={styles.datesValue}>{formatTripHeaderDate(startDate)}</Text>
-                </BlurView>
-              </View>
-            </View>
-            <View style={[styles.dateField, styles.dateFieldLast]}>
-              <Text style={styles.statLabel}>End</Text>
-              <View style={[styles.dateBox, styles.dateBoxLast]}>
-                <BlurView intensity={28} tint="extraLight" style={styles.glassDateFieldBlur}>
-                  <Text style={styles.datesValue}>{formatTripHeaderDate(endDate)}</Text>
-                </BlurView>
-              </View>
-            </View>
-          </View>
 
           <View
             style={styles.accommodationSection}
@@ -1124,7 +1140,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                           const timeValue = isEditingTime
                             ? (timeDrafts[p.id] ?? formatItineraryTimeValue(p.displayTime))
                             : formatItineraryTimeValue(p.displayTime);
-                          const iconBg = ACTIVITY_ICON_COLORS[placeIndex % ACTIVITY_ICON_COLORS.length];
+                          const iconAccent = ACTIVITY_ICON_COLORS[placeIndex % ACTIVITY_ICON_COLORS.length];
                           const iconName = getActivityIcon(p.name);
                           return (
                             <Animated.View
@@ -1158,7 +1174,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                               <View style={styles.itineraryRowShell}>
                                 {/* Timeline node dot */}
                                 <View style={styles.timelineNodeCol}>
-                                  <View style={[styles.timelineNodeDot, { borderColor: iconBg }]} />
+                                  <View style={[styles.timelineNodeDot, { borderColor: iconAccent.icon }]} />
                                 </View>
 
                                 {/* Card */}
@@ -1196,8 +1212,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                   ) : (
                                     <View style={styles.cardContentRow}>
                                       {/* Pastel icon box */}
-                                      <View style={[styles.itineraryIconBox, { backgroundColor: iconBg }]}>
-                                        <Ionicons name={iconName} size={15} color="#2B2927" />
+                                      <View style={[styles.itineraryIconBox, { backgroundColor: iconAccent.bg }]}>
+                                        <Ionicons name={iconName} size={15} color={iconAccent.icon} />
                                       </View>
 
                                       {/* Activity text — pressable */}
@@ -1527,6 +1543,39 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
+  heroInfoCard: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 28,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#2c2b28',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  heroInfoCardBlur: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+  },
+  heroInfoTitle: {
+    color: '#2c2b28',
+    fontSize: 19,
+    lineHeight: 23,
+    fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800'
+  },
+  heroInfoMeta: {
+    marginTop: 2,
+    color: '#8a8987',
+    fontSize: 15,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: Platform.OS === 'ios' ? '500' : '400'
+  },
 
   // Floating content card
   floatingCard: {
@@ -1542,43 +1591,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -4 },
     elevation: 3,
-  },
-
-  detailMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-    marginTop: 2,
-  },
-  planningPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eef3e4',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  planningDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#6b8a48',
-  },
-  planningPillText: {
-    fontSize: 11,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: '700',
-    color: '#6b8a48',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  placesCountText: {
-    fontSize: 13,
-    fontFamily: 'Nunito_600SemiBold',
-    fontWeight: '600',
-    color: '#8a8987',
   },
 
   editCard: {
@@ -1664,13 +1676,18 @@ const styles = StyleSheet.create({
     color: '#2c2b28'
   },
   detailLocation: {
-    color: '#7a7770',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: Platform.OS === 'ios' ? '600' : '500',
-    marginTop: -2,
-    flex: 1
+    fontFamily: 'Nunito_600SemiBold',
+    fontWeight: Platform.OS === 'ios' ? '600' : '700',
+  },
+  detailLocationPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginTop: 4,
   },
   detailTitleGroup: {
     marginBottom: 16
@@ -1695,33 +1712,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     textAlign: 'center'
   },
-  datesTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'stretch',
-    marginTop: 2,
-    marginBottom: 14
-  },
-  dateField: {
-    flex: 1,
-    marginRight: 8
-  },
-  dateFieldLast: {
-    marginRight: 0
-  },
-  dateBox: {
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    overflow: 'hidden'
-  },
-  dateBoxLast: {
-    marginRight: 0
-  },
-  dateBoxActive: {
-    borderColor: '#CCC5BB',
-    backgroundColor: '#ffffff'
+  detailDatesInline: {
+    color: '#2c2b28',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
+    marginTop: 4
   },
   inlineCalendarWrap: {
     width: '100%',
@@ -1737,21 +1734,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     transform: Platform.OS === 'ios' ? [{ scale: 0.92 }] : [],
     marginVertical: Platform.OS === 'ios' ? -12 : 0
-  },
-  statLabel: {
-    color: '#2c2b28',
-    fontSize: 12,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    marginBottom: 8,
-    marginLeft: 4
-  },
-  datesValue: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: '400',
-    color: '#2c2b28'
   },
   accommodationSection: {
     marginTop: 4,
@@ -1943,8 +1925,8 @@ const styles = StyleSheet.create({
     borderColor: '#e8e5e0',
   },
   itineraryDateChipActive: {
-    backgroundColor: '#ffba30',
-    borderColor: '#ffba30',
+    backgroundColor: '#EFCE7B',
+    borderColor: '#EFCE7B',
   },
   itineraryDateChipDayNumber: {
     color: '#2c2b28',
@@ -2362,13 +2344,13 @@ const styles = StyleSheet.create({
   recommendationsButton: {
     borderRadius: 14,
     height: 50,
-    backgroundColor: '#ffba30',
+    backgroundColor: 'rgba(211,182,211,0.30)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
   },
   recommendationsButtonText: {
-    color: '#2c2b28',
+    color: '#D3B6D3',
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_700Bold',

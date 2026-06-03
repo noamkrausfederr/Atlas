@@ -162,7 +162,6 @@ export function ProfileScreen({ boards, followingCount, onOpenBoard, onOpenSetti
       publicBoards={publicBoards}
       onOpenBoard={onOpenBoard}
       hideTripsSection
-      showScreenHeader
       showSettingsButton
       onSettingsPress={onOpenSettings}
       showFollowButton={false}
@@ -284,7 +283,7 @@ export function SettingsScreen({ onBack }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f0efed'
+    backgroundColor: '#f3f2ef'
   },
   screenContent: {
     flexGrow: 1,

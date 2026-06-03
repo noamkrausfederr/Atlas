@@ -12,7 +12,18 @@ import { PublicProfileView } from './ProfileScreen';
 
 const DAY_RANGE_MIN = 1;
 const DAY_RANGE_MAX = 30;
-const EXPLORE_BATCH_SIZE = 8;
+const EXPLORE_TAG_COLORS = [
+  { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
+  { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
+  { bg: 'rgba(109,184,190,0.40)', text: '#6DB8BE' },
+  { bg: 'rgba(165,187,26,0.30)', text: '#A5BB1A' },
+];
+const ACTIVITY_ICON_COLORS = [
+  { bg: 'rgba(184,206,232,0.30)', icon: '#B8CEE8' },
+  { bg: 'rgba(211,182,211,0.30)', icon: '#D3B6D3' },
+  { bg: 'rgba(109,184,190,0.40)', icon: '#6DB8BE' },
+  { bg: 'rgba(165,187,26,0.30)', icon: '#A5BB1A' },
+];
 
 const FILTER_DEFAULTS = {
   country: [],
@@ -74,6 +85,23 @@ function getDateKey(date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function getExploreAccent(index = 0) {
+  return EXPLORE_TAG_COLORS[((index % EXPLORE_TAG_COLORS.length) + EXPLORE_TAG_COLORS.length) % EXPLORE_TAG_COLORS.length];
+}
+
+function getActivityIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (/hotel|hostel|airbnb|check.?in|check.?out/.test(n)) return 'bed-outline';
+  if (/eat|food|restaurant|cafe|coffee|lunch|dinner|breakfast|brunch/.test(n)) return 'restaurant-outline';
+  if (/flight|airport|fly|plane/.test(n)) return 'airplane-outline';
+  if (/walk|hike|stroll/.test(n)) return 'walk-outline';
+  if (/museum|gallery|art|exhibit/.test(n)) return 'business-outline';
+  if (/beach|pool|swim/.test(n)) return 'water-outline';
+  if (/car|drive|taxi|uber/.test(n)) return 'car-outline';
+  if (/shop|market|store|mall/.test(n)) return 'bag-handle-outline';
+  return 'location-outline';
+}
+
 function getOrdinalSuffix(day) {
   if (day % 100 >= 11 && day % 100 <= 13) return 'th';
   if (day % 10 === 1) return 'st';
@@ -87,6 +115,14 @@ function formatItineraryDate(date) {
   const month = date.toLocaleDateString(undefined, { month: 'long' });
   const day = date.getDate();
   return `${weekday}, ${day}${getOrdinalSuffix(day)} ${month}`;
+}
+
+function formatItineraryChipWeekday(date) {
+  return date.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase();
+}
+
+function formatItineraryChipMonth(date) {
+  return date.toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
 }
 
 function getTripDateSections(startDateValue, endDateValue) {
@@ -185,7 +221,8 @@ export function ExploreScreen({
   onAddPublicTrip,
   onToggleLikePublicTrip,
   onToggleFollowProfile,
-  onMessageProfile
+  onMessageProfile,
+  onFilterPageVisibilityChange
 }) {
   const [isFilterPageOpen, setIsFilterPageOpen] = useState(false);
   const [filters, setFilters] = useState(FILTER_DEFAULTS);
@@ -196,7 +233,11 @@ export function ExploreScreen({
   const [showCountryOptions, setShowCountryOptions] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [seenTripIds, setSeenTripIds] = useState(new Set());
+
+  useEffect(() => {
+    onFilterPageVisibilityChange?.(isFilterPageOpen || Boolean(selectedPublicTrip));
+    return () => onFilterPageVisibilityChange?.(false);
+  }, [isFilterPageOpen, selectedPublicTrip, onFilterPageVisibilityChange]);
 
   useEffect(() => {
     setSelectedPublicTrip((current) => (
@@ -222,18 +263,7 @@ export function ExploreScreen({
     [publicTrips, filters, searchQuery]
   );
 
-  useEffect(() => {
-    setSeenTripIds(new Set());
-  }, [filters, searchQuery]);
-
-  const unseenFiltered = useMemo(
-    () => filteredTrips.filter((t) => !seenTripIds.has(t.id)),
-    [filteredTrips, seenTripIds]
-  );
-  const tripsToShow = useMemo(
-    () => (unseenFiltered.length > 0 ? unseenFiltered : filteredTrips).slice(0, EXPLORE_BATCH_SIZE),
-    [unseenFiltered, filteredTrips]
-  );
+  const tripsToShow = filteredTrips;
 
   const addedPublicTripIds = new Set(boards.map((board) => board.sourcePublicTripId).filter(Boolean));
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
@@ -251,14 +281,6 @@ export function ExploreScreen({
     setFilters(FILTER_DEFAULTS);
     setCountrySearch('');
     setShowCountryOptions(false);
-  };
-  const handleRefresh = () => {
-    setSeenTripIds((prev) => {
-      const next = new Set(prev);
-      tripsToShow.forEach((t) => next.add(t.id));
-      if (filteredTrips.every((t) => next.has(t.id))) return new Set();
-      return next;
-    });
   };
   const updateDayRange = (minDays, maxDays) => setFilters((current) => ({ ...current, minDays, maxDays }));
   const handleFilterDateChange = (field, _event, selectedDate) => {
@@ -389,14 +411,9 @@ export function ExploreScreen({
             clearButtonMode="while-editing"
           />
         </View>
-        <View style={styles.exploreIconGroup}>
-          <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
-            <Ionicons name="funnel-outline" size={22} color="#8a8987" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.filterButton} onPress={handleRefresh}>
-            <Ionicons name="swap-vertical-outline" size={22} color="#8a8987" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.filterButton} onPress={() => setIsFilterPageOpen(true)}>
+          <Ionicons name="funnel-outline" size={22} color="#8a8987" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.publicTripMasonry}>
@@ -428,6 +445,10 @@ export function ExploreScreen({
 }
 
 function PublicTripCard({ trip, onOpenTrip, onOpenProfile, isLiked, onToggleLike }) {
+  const locationAccent = getExploreAccent(
+    trip.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  );
+
   return (
     <View style={styles.publicTripCard}>
       <TouchableOpacity activeOpacity={0.88} onPress={onOpenTrip} style={styles.publicTripImageWrap}>
@@ -437,18 +458,21 @@ function PublicTripCard({ trip, onOpenTrip, onOpenProfile, isLiked, onToggleLike
               <Ionicons name="image-outline" size={28} color="#d4cfc9" />
             </View>
         }
-        <TouchableOpacity style={styles.publicTripHeartBtn} onPress={onToggleLike} activeOpacity={0.8}>
-          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#ff3b30' : '#ffffff'} />
-        </TouchableOpacity>
       </TouchableOpacity>
       <View style={styles.publicTripBody}>
         <TouchableOpacity onPress={onOpenTrip} activeOpacity={0.85}>
           <Text style={styles.publicTripTitle} numberOfLines={2}>{trip.title}</Text>
           {trip.location ? (
-            <View style={styles.publicTripLocationRow}>
-              <Ionicons name="location-outline" size={10} color="#8a8987" />
-              <Text style={styles.publicTripMeta} numberOfLines={1}>{trip.location}</Text>
+            <View style={[styles.publicTripLocationRow, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+              <Ionicons name="location-outline" size={10} color={locationAccent.text} />
+              <Text style={[styles.publicTripMeta, { color: locationAccent.text }]} numberOfLines={1}>{trip.location}</Text>
             </View>
+          ) : null}
+          <Text style={styles.publicTripDates} numberOfLines={1}>{formatDateRangeWithYear(trip)}</Text>
+          {trip.description ? (
+            <Text style={styles.publicTripDescription} numberOfLines={2} ellipsizeMode="tail">
+              {trip.description}
+            </Text>
           ) : null}
         </TouchableOpacity>
         <TouchableOpacity onPress={onOpenProfile} style={styles.publicTripAuthorRow} activeOpacity={0.75}>
@@ -456,6 +480,9 @@ function PublicTripCard({ trip, onOpenTrip, onOpenProfile, isLiked, onToggleLike
             <Text style={styles.publicTripAuthorAvatarText}>{trip.ownerName?.[0]?.toUpperCase() ?? '?'}</Text>
           </View>
           <Text style={styles.publicTripOwner} numberOfLines={1}>{trip.ownerName}</Text>
+          <TouchableOpacity style={styles.publicTripHeartBtn} onPress={onToggleLike} activeOpacity={0.8}>
+            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={14} color={isLiked ? '#ff3b30' : '#8a8987'} />
+          </TouchableOpacity>
         </TouchableOpacity>
       </View>
     </View>
@@ -487,9 +514,6 @@ function ExploreFilterScreen({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <View style={[styles.exploreSubHeaderText, styles.filterSubHeaderText]}>
-          <Text style={styles.exploreSubTitle}>Filters</Text>
-        </View>
       </View>
 
       <View style={styles.filterPanel}>
@@ -575,11 +599,15 @@ function FilterDateButton({ label, value, active, onPress }) {
 function PublicTripTags({ trip }) {
   return (
     <View style={styles.publicTripTagRow}>
-      {[trip.travelerType, trip.budget, trip.pace, trip.accessibility].filter(Boolean).map((tag) => (
-        <View key={tag} style={styles.publicTripTag}>
-          <Text style={styles.publicTripTagText}>{tag}</Text>
-        </View>
-      ))}
+      {[trip.travelerType, trip.budget, trip.pace, trip.accessibility].filter(Boolean).map((tag, index) => {
+        const accent = getExploreAccent(index);
+
+        return (
+          <View key={tag} style={[styles.publicTripTag, { backgroundColor: accent.bg, borderColor: accent.bg }]}>
+            <Text style={[styles.publicTripTagText, { color: accent.text }]}>{tag}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -734,7 +762,11 @@ function PublicTripDetail({
   onToggleLike
 }) {
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
+  const [selectedPublicItineraryDayIndex, setSelectedPublicItineraryDayIndex] = useState(0);
   const itinerarySections = getTripDateSections(trip.startDate, trip.endDate);
+  const locationAccent = getExploreAccent(
+    trip.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  );
   (trip.placesList ?? []).forEach((place, index) => {
     const target = getPublicPlaceSectionIndex(place, index, itinerarySections.length);
     if (target instanceof Date) {
@@ -744,83 +776,164 @@ function PublicTripDetail({
     }
     itinerarySections[target].places.push(place);
   });
+  const safeSelectedPublicItineraryDayIndex = Math.min(
+    Math.max(selectedPublicItineraryDayIndex, 0),
+    Math.max(itinerarySections.length - 1, 0)
+  );
+  const selectedPublicItinerarySection =
+    itinerarySections[safeSelectedPublicItineraryDayIndex] ?? itinerarySections[0] ?? null;
+
+  useEffect(() => {
+    if (selectedPublicItineraryDayIndex !== safeSelectedPublicItineraryDayIndex) {
+      setSelectedPublicItineraryDayIndex(safeSelectedPublicItineraryDayIndex);
+    }
+  }, [safeSelectedPublicItineraryDayIndex, selectedPublicItineraryDayIndex]);
 
   return (
     <View style={styles.publicDetailScreen}>
-      <View style={styles.publicDetailCard}>
-        <View style={styles.publicDetailHeader}>
-          <TouchableOpacity onPress={onBack} style={[styles.backButton, styles.publicDetailBackButton]}>
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onToggleLike} style={[styles.publicHeartButton, styles.publicDetailHeaderAction]}>
-            <Text style={[styles.publicHeartButtonText, isLiked && styles.publicHeartButtonTextActive]}>
-              {isLiked ? '♥' : '♡'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.publicProfileInline}>
-          <TouchableOpacity onPress={onOpenProfile} style={styles.publicProfilePressable}>
-            <View style={styles.publicProfileAvatarImage} />
-            <View style={styles.publicProfileTextWrap}>
-              <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
-              <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
+      <ScrollView
+        contentContainerStyle={styles.publicDetailScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.publicDetailHeroSection}>
+          {trip.image ? (
+            <Image source={{ uri: trip.image }} style={styles.publicDetailHeroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.publicDetailHeroPlaceholder}>
+              <Ionicons name="airplane-outline" size={64} color="rgba(255,255,255,0.35)" />
+            </View>
+          )}
+          <View style={styles.publicDetailHeroGradient} />
+          <TouchableOpacity onPress={onBack} style={styles.publicDetailHeroBackBtn} activeOpacity={0.8}>
+            <View style={styles.publicDetailHeroBtnInner}>
+              <Ionicons name="chevron-back" size={20} color="#2c2b28" />
             </View>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.publicDetailTitleGroup}>
-          <Text style={styles.publicDetailTitle} numberOfLines={2}>{trip.title}</Text>
-          {trip.location ? <Text style={styles.publicDetailLocation}>{trip.location}</Text> : null}
-          <Text style={styles.publicDetailMeta}>{formatDateRangeWithYear(trip)}</Text>
-        </View>
-
-        <Image source={{ uri: trip.image }} style={styles.publicDetailImage} />
-
-        {trip.description ? <Text style={styles.publicDetailDescription}>{trip.description}</Text> : null}
-
-        <PublicTripTags trip={trip} />
-
-        <View style={styles.publicDetailItineraryHead}>
-          <Text style={styles.publicDetailSectionTitle}>Itinerary</Text>
-        </View>
-        {itinerarySections.map((section, index) => (
-          <View key={section.key} style={styles.publicItineraryDaySection}>
-            <View style={styles.publicItineraryDayRail}>
-              <View style={styles.publicItineraryDayDot} />
-              {index < itinerarySections.length - 1 && <View style={styles.publicItineraryDayLine} />}
+          <TouchableOpacity onPress={onToggleLike} style={styles.publicDetailHeroLikeBtn} activeOpacity={0.8}>
+            <View style={styles.publicDetailHeroBtnInner}>
+              <Text style={[styles.publicHeartButtonText, isLiked && styles.publicHeartButtonTextActive]}>
+                {isLiked ? '♥' : '♡'}
+              </Text>
             </View>
-            <View style={styles.publicItineraryDayContent}>
-              <Text style={styles.publicItineraryDayTitle}>{section.title}</Text>
-              {section.places.length === 0 && <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>}
-              {section.places.length > 0 && (
-                <View style={styles.publicPlaceGroup}>
-                  <BlurView intensity={28} tint="extraLight" style={styles.publicPlaceGroupGlass} />
-                  {section.places.map((place) => (
-                    <TouchableOpacity
-                      key={place.id}
-                      style={styles.publicPlaceRow}
-                      activeOpacity={0.82}
-                      onPress={() => setSelectedPlaceDetail({ place, dateLabel: section.title })}
-                    >
-                      <Text style={styles.publicPlaceName}>{place.name}</Text>
-                      {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
+          </TouchableOpacity>
+          <View style={styles.publicDetailHeroInfoCard}>
+            <BlurView intensity={22} tint="light" style={styles.publicDetailHeroInfoCardBlur}>
+              <Text style={styles.publicDetailHeroInfoTitle} numberOfLines={2}>{trip.title}</Text>
+              <Text style={styles.publicDetailHeroInfoMeta} numberOfLines={1}>
+                {trip.location
+                  ? `${trip.location} · ${formatDateRangeWithYear(trip)}`
+                  : formatDateRangeWithYear(trip)}
+              </Text>
+            </BlurView>
           </View>
-        ))}
+        </View>
 
-        <TouchableOpacity
-          style={[styles.addPublicTripButton, styles.publicDetailAddButton, alreadyAdded && styles.addPublicTripButtonDone]}
-          onPress={() => onAddPublicTrip(trip)}
-          disabled={alreadyAdded}
-        >
-          <Text style={[styles.addPublicTripButtonText, alreadyAdded && styles.addPublicTripButtonTextDone]}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.publicDetailFloatingCard}>
+          <View style={styles.publicProfileInline}>
+            <TouchableOpacity onPress={onOpenProfile} style={styles.publicProfilePressable}>
+              <View style={styles.publicProfileAvatarImage}>
+                <Text style={styles.publicProfileAvatarInitial}>
+                  {trip.ownerName?.[0]?.toUpperCase() ?? '?'}
+                </Text>
+              </View>
+              <View style={styles.publicProfileTextWrap}>
+                <Text style={styles.publicProfileName} numberOfLines={1}>{trip.ownerName}</Text>
+                <Text style={styles.publicProfileSubtext} numberOfLines={1}>View public profile</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.publicDetailTitleGroup}>
+            <Text style={styles.publicDetailTitle} numberOfLines={2}>{trip.title}</Text>
+            {trip.location ? (
+              <View style={[styles.publicDetailLocationPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
+                <Text style={[styles.publicDetailLocation, { color: locationAccent.text }]}>{trip.location}</Text>
+              </View>
+            ) : null}
+            <Text style={styles.publicDetailMeta}>{formatDateRangeWithYear(trip)}</Text>
+          </View>
+
+          {trip.description ? <Text style={styles.publicDetailDescription}>{trip.description}</Text> : null}
+
+          <PublicTripTags trip={trip} />
+
+          <View style={styles.publicDetailItineraryHead}>
+            <Text style={styles.publicDetailSectionTitle}>Itinerary</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.publicItineraryDateRow}
+            style={styles.publicItineraryDateScroll}
+          >
+            {itinerarySections.map((section, index) => {
+              const isActive = index === safeSelectedPublicItineraryDayIndex;
+              return (
+                <TouchableOpacity
+                  key={section.key}
+                  style={[styles.publicItineraryDateChip, isActive && styles.publicItineraryDateChipActive]}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedPublicItineraryDayIndex(index)}
+                >
+                  <Text style={[styles.publicItineraryDateChipDayNumber, isActive && styles.publicItineraryDateChipTextActive]}>
+                    {section.date.getDate()}
+                  </Text>
+                  <Text style={[styles.publicItineraryDateChipWeekday, isActive && styles.publicItineraryDateChipTextActive]}>
+                    {formatItineraryChipWeekday(section.date)}
+                  </Text>
+                  <Text style={[styles.publicItineraryDateChipMonth, isActive && styles.publicItineraryDateChipTextActive]}>
+                    {formatItineraryChipMonth(section.date)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {selectedPublicItinerarySection ? (
+            <View key={selectedPublicItinerarySection.key} style={styles.publicItineraryDaySection}>
+              <View style={styles.publicItineraryDayContent}>
+                <Text style={styles.publicItineraryDayTitle}>{selectedPublicItinerarySection.title}</Text>
+                {selectedPublicItinerarySection.places.length === 0 && (
+                  <Text style={styles.publicItineraryEmpty}>No plans yet.</Text>
+                )}
+                {selectedPublicItinerarySection.places.length > 0 && (
+                  <View style={styles.publicPlaceGroup}>
+                    <BlurView intensity={28} tint="extraLight" style={styles.publicPlaceGroupGlass} />
+                    {selectedPublicItinerarySection.places.map((place, placeIndex) => {
+                      const iconAccent = ACTIVITY_ICON_COLORS[placeIndex % ACTIVITY_ICON_COLORS.length];
+                      const iconName = getActivityIcon(place.name);
+                      return (
+                      <TouchableOpacity
+                        key={place.id}
+                        style={styles.publicPlaceRow}
+                        activeOpacity={0.82}
+                        onPress={() => setSelectedPlaceDetail({ place, dateLabel: selectedPublicItinerarySection.title })}
+                      >
+                        <View style={[styles.publicPlaceIconBox, { backgroundColor: iconAccent.bg }]}>
+                          <Ionicons name={iconName} size={15} color={iconAccent.icon} />
+                        </View>
+                        <View style={styles.publicPlaceTextBlock}>
+                          <Text style={styles.publicPlaceName}>{place.name}</Text>
+                          {place.note && <Text style={styles.publicPlaceNote}>{place.note}</Text>}
+                        </View>
+                      </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.addPublicTripButton, styles.publicDetailAddButton, alreadyAdded && styles.addPublicTripButtonDone]}
+            onPress={() => onAddPublicTrip(trip)}
+            disabled={alreadyAdded}
+          >
+            <Text style={[styles.addPublicTripButtonText, alreadyAdded && styles.addPublicTripButtonTextDone]}>{alreadyAdded ? 'Added to my trips' : 'Add to my trips'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       <PlaceDetailModal
         visible={Boolean(selectedPlaceDetail)}
@@ -924,6 +1037,9 @@ export function ExploreMoreScreen({ board, onBack }) {
     hasMore: true
   });
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const locationAccent = getExploreAccent(
+    board.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  );
 
   const hasSearched = Boolean(activeSearchQuery);
   const insets = useSafeAreaInsets();
@@ -1005,7 +1121,7 @@ export function ExploreMoreScreen({ board, onBack }) {
         <View style={styles.recTitleGroup}>
           <Text style={styles.recPageTitle}>{board.title}</Text>
           {board.location ? (
-            <Text style={styles.recPageLocation}>{board.location}</Text>
+            <Text style={[styles.recPageLocation, { color: locationAccent.text }]}>{board.location}</Text>
           ) : null}
           <Text style={styles.recPageMeta}>
             {hasSearched ? `${formatDateRange(board)} · ${recommendations.length} results` : formatDateRange(board)}
@@ -1104,7 +1220,7 @@ export function ExploreMoreScreen({ board, onBack }) {
 const styles = StyleSheet.create({
   exploreHeader: {
     flexDirection: 'column',
-    marginBottom: 14,
+    marginBottom: 10,
     paddingHorizontal: 2
   },
   explorePageTitle: {
@@ -1126,11 +1242,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     gap: 8
   },
-  exploreIconGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2
-  },
   exploreSearchBar: {
     flex: 1,
     flexDirection: 'row',
@@ -1151,8 +1262,12 @@ const styles = StyleSheet.create({
     includeFontPadding: false
   },
   filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e8e5e0',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -1395,17 +1510,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e8e5e0',
     shadowColor: '#2c2b28',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2
   },
   publicTripImageWrap: {
-    position: 'relative'
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 16,
   },
   publicTripImage: {
     width: '100%',
-    height: 120,
+    height: 98,
     backgroundColor: '#f0efed'
   },
   publicTripImagePlaceholder: {
@@ -1413,24 +1530,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   publicTripHeartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(44,43,40,0.38)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#f0efed',
+    borderWidth: 1,
+    borderColor: '#e8e5e0',
     alignItems: 'center',
     justifyContent: 'center'
   },
   publicTripBody: {
-    padding: 10
+    paddingHorizontal: 11,
+    paddingTop: 9,
+    paddingBottom: 12
   },
   publicTripTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 19,
     color: '#2c2b28',
-    marginBottom: 4,
+    marginBottom: 5,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
@@ -1438,33 +1556,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginBottom: 2
+    alignSelf: 'flex-start',
+    marginBottom: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   publicTripMeta: {
     fontSize: 11,
     lineHeight: 15,
     color: '#8a8987',
     fontFamily: 'Nunito_400Regular',
-    flex: 1
+    flexShrink: 1
   },
   publicTripAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 8
+    marginTop: 10
   },
   publicTripAuthorAvatar: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#fff4d9',
+    backgroundColor: 'rgba(211,182,211,0.30)',
     alignItems: 'center',
     justifyContent: 'center'
   },
   publicTripAuthorAvatarText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#c48a00'
+    color: '#D3B6D3'
   },
   publicTripOwner: {
     color: '#7a7770',
@@ -1475,13 +1598,16 @@ const styles = StyleSheet.create({
   publicTripDates: {
     fontSize: 11,
     lineHeight: 15,
-    color: '#8a8987',
-    fontFamily: 'Nunito_400Regular'
+    color: '#2c2b28',
+    marginTop: 4,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700'
   },
   publicTripDescription: {
     fontSize: 11,
     lineHeight: 15,
-    color: '#8a8987',
+    color: '#2c2b28',
+    marginTop: 2,
     fontFamily: 'Nunito_400Regular'
   },
   publicTripTagRow: {
@@ -1506,10 +1632,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   addPublicTripButton: {
-    backgroundColor: '#ffba30',
+    backgroundColor: 'rgba(211,182,211,0.30)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#ffba30',
+    borderColor: 'rgba(211,182,211,0.30)',
     paddingVertical: 14,
     alignItems: 'center'
   },
@@ -1521,7 +1647,7 @@ const styles = StyleSheet.create({
     color: '#8a8987'
   },
   addPublicTripButtonText: {
-    color: '#2c2b28',
+    color: '#D3B6D3',
     fontWeight: '700',
     fontSize: 15,
     fontFamily: 'Nunito_700Bold'
@@ -1539,32 +1665,106 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   publicDetailScreen: {
-    backgroundColor: '#f0efed'
+    flex: 1,
+    backgroundColor: '#f3f2ef',
+    marginHorizontal: -18
   },
-  publicDetailCard: {
+  publicDetailScrollContent: {
+    paddingBottom: 20
+  },
+  publicDetailHeroSection: {
+    height: 240,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  publicDetailHeroImage: {
+    width: '100%',
+    height: 240,
+  },
+  publicDetailHeroPlaceholder: {
+    width: '100%',
+    height: 240,
+    backgroundColor: '#7a6ab8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  publicDetailHeroGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  publicDetailHeroBackBtn: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+  },
+  publicDetailHeroLikeBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  publicDetailHeroBtnInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  publicDetailHeroInfoCard: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 28,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#2c2b28',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  publicDetailHeroInfoCardBlur: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+  },
+  publicDetailHeroInfoTitle: {
+    color: '#2c2b28',
+    fontSize: 19,
+    lineHeight: 23,
+    fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800'
+  },
+  publicDetailHeroInfoMeta: {
+    marginTop: 2,
+    color: '#8a8987',
+    fontSize: 15,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: Platform.OS === 'ios' ? '500' : '400'
+  },
+  publicDetailFloatingCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -24,
+    padding: 20,
+    paddingBottom: 16,
     overflow: 'hidden',
     shadowColor: '#2c2b28',
     shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  publicDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10
-  },
-  publicDetailBackButton: {
-    marginLeft: 0,
-    paddingHorizontal: 0
-  },
-  publicDetailHeaderAction: {
-    marginRight: 0,
-    paddingHorizontal: 0
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 3,
   },
   publicDetailTitleGroup: {
     marginBottom: 16
@@ -1578,23 +1778,23 @@ const styles = StyleSheet.create({
     textTransform: 'lowercase'
   },
   publicDetailLocation: {
-    color: '#7a7770',
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: Platform.OS === 'ios' ? '600' : '500',
-    marginTop: 4
+    fontFamily: 'Nunito_600SemiBold',
+    fontWeight: Platform.OS === 'ios' ? '600' : '700',
   },
-  publicDetailImage: {
-    width: '100%',
-    height: 176,
-    borderRadius: 18,
-    marginBottom: 16
+  publicDetailLocationPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginTop: 4,
   },
   publicProfileInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
     marginBottom: 10
   },
   publicProfilePressable: {
@@ -1607,7 +1807,16 @@ const styles = StyleSheet.create({
   publicProfileAvatarImage: {
     width: 38,
     height: 38,
-    borderRadius: 19
+    borderRadius: 19,
+    backgroundColor: 'rgba(211,182,211,0.30)',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  publicProfileAvatarInitial: {
+    color: '#D3B6D3',
+    fontSize: 17,
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold'
   },
   publicProfileTextWrap: {
     flex: 1,
@@ -1627,18 +1836,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   publicHeartButton: {
-    minWidth: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    marginRight: 6,
-    height: 36
+    minWidth: 28,
   },
   publicHeartButtonText: {
     color: '#CCCCCC',
-    fontSize: 28,
-    lineHeight: 30,
+    fontSize: 24,
+    lineHeight: 24,
     fontWeight: '500'
   },
   publicHeartButtonTextActive: {
@@ -1654,11 +1859,11 @@ const styles = StyleSheet.create({
     color: '#FF3B30'
   },
   publicDetailMeta: {
-    color: '#8a8987',
+    color: '#2c2b28',
     fontSize: 13,
     lineHeight: 18,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: Platform.OS === 'ios' ? '600' : '500',
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
     marginTop: 4
   },
   publicDetailDescription: {
@@ -1680,26 +1885,59 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800'
   },
+  publicItineraryDateScroll: {
+    marginBottom: 18
+  },
+  publicItineraryDateRow: {
+    paddingRight: 4,
+    gap: 8
+  },
+  publicItineraryDateChip: {
+    width: 50,
+    minHeight: 60,
+    borderRadius: 14,
+    backgroundColor: '#EEE9E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: '#e8e5e0'
+  },
+  publicItineraryDateChipActive: {
+    backgroundColor: '#EFCE7B',
+    borderColor: '#EFCE7B'
+  },
+  publicItineraryDateChipDayNumber: {
+    color: '#2c2b28',
+    fontSize: 18,
+    lineHeight: 20,
+    fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800'
+  },
+  publicItineraryDateChipWeekday: {
+    marginTop: 2,
+    color: '#7a7770',
+    fontSize: 10,
+    lineHeight: 12,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  publicItineraryDateChipMonth: {
+    marginTop: 1,
+    color: '#8a8987',
+    fontSize: 9,
+    lineHeight: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '600'
+  },
+  publicItineraryDateChipTextActive: {
+    color: '#2c2b28'
+  },
   publicItineraryDaySection: {
-    flexDirection: 'row',
-    alignItems: 'stretch'
-  },
-  publicItineraryDayRail: {
-    width: 24,
-    alignItems: 'center'
-  },
-  publicItineraryDayDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ffba30',
-    marginTop: 6
-  },
-  publicItineraryDayLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: '#e8e5e0',
-    marginTop: 4
+    marginBottom: 8
   },
   publicItineraryDayContent: {
     flex: 1,
@@ -1733,8 +1971,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(240,239,237,0.90)'
   },
   publicPlaceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingVertical: 10,
     paddingHorizontal: 12
+  },
+  publicPlaceIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 1
+  },
+  publicPlaceTextBlock: {
+    flex: 1,
+    minWidth: 0
   },
   publicPlaceName: {
     color: '#2c2b28',
@@ -1854,14 +2107,13 @@ const styles = StyleSheet.create({
   exploreSubHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 10
+    marginBottom: 8,
   },
   backButton: {
     paddingVertical: 4,
     paddingHorizontal: 2,
     marginTop: 0,
-    marginLeft: 8,
+    marginLeft: 2,
     minWidth: 28,
     alignItems: 'flex-start',
     justifyContent: 'center',
@@ -1874,22 +2126,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
-  exploreSubHeaderText: {
-    flex: 1
-  },
   publicDetailHeaderText: {
     alignItems: 'flex-end'
-  },
-  filterSubHeaderText: {
-    alignItems: 'flex-end',
-    paddingRight: 10
-  },
-  exploreSubTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#2c2b28',
-    textTransform: 'lowercase',
-    fontFamily: 'Nunito_800ExtraBold'
   },
   publicDetailHeaderTitle: {
     textAlign: 'right'
