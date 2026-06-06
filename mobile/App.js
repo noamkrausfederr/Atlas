@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Modal, TextInput, Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -18,15 +19,13 @@ import { colors, fonts, radius, shadow } from './src/theme';
 
 import { publicTrips as publicTripMetadata, sampleBoards } from './data/trips';
 import { getPastTrips, getUpcomingTrips } from './data/tripUtils';
-import { getBoardImageUrl, hydrateTripImages } from './data/cityPhotos';
 
 // Components & Screens
 import { BoardCard } from './src/components/BoardCard';
-import { IllustratedTripCard } from './src/components/IllustratedTripCard';
 import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
-import { ProfileScreen, SettingsScreen } from './src/screens/ProfileScreen';
+import { ProfileScreen, SettingsScreen, TripListScreen } from './src/screens/ProfileScreen';
 
 function formatInboxHandle(ownerName) {
   return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
@@ -89,16 +88,20 @@ function InnerApp() {
     Nunito_600SemiBold,
     Nunito_700Bold,
     Nunito_800ExtraBold,
-    Nunito_900Black
+    Nunito_900Black,
+    Gaya: require('./assets/fonts/gayatrial-italic.otf'),
+    LuckyBones: require('./assets/fonts/Luckybones-Bold.otf'),
+    SKMoralist: require('./assets/fonts/SKMoralist-Regular.ttf'),
+    Biro: require('./assets/fonts/Biro_Script_reduced.ttf')
   });
 
   const createBoardFormRef = useRef(null);
   const createBoardLocationInputRef = useRef(null);
   const [boards, setBoards] = useState(sampleBoards);
-  const [hydratedPublicTrips, setHydratedPublicTrips] = useState(publicTripMetadata);
+  const hydratedPublicTrips = publicTripMetadata;
   const [selectedBoard, setSelectedBoard] = useState(null);
   const [tripStack, setTripStack] = useState(null);
-  const [activeTab, setActiveTab] = useState('Trips');
+  const [activeTab, setActiveTab] = useState('Profile');
   const [exploreStack, setExploreStack] = useState(null);
   const [profileStack, setProfileStack] = useState(null);
   const [exploreResetKey, setExploreResetKey] = useState(0);
@@ -114,13 +117,16 @@ function InnerApp() {
   const [citySearchError, setCitySearchError] = useState('');
   const [isLocationFocused, setIsLocationFocused] = useState(false);
   const [isCreatingBoard, setIsCreatingBoard] = useState(false);
+  const [isPickingTripPhoto, setIsPickingTripPhoto] = useState(false);
+  const [tripPhotoError, setTripPhotoError] = useState('');
   const [activeDraftDateField, setActiveDraftDateField] = useState(null);
   const [draftBoard, setDraftBoard] = useState({
     title: '',
     location: '',
     description: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    image: ''
   });
 
   const parseDateInput = (value) => {
@@ -257,48 +263,15 @@ function InnerApp() {
     };
   }, [draftBoard.location, isCreateBoardVisible, isLocationFocused]);
 
-  useEffect(() => {
-    let isActive = true;
-
-    Promise.all([
-      hydrateTripImages(sampleBoards),
-      hydrateTripImages(publicTripMetadata)
-    ]).then(([hydratedBoards, nextPublicTrips]) => {
-      if (!isActive) return;
-
-      const imageUrls = [...hydratedBoards, ...nextPublicTrips].map((trip) => trip.image).filter(Boolean);
-      imageUrls.forEach((imageUrl) => Image.prefetch(imageUrl));
-
-      const hydratedImagesById = hydratedBoards.reduce((images, board) => {
-        images[board.id] = board.image;
-        return images;
-      }, {});
-
-      setHydratedPublicTrips(nextPublicTrips);
-      setBoards((current) =>
-        current.map((board) => (
-          hydratedImagesById[board.id] ? { ...board, image: hydratedImagesById[board.id] } : board
-        ))
-      );
-      setSelectedBoard((current) => (
-        current && hydratedImagesById[current.id] ? { ...current, image: hydratedImagesById[current.id] } : current
-      ));
-    });
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
   
   const insets = useSafeAreaInsets();
 
   if (!fontsLoaded) return null;
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
   
-const upcomingBoards = getUpcomingTrips(boards);
+  const upcomingBoards = getUpcomingTrips(boards);
   const pastTrips = getPastTrips(boards);
   const likedPublicTrips = hydratedPublicTrips.filter((trip) => likedPublicTripIds.includes(trip.id));
-  const isTripsRootView = !selectedBoard && activeTab === 'Trips';
   const isExploreView = activeTab === 'Explore';
   const isInboxView = activeTab === 'Inbox';
   const isProfileView = activeTab === 'Profile';
@@ -442,10 +415,12 @@ const upcomingBoards = getUpcomingTrips(boards);
       location: '',
       description: '',
       startDate: '',
-      endDate: ''
+      endDate: '',
+      image: ''
     });
     setCityOptions([]);
     setCitySearchError('');
+    setTripPhotoError('');
     setIsLocationFocused(false);
     setActiveDraftDateField(null);
   };
@@ -458,6 +433,32 @@ const upcomingBoards = getUpcomingTrips(boards);
   const closeNewBoard = () => {
     setIsCreateBoardVisible(false);
     setActiveDraftDateField(null);
+  };
+
+  const handlePickTripPhoto = async () => {
+    if (isPickingTripPhoto) {
+      return;
+    }
+
+    setTripPhotoError('');
+    setIsPickingTripPhoto(true);
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+        allowsEditing: true,
+        aspect: [4, 5],
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setDraftBoard((current) => ({ ...current, image: result.assets[0].uri }));
+      }
+    } catch (error) {
+      setTripPhotoError('Could not open photo library. Try restarting Expo once.');
+    } finally {
+      setIsPickingTripPhoto(false);
+    }
   };
 
   const addPublicTripToBoards = (trip) => {
@@ -479,7 +480,7 @@ const upcomingBoards = getUpcomingTrips(boards);
     };
 
     setBoards((current) => [copiedTrip, ...current]);
-    setActiveTab('Trips');
+    setActiveTab('Profile');
     setSelectedBoard(copiedTrip);
     setTripStack(null);
     setExploreStack(null);
@@ -498,22 +499,32 @@ const upcomingBoards = getUpcomingTrips(boards);
   const handleCreateBoard = async () => {
     const title = draftBoard.title.trim();
     const location = draftBoard.location.trim();
-    if (!title || isCreatingBoard) {
+    const description = draftBoard.description.trim();
+    const selectedImage = draftBoard.image.trim();
+    const startValue = parseDateInput(draftBoard.startDate);
+    const endValue = parseDateInput(draftBoard.endDate);
+
+    if (
+      isCreatingBoard ||
+      !title ||
+      !location ||
+      !description ||
+      !selectedImage ||
+      !startValue ||
+      !endValue
+    ) {
       return;
     }
     setIsCreatingBoard(true);
 
     try {
-      const start = parseDateInput(draftBoard.startDate) || new Date();
+      const start = new Date(startValue);
       start.setHours(0, 0, 0, 0);
 
-      const endValue = parseDateInput(draftBoard.endDate);
-      const endDate = endValue ? new Date(endValue) : new Date(start);
+      const endDate = new Date(endValue);
       if (endDate < start) {
         endDate.setTime(start.getTime());
       }
-      const description = draftBoard.description.trim();
-      const image = await getBoardImageUrl(location || title);
 
       const newBoard = {
         id: `board-${Date.now()}`,
@@ -521,7 +532,7 @@ const upcomingBoards = getUpcomingTrips(boards);
         subtitle: location || 'New trip',
         location,
         description,
-        image,
+        image: selectedImage,
         places: 0,
         days: Math.max(1, Math.round((endDate - start) / (1000 * 60 * 60 * 24)) + 1),
         startDate: start.toISOString(),
@@ -539,6 +550,15 @@ const upcomingBoards = getUpcomingTrips(boards);
       setIsCreatingBoard(false);
     }
   };
+
+  const isDraftBoardComplete = Boolean(
+    draftBoard.title.trim() &&
+    draftBoard.location.trim() &&
+    draftBoard.description.trim() &&
+    draftBoard.startDate.trim() &&
+    draftBoard.endDate.trim() &&
+    draftBoard.image.trim()
+  );
 
   const renderCreateBoardModal = () => (
     <Modal visible={isCreateBoardVisible} animationType="slide" transparent>
@@ -616,6 +636,29 @@ const upcomingBoards = getUpcomingTrips(boards);
                 )}
               </View>
             )}
+            <Text style={styles.modalLabel}>Trip photo</Text>
+            <TouchableOpacity
+              style={styles.photoPickerButton}
+              activeOpacity={0.82}
+              onPress={handlePickTripPhoto}
+            >
+              {draftBoard.image ? (
+                <Image source={{ uri: draftBoard.image }} style={styles.photoPickerPreview} />
+              ) : (
+                <View style={styles.photoPickerPlaceholder}>
+                  {isPickingTripPhoto ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <Ionicons name="image-outline" size={26} color={colors.textMuted} />
+                  )}
+                  <Text style={styles.photoPickerPlaceholderText}>Upload trip photo</Text>
+                  <Text style={styles.photoPickerHelperText}>
+                    {isPickingTripPhoto ? 'Opening photo library...' : 'This is required before saving'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {tripPhotoError ? <Text style={styles.photoPickerError}>{tripPhotoError}</Text> : null}
             <Text style={styles.modalLabel}>Start date</Text>
             <TouchableOpacity
               style={[styles.modalInput, styles.modalDateButton]}
@@ -689,11 +732,15 @@ const upcomingBoards = getUpcomingTrips(boards);
               <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.modalButton, styles.modalSaveButton, isCreatingBoard && styles.modalSaveButtonDisabled]}
+              style={[
+                styles.modalButton,
+                styles.modalSaveButton,
+                (!isDraftBoardComplete || isCreatingBoard) && styles.modalSaveButtonDisabled
+              ]}
               onPress={handleCreateBoard}
-              disabled={isCreatingBoard}
+              disabled={!isDraftBoardComplete || isCreatingBoard}
             >
-              <Text style={styles.modalSaveText}>{isCreatingBoard ? 'Finding photo...' : 'Save trip'}</Text>
+              <Text style={styles.modalSaveText}>{isCreatingBoard ? 'Saving trip...' : 'Save trip'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -770,12 +817,40 @@ const upcomingBoards = getUpcomingTrips(boards);
         );
       }
 
+      if (profileStack?.screen === 'allUpcoming') {
+        return (
+          <TripListScreen
+            title="Upcoming Trips"
+            boards={upcomingBoards}
+            compact={false}
+            onBack={() => setProfileStack(null)}
+            onOpenBoard={openBoard}
+          />
+        );
+      }
+
+      if (profileStack?.screen === 'allPast') {
+        return (
+          <TripListScreen
+            title="Past Trips"
+            boards={pastTrips}
+            compact={false}
+            onBack={() => setProfileStack(null)}
+            onOpenBoard={openBoard}
+          />
+        );
+      }
+
       return (
         <ProfileScreen
           boards={boards}
+          upcomingBoards={upcomingBoards}
+          pastTrips={pastTrips}
           followingCount={382 + followedProfileNames.length}
           onOpenBoard={openBoard}
-          onOpenSettings={() => setProfileStack({ screen: 'settings' })}
+          onSeeAllUpcoming={() => setProfileStack({ screen: 'allUpcoming' })}
+          onSeeAllPast={() => setProfileStack({ screen: 'allPast' })}
+          onSettingsPress={() => setProfileStack({ screen: 'settings' })}
         />
       );
     }
@@ -798,58 +873,7 @@ const upcomingBoards = getUpcomingTrips(boards);
         />
       );
     }
-
-    return (
-      <>
-        {/* Upcoming trips */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionHeaderTitle}>Upcoming</Text>
-          <Text style={styles.sectionHeaderSeeAll}>See all</Text>
-        </View>
-
-        {upcomingBoards.length > 0 ? (
-          <View style={styles.tripStack}>
-            {/* Featured first trip */}
-            <IllustratedTripCard
-              key={upcomingBoards[0].id}
-              board={upcomingBoards[0]}
-              onPress={openBoard}
-              featured
-              style={styles.featuredCard}
-            />
-            {/* Mini grid for the rest */}
-            {upcomingBoards.length > 1 && (
-              <View style={styles.miniGrid}>
-                {upcomingBoards.slice(1).map((board) => (
-                  <IllustratedTripCard key={board.id} board={board} onPress={openBoard} />
-                ))}
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.emptySection}>
-            <Ionicons name="airplane-outline" size={28} color={colors.textMuted} style={{ marginBottom: 8 }} />
-            <Text style={styles.emptySectionText}>No upcoming trips yet.</Text>
-          </View>
-        )}
-
-        {/* Past trips */}
-        <View style={[styles.sectionHeaderRow, { marginTop: 8 }]}>
-          <Text style={styles.sectionHeaderTitle}>Past Trips</Text>
-          <Text style={styles.sectionHeaderSeeAll}>See all</Text>
-        </View>
-
-        {pastTrips.length > 0 ? (
-          <View>
-            {pastTrips.map((board) => (
-              <IllustratedTripCard key={board.id} board={board} onPress={openBoard} compact />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyTrips} />
-        )}
-      </>
-    );
+    return null;
   };
 
   const showTabBar = !selectedBoard && !isInboxChatOpen;
@@ -859,7 +883,7 @@ const upcomingBoards = getUpcomingTrips(boards);
     <SafeAreaView
       style={[
         styles.safeArea,
-        (isTripsRootView || isExploreView || isInboxView || isProfileView) && styles.tripsSafeArea,
+        (isExploreView || isInboxView || isProfileView) && styles.tripsSafeArea,
         isTripDetailView && styles.detailSafeArea
       ]}
       edges={['top']}
@@ -875,6 +899,37 @@ const upcomingBoards = getUpcomingTrips(boards);
                 <Text style={styles.appHeaderBrandTextDot}>.</Text>
               </Text>
             </View>
+            {isExploreView || isProfileView || isInboxView ? (
+              <View style={styles.appHeaderActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.appHeaderActionButton,
+                    styles.appHeaderActionButtonRelative,
+                    isInboxView && styles.appHeaderActionInboxButton
+                  ]}
+                  onPress={() => openTab('Inbox')}
+                  activeOpacity={0.8}
+                >
+                  {isInboxView ? (
+                    <Text style={styles.appHeaderActionInboxText}>Inbox</Text>
+                  ) : (
+                    <Ionicons name={activeTab === 'Inbox' ? 'notifications' : 'notifications-outline'} size={20} color={colors.text} />
+                  )}
+                  {inboxUnreadCount > 0 && (
+                    <View style={styles.appHeaderBadge}>
+                      <Text style={styles.appHeaderBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.appHeaderActionButton, styles.appHeaderProfileButton]}
+                  onPress={() => openTab('Profile')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={20} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
         </View>
       )}
@@ -882,7 +937,6 @@ const upcomingBoards = getUpcomingTrips(boards);
       <View
         style={[
           styles.contentWrapper,
-          isTripsRootView && styles.tripsContentWrapper,
           isTripDetailView && styles.detailContentWrapper,
           (isExploreView || isInboxView || isProfileView) && styles.tripsContentWrapper
         ]}
@@ -900,10 +954,9 @@ const upcomingBoards = getUpcomingTrips(boards);
             contentContainerStyle={[
               styles.container,
               exploreStack && styles.exploreStackContainer,
-              isTripsRootView && styles.tripsContainer,
               isExploreView && styles.exploreContainer
             ]}
-            style={isTripsRootView ? styles.tripsScrollView : isExploreView ? styles.exploreScrollView : null}
+            style={isExploreView ? styles.exploreScrollView : null}
             showsVerticalScrollIndicator={false}
           >
             {renderContent()}
@@ -912,8 +965,7 @@ const upcomingBoards = getUpcomingTrips(boards);
         {renderCreateBoardModal()}
       </View>
 
-      {/* Floating create FAB — only on trips root */}
-      {isTripsRootView && (
+      {isProfileView && !selectedBoard && !profileStack && (
         <TouchableOpacity
           style={[styles.floatingFAB, { bottom: floatingFabBottom }]}
           onPress={openNewBoard}
@@ -926,22 +978,8 @@ const upcomingBoards = getUpcomingTrips(boards);
       {showTabBar && (
         <View style={[styles.bottomTabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={styles.bottomTabBarInner}>
-            <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Trips')}>
-              <Ionicons name={activeTab === 'Trips' ? 'briefcase' : 'briefcase-outline'} size={22} color="#888480" />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Explore')}>
-              <Ionicons name={activeTab === 'Explore' ? 'compass' : 'compass-outline'} size={22} color="#888480" />
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.bottomTabButton, styles.bottomTabButtonRelative]} onPress={() => openTab('Inbox')}>
-              <Ionicons name={activeTab === 'Inbox' ? 'mail' : 'mail-outline'} size={22} color="#888480" />
-              {inboxUnreadCount > 0 && (
-                <View style={styles.bottomTabBadge}>
-                  <Text style={styles.bottomTabBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.bottomTabButton} onPress={() => openTab('Profile')}>
-              <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={22} color="#888480" />
+              <Ionicons name={activeTab === 'Explore' ? 'compass' : 'compass-outline'} size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
         </View>
@@ -961,20 +999,20 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   tripsSafeArea: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   detailSafeArea: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   container: {
     padding: 20,
     paddingBottom: 32
   },
   tripsContainer: {
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.background,
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 24
@@ -982,23 +1020,23 @@ const styles = StyleSheet.create({
   exploreContainer: {
     paddingHorizontal: 18,
     paddingTop: 8,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   contentWrapper: {
     flex: 1,
     position: 'relative'
   },
   tripsContentWrapper: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   detailContentWrapper: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   tripsScrollView: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   exploreScrollView: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   heroCard: {
     backgroundColor: '#FFF8F0',
@@ -1033,13 +1071,13 @@ const styles = StyleSheet.create({
     marginBottom: 18
   },
   heroButton: {
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#F26B64',
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center'
   },
   heroButtonText: {
-    color: '#FFF8F0',
+    color: '#ffffff',
     fontWeight: '700',
     fontSize: 15
   },
@@ -1103,7 +1141,7 @@ const styles = StyleSheet.create({
   createTripButton: {
     width: 44,
     height: 44,
-    backgroundColor: '#E6A6B3',
+    backgroundColor: '#F26B64',
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center'
@@ -1175,12 +1213,13 @@ const styles = StyleSheet.create({
     lineHeight: 20
   },
   appHeader: {
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.background,
     zIndex: 20
   },
   appHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 18,
     paddingVertical: 10
   },
@@ -1190,28 +1229,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(211,182,211,0.30)'
+    backgroundColor: colors.surfaceDeep
   },
   appHeaderBrandText: {
     fontSize: 22,
-    fontWeight: '800',
-    fontFamily: 'Nunito_800ExtraBold',
-    color: '#D3B6D3',
+    fontFamily: 'Gaya',
+    color: '#FF3C37',
     letterSpacing: -0.4
   },
   appHeaderBrandTextDot: {
-    color: '#D3B6D3'
+    color: '#FF3C37'
+  },
+  appHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10
+  },
+  appHeaderActionButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  appHeaderProfileButton: {
+    backgroundColor: 'transparent',
+  },
+  appHeaderActionButtonRelative: {
+    position: 'relative'
+  },
+  appHeaderActionInboxButton: {
+    width: 'auto',
+    paddingHorizontal: 4,
+  },
+  appHeaderActionInboxText: {
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 18,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  appHeaderBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(242,107,100,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 0.5,
+    borderColor: '#F26B64'
+  },
+  appHeaderBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#F26B64'
   },
   bottomTabBar: {
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: '#e6e3df',
+    borderTopColor: colors.border,
     zIndex: 20
   },
   bottomTabBarInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     paddingHorizontal: 18,
     paddingTop: 10
   },
@@ -1221,36 +1308,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  bottomTabButtonRelative: {
-    position: 'relative'
-  },
-  bottomTabBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#EFCE7B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3
-  },
-  bottomTabBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: colors.text
-  },
   floatingFAB: {
     position: 'absolute',
     right: 20,
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#EFCE7B',
+    backgroundColor: '#F26B64',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#EFCE7B',
+    shadowColor: '#F26B64',
     shadowOpacity: 0.4,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -1295,14 +1362,14 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold
   },
   modalInput: {
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.surfaceDeep,
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 16 : 12,
     marginBottom: 14,
-    color: '#111111',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: colors.border,
     textAlign: 'left'
   },
   modalMultilineInput: {
@@ -1313,20 +1380,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   modalDateText: {
-    color: '#111111',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600'
   },
   modalDatePlaceholder: {
-    color: '#AAAAAA',
+    color: colors.textMuted,
     fontWeight: '400'
   },
   modalCalendarWrap: {
     width: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     marginTop: -6,
     marginBottom: 14
@@ -1340,10 +1407,10 @@ const styles = StyleSheet.create({
   cityDropdown: {
     marginTop: -6,
     marginBottom: 14,
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.surfaceDeep,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)',
+    borderColor: colors.border,
     overflow: 'hidden'
   },
   cityDropdownStatus: {
@@ -1378,6 +1445,44 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14
   },
+  photoPickerButton: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  photoPickerPreview: {
+    width: '100%',
+    height: 180,
+  },
+  photoPickerPlaceholder: {
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.surfaceDeep,
+    paddingHorizontal: 20,
+  },
+  photoPickerPlaceholderText: {
+    color: colors.text,
+    fontSize: 16,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+  },
+  photoPickerHelperText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: fonts.regular,
+  },
+  photoPickerError: {
+    color: '#C9524E',
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    marginTop: -6,
+    marginBottom: 10,
+  },
   modalTextArea: {
     minHeight: 100,
     textAlignVertical: 'top'
@@ -1394,9 +1499,9 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCancelButton: {
-    backgroundColor: '#f3f2ef',
+    backgroundColor: colors.surfaceDeep,
     borderWidth: 1,
-    borderColor: 'rgba(215,215,210,0.95)'
+    borderColor: colors.border
   },
   modalCancelText: {
     color: colors.text,
@@ -1404,15 +1509,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold
   },
   modalSaveButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: '#F26B64',
     borderWidth: 1,
-    borderColor: colors.accent
+    borderColor: '#F26B64'
   },
   modalSaveButtonDisabled: {
     opacity: 0.55
   },
   modalSaveText: {
-    color: colors.text,
+    color: '#ffffff',
     fontWeight: '700',
     fontFamily: fonts.bold
   },
@@ -1422,7 +1527,7 @@ const styles = StyleSheet.create({
     paddingTop: 0
   },
   tripDetailContainer: {
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   exploreStackContainer: {
     paddingBottom: 120

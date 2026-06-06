@@ -4,20 +4,123 @@
 
 :root {
   color-scheme: light;
+  --atlas-ink: #15243c;
+  --atlas-muted: #60708a;
+  --atlas-paper: #fffaf3;
+  --atlas-sand: #f3e3c8;
+  --atlas-sun: #f09a61;
+  --atlas-sea: #2f6c72;
+  --atlas-mist: #dce8e4;
+  --atlas-butter: #f0e1a5;
+  --atlas-butter-soft: #fbf2cc;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  @apply bg-white text-slate-900 antialiased;
-  font-family: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, sans-serif;
+  @apply antialiased;
+  background:
+    radial-gradient(circle at top left, rgba(240, 154, 97, 0.18), transparent 26rem),
+    radial-gradient(circle at top right, rgba(47, 108, 114, 0.14), transparent 24rem),
+    linear-gradient(180deg, #fffdf9 0%, #fff9f2 42%, #f7f5ef 100%);
+  color: var(--atlas-ink);
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+[data-atlas-display='true'] {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  letter-spacing: -0.03em;
+}
+
+.atlas-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.atlas-shell::before {
+  content: '';
+  position: fixed;
+  inset: auto auto 4rem -7rem;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 9999px;
+  background: rgba(240, 154, 97, 0.12);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.atlas-shell::after {
+  content: '';
+  position: fixed;
+  inset: 8rem -6rem auto auto;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 9999px;
+  background: rgba(47, 108, 114, 0.1);
+  filter: blur(48px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.atlas-kicker {
+  color: var(--atlas-sea);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.atlas-panel {
+  border: 1px solid rgba(21, 36, 60, 0.08);
+  background: rgba(255, 252, 246, 0.82);
+  box-shadow: 0 22px 60px rgba(21, 36, 60, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+
+.atlas-grid {
+  background-image:
+    linear-gradient(rgba(21, 36, 60, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21, 36, 60, 0.05) 1px, transparent 1px);
+  background-size: 2.75rem 2.75rem;
+}
+
+.atlas-wash {
+  background:
+    radial-gradient(circle at top, rgba(240, 154, 97, 0.24), transparent 30%),
+    linear-gradient(180deg, rgba(255, 251, 244, 0.98), rgba(249, 244, 235, 0.92));
+}
+
+@keyframes atlasFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 button,
 input,
 textarea,
 select {
-  @apply focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-white;
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+  --tw-ring-color: rgba(47, 108, 114, 0.35);
+  --tw-ring-offset-color: #fff8f0;
 }
 
 ::selection {
-  @apply bg-slate-200 text-slate-900;
+  background: rgba(240, 154, 97, 0.28);
+  color: var(--atlas-ink);
 }

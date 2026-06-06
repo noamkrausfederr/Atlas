@@ -57,14 +57,15 @@ export default function DiscoverMasonry({ boards }: DiscoverMasonryProps) {
     <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
       {pins.map((pin) => (
         <article key={pin.id} className="mb-4 break-inside-avoid">
-          <div className="group relative overflow-hidden rounded-2xl bg-slate-100">
+          <div className="atlas-panel group relative overflow-hidden rounded-[1.75rem] p-2">
             <div className={`relative overflow-hidden ${aspectClasses[pin.aspect]}`}>
               <img
                 src={pin.cover}
                 alt={pin.title}
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                className="h-full w-full rounded-[1.2rem] object-cover transition duration-500 group-hover:scale-105"
                 loading="lazy"
               />
+              <div className="absolute inset-0 rounded-[1.2rem] bg-gradient-to-t from-[rgba(21,36,60,0.42)] via-transparent to-transparent" />
               <button
                 type="button"
                 aria-label="Save pin"
@@ -75,10 +76,10 @@ export default function DiscoverMasonry({ boards }: DiscoverMasonryProps) {
                 </svg>
               </button>
             </div>
-            <div className="px-1 pt-3">
-              <p className="line-clamp-1 text-sm font-semibold text-slate-900">{pin.title}</p>
-              <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{pin.location}</p>
-              <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-wider text-slate-400">{pin.boardTitle}</p>
+            <div className="px-2 pb-2 pt-3">
+              <p className="line-clamp-1 text-sm font-semibold text-[var(--atlas-ink)]">{pin.title}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs text-[var(--atlas-muted)]">{pin.location}</p>
+              <p className="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[var(--atlas-sea)]">{pin.boardTitle}</p>
             </div>
           </div>
         </article>

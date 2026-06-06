@@ -7,7 +7,7 @@ const FALLBACK_IMAGE =
 const CARD_GAP = 12;
 const PAGE_PADDING = 12;
 const CARD_WIDTH = Math.floor((Dimensions.get('window').width - PAGE_PADDING * 2 - CARD_GAP) / 2);
-const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.42);
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.38);
 
 // Soft pastel accent strips — deterministic by id hash
 const CARD_ACCENTS = [
@@ -58,7 +58,10 @@ export function BoardCard({ board, onPress, style }) {
     setImageFailed(false);
   }, [board.image]);
 
-  const imageUri = imageFailed || !board.image ? FALLBACK_IMAGE : board.image;
+  const isLocalImage = typeof board.image === 'number';
+  const imageSource = isLocalImage
+    ? board.image
+    : (imageFailed || !board.image ? { uri: FALLBACK_IMAGE } : { uri: board.image });
   const locationText = getBoardLocation(board);
   const dateText = formatBoardDates(board);
   const accentColor = getAccent(board);
@@ -79,27 +82,20 @@ export function BoardCard({ board, onPress, style }) {
         onPressOut={handlePressOut}
         style={styles.pressArea}
       >
-        {/* Top: destination photo */}
         <View style={styles.photoSection}>
           <Image
-            source={{ uri: imageUri }}
-            style={styles.photo}
-            onError={() => setImageFailed(true)}
+            source={imageSource}
+            style={{ width: CARD_WIDTH, height: CARD_HEIGHT, objectFit: 'cover' }}
+            onError={() => !isLocalImage && setImageFailed(true)}
           />
-          {/* Warm fade at bottom of photo into info panel */}
-          <View style={styles.photoFade} />
         </View>
-
-        {/* Bottom: warm cream info panel */}
         <View style={styles.infoPanel}>
           <Text style={styles.cardTitle} numberOfLines={2}>{board.title}</Text>
           {locationText ? (
             <Text style={styles.cardLocation} numberOfLines={1}>{locationText}</Text>
           ) : null}
           {dateText ? (
-            <View style={[styles.datePill, { backgroundColor: accentColor }]}>
-              <Text style={styles.datePillText}>{dateText}</Text>
-            </View>
+            <Text style={styles.dateText} numberOfLines={1}>{dateText}</Text>
           ) : null}
         </View>
       </TouchableOpacity>
@@ -110,68 +106,50 @@ export function BoardCard({ board, onPress, style }) {
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    height: CARD_HEIGHT,
     marginRight: CARD_GAP,
-    borderRadius: radius.xxl,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    ...shadow.md,
   },
   pressArea: {
-    flex: 1,
+    overflow: 'visible',
   },
   photoSection: {
-    flex: 58,
-    position: 'relative',
+    height: CARD_HEIGHT,
     overflow: 'hidden',
+    borderRadius: radius.trip,
+    borderWidth: 1.5,
+    borderColor: colors.redBorder,
+    backgroundColor: colors.surface,
+    ...shadow.md,
   },
   photo: {
     width: '100%',
     height: '100%',
   },
-  photoFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 32,
-    backgroundColor: 'rgba(255,253,248,0.2)',
-  },
   infoPanel: {
-    flex: 42,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     paddingTop: 10,
-    paddingBottom: 12,
-    justifyContent: 'space-between',
+    paddingBottom: 2,
   },
   cardTitle: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
     color: colors.text,
-    fontFamily: fonts.extraBold,
+    fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
     marginBottom: 2,
     flexShrink: 1,
   },
   cardLocation: {
-    fontSize: 11,
-    lineHeight: 14,
-    color: colors.textMuted,
-    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    fontFamily: 'Nunito_600SemiBold',
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  datePill: {
-    alignSelf: 'flex-start',
-    borderRadius: radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  datePillText: {
-    fontSize: 10,
-    color: colors.text,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
+  dateText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
   },
 });

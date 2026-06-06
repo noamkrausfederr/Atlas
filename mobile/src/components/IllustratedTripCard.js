@@ -1,15 +1,16 @@
 import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { colors, fonts, shadow } from '../theme';
+import { colors, fonts, radius, shadow } from '../theme';
 
 const W = Dimensions.get('window').width;
 const CONTENT_W = W - 36;
 const CARD_GAP = 10;
 const MINI_W = Math.floor((CONTENT_W - CARD_GAP) / 2);
-const FEATURED_IMG_H = 188;
-const MINI_IMG_H = 84;
-const COMPACT_H = 78;
+const FEATURED_IMG_H = 238;
+const MINI_IMG_H = 214;
+const COMPACT_H = 92;
+const TRIP_RADIUS = radius.trip;
 const LOCATION_ACCENTS = [
   { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
   { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
@@ -63,7 +64,10 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
   const pressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 2 }).start();
   const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
 
-  const imageUri = !imageFailed && board.image ? board.image : null;
+  const isLocalImage = typeof board.image === 'number';
+  const imageSource = isLocalImage
+    ? board.image
+    : (!imageFailed && board.image ? { uri: board.image } : null);
   const dateText = dateRange(board);
   const loc = getLocation(board);
   const locationAccent = getLocationAccent(board);
@@ -74,20 +78,15 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
       <Animated.View style={[styles.compactCard, style, { transform: [{ scale }] }]}>
         <TouchableOpacity activeOpacity={1} onPress={() => onPress(board)} onPressIn={pressIn} onPressOut={pressOut} style={styles.compactInner}>
           <View style={styles.compactThumb}>
-            {imageUri
-              ? <Image source={{ uri: imageUri }} style={styles.compactThumbImg} resizeMode="cover" onError={() => setImageFailed(true)} />
+            {imageSource
+              ? <Image source={imageSource} style={{ width: COMPACT_H, height: COMPACT_H, objectFit: 'cover' }} onError={() => !isLocalImage && setImageFailed(true)} />
               : <TripPlaceholder board={board} height={COMPACT_H} />
             }
           </View>
           <View style={styles.compactInfo}>
             <Text style={styles.compactTitle} numberOfLines={1}>{board.title}</Text>
-            {loc ? (
-              <View style={[styles.compactLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
-                <Text style={[styles.compactLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
-              </View>
-            ) : null}
+            {loc ? <Text style={styles.compactLoc} numberOfLines={1}>{loc}</Text> : null}
             {dateText ? <Text style={styles.compactDate}>{dateText}</Text> : null}
-            {board.description ? <Text style={styles.compactDesc} numberOfLines={1}>{board.description}</Text> : null}
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -100,20 +99,15 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
       <Animated.View style={[styles.featuredCard, { width: CONTENT_W }, style, { transform: [{ scale }] }]}>
         <TouchableOpacity activeOpacity={1} onPress={() => onPress(board)} onPressIn={pressIn} onPressOut={pressOut} activeOpacity={0.92}>
           <View style={styles.featuredImgWrap}>
-            {imageUri
-              ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" onError={() => setImageFailed(true)} />
+            {imageSource
+              ? <Image source={imageSource} style={{ width: CONTENT_W, height: FEATURED_IMG_H, objectFit: 'cover' }} onError={() => !isLocalImage && setImageFailed(true)} />
               : <TripPlaceholder board={board} height={FEATURED_IMG_H} />
             }
           </View>
-          <View style={styles.featuredContent}>
+          <View style={styles.featuredInfo}>
             <Text style={styles.featuredTitle} numberOfLines={2}>{board.title}</Text>
-            {loc ? (
-              <View style={[styles.featuredLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
-                <Text style={[styles.featuredLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
-              </View>
-            ) : null}
+            {loc ? <Text style={styles.featuredLoc} numberOfLines={1}>{loc}</Text> : null}
             {dateText ? <Text style={styles.featuredDate}>{dateText}</Text> : null}
-            {board.description ? <Text style={styles.featuredDesc} numberOfLines={2}>{board.description}</Text> : null}
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -125,20 +119,15 @@ export function IllustratedTripCard({ board, onPress, featured = false, compact 
     <Animated.View style={[styles.miniCard, { width: MINI_W }, style, { transform: [{ scale }] }]}>
       <TouchableOpacity activeOpacity={1} onPress={() => onPress(board)} onPressIn={pressIn} onPressOut={pressOut} style={{ flex: 1 }}>
         <View style={[styles.miniImgWrap, { height: MINI_IMG_H }]}>
-          {imageUri
-            ? <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" onError={() => setImageFailed(true)} />
+          {imageSource
+            ? <Image source={imageSource} style={{ width: MINI_W, height: MINI_IMG_H, objectFit: 'cover' }} onError={() => !isLocalImage && setImageFailed(true)} />
             : <TripPlaceholder board={board} height={MINI_IMG_H} />
           }
         </View>
         <View style={styles.miniInfo}>
-          <Text style={styles.miniTitle} numberOfLines={1}>{board.title}</Text>
-          {loc ? (
-            <View style={[styles.miniLocPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
-              <Text style={[styles.miniLoc, { color: locationAccent.text }]} numberOfLines={1}>{loc}</Text>
-            </View>
-          ) : null}
+          <Text style={styles.miniTitle} numberOfLines={2}>{board.title}</Text>
+          {loc ? <Text style={styles.miniLoc} numberOfLines={1}>{loc}</Text> : null}
           {dateText ? <Text style={styles.miniDate}>{dateText}</Text> : null}
-          {board.description ? <Text style={styles.miniDesc} numberOfLines={2}>{board.description}</Text> : null}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -149,9 +138,11 @@ const styles = StyleSheet.create({
   // ── Compact ──
   compactCard: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: TRIP_RADIUS,
     overflow: 'hidden',
     marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: colors.redBorder,
     ...shadow.sm,
   },
   compactInner: {
@@ -162,8 +153,8 @@ const styles = StyleSheet.create({
   compactThumb: {
     width: COMPACT_H,
     height: COMPACT_H,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
+    borderTopLeftRadius: TRIP_RADIUS,
+    borderBottomLeftRadius: TRIP_RADIUS,
     overflow: 'hidden',
     flexShrink: 0,
   },
@@ -173,42 +164,32 @@ const styles = StyleSheet.create({
   },
   compactInfo: {
     flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    justifyContent: 'center',
   },
   compactTitle: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontFamily: fonts.extraBold,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  compactLocPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  compactLoc: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontFamily: fonts.semiBold,
-    fontWeight: '600',
-  },
-  compactDesc: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontFamily: fonts.regular,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  compactDate: {
-    fontSize: 10,
-    fontFamily: fonts.bold,
+    fontSize: 15,
+    lineHeight: 19,
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700',
     color: colors.text,
+    marginBottom: 1,
+  },
+  compactLoc: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    color: colors.textSecondary,
+    marginBottom: 1,
+  },
+  compactDate: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    color: colors.textMuted,
   },
   completedPill: {
     marginRight: 12,
@@ -228,53 +209,43 @@ const styles = StyleSheet.create({
 
   // ── Featured ──
   featuredCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    ...shadow.md,
+    overflow: 'visible',
   },
   featuredImgWrap: {
     height: FEATURED_IMG_H,
     overflow: 'hidden',
-    borderRadius: 16,
+    borderRadius: TRIP_RADIUS,
+    borderWidth: 1.5,
+    borderColor: colors.redBorder,
+    backgroundColor: colors.surface,
+    ...shadow.md,
   },
-  featuredContent: {
-    paddingHorizontal: 14,
-    paddingTop: 11,
-    paddingBottom: 12,
-    gap: 4,
+  featuredInfo: {
+    paddingHorizontal: 8,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   featuredTitle: {
-    fontSize: 17,
-    lineHeight: 21,
-    fontFamily: fonts.extraBold,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  featuredLocPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  featuredDate: {
-    fontSize: 11,
-    fontFamily: fonts.bold,
+    fontSize: 18,
+    lineHeight: 22,
+    fontFamily: 'Nunito_700Bold',
     fontWeight: '700',
     color: colors.text,
   },
-  featuredLoc: {
-    fontSize: 11,
-    fontFamily: fonts.semiBold,
-    fontWeight: '600',
-  },
-  featuredDesc: {
-    fontSize: 12,
+  featuredDate: {
+    fontSize: 13,
     lineHeight: 16,
-    fontFamily: fonts.regular,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    color: colors.textMuted,
+  },
+  featuredLoc: {
+    fontSize: 14,
+    lineHeight: 17,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
     color: colors.textSecondary,
-    marginTop: 1,
+    marginBottom: 2,
   },
   statusPill: {
     flexDirection: 'row',
@@ -299,67 +270,42 @@ const styles = StyleSheet.create({
 
   // ── Mini ──
   miniCard: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-    ...shadow.sm,
+    overflow: 'visible',
   },
   miniImgWrap: {
     overflow: 'hidden',
-    borderRadius: 14,
+    borderRadius: TRIP_RADIUS,
+    borderWidth: 1.5,
+    borderColor: colors.redBorder,
+    backgroundColor: colors.surface,
+    ...shadow.sm,
   },
   miniInfo: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 9,
-    paddingTop: 8,
-    paddingBottom: 9,
-    gap: 4,
+    paddingHorizontal: 6,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   miniTitle: {
-    fontSize: 12,
-    lineHeight: 15,
-    fontFamily: fonts.extraBold,
-    fontWeight: '800',
+    fontSize: 15,
+    lineHeight: 19,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
     color: colors.text,
   },
-  miniLocPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
   miniLoc: {
-    fontSize: 10,
-    lineHeight: 12,
-    fontFamily: fonts.semiBold,
-    fontWeight: '600',
-  },
-  miniDesc: {
-    fontSize: 10,
-    lineHeight: 13,
-    fontFamily: fonts.regular,
-    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 16,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    color: colors.textSecondary,
     marginTop: 1,
   },
   miniDate: {
-    fontSize: 10,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  miniStatusPill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginTop: 4,
-  },
-  miniStatusText: {
-    fontSize: 10,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    fontSize: 12,
+    lineHeight: 15,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    color: colors.textMuted,
+    marginTop: 1,
   },
 });

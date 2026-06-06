@@ -5,12 +5,13 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { autocompleteAccommodation } from '../../data/liveRecommendations';
+import { colors } from '../theme';
 
 const ACTIVITY_ICON_COLORS = [
-  { bg: 'rgba(184,206,232,0.30)', icon: '#B8CEE8' },
-  { bg: 'rgba(211,182,211,0.30)', icon: '#D3B6D3' },
-  { bg: 'rgba(109,184,190,0.40)', icon: '#6DB8BE' },
-  { bg: 'rgba(165,187,26,0.30)', icon: '#A5BB1A' },
+  { bg: 'rgba(200,196,190,0.45)', icon: '#2C2B28' },
+  { bg: 'rgba(200,196,190,0.45)', icon: '#2C2B28' },
+  { bg: 'rgba(200,196,190,0.45)', icon: '#2C2B28' },
+  { bg: 'rgba(200,196,190,0.45)', icon: '#2C2B28' },
 ];
 const LOCATION_ACCENTS = [
   { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
@@ -889,7 +890,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         {/* Full-bleed hero image */}
         <View style={styles.heroSection}>
           {board.image ? (
-            <Image source={{ uri: board.image }} style={styles.heroImage} resizeMode="cover" />
+            <Image source={typeof board.image === 'number' ? board.image : { uri: board.image }} style={[styles.heroImage, { width: '100%', height: '100%', objectFit: 'cover' }]} />
           ) : (
             <View style={styles.heroPlaceholder}>
               <Ionicons name="airplane-outline" size={64} color="rgba(255,255,255,0.35)" />
@@ -898,12 +899,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
           <View style={styles.heroGradient} />
           <TouchableOpacity onPress={onBack} style={styles.heroBackBtn} activeOpacity={0.8}>
             <View style={styles.heroBtnInner}>
-              <Ionicons name="chevron-back" size={20} color="#2c2b28" />
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
             </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={onOpenEditTrip} style={styles.heroMenuBtn} activeOpacity={0.8}>
             <View style={styles.heroBtnInner}>
-              <Ionicons name="ellipsis-horizontal" size={18} color="#2c2b28" />
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.text} />
             </View>
           </TouchableOpacity>
           <View style={styles.heroInfoCard}>
@@ -912,9 +913,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 {board.title}
               </Text>
               <Text style={styles.heroInfoMeta} numberOfLines={1}>
-                {board.location
-                  ? `${board.location} · ${formatTripDateRangeWithYear(startDate, endDate)}`
-                  : formatTripDateRangeWithYear(startDate, endDate)}
+                {board.location ? (
+                  <>
+                    <Text style={styles.heroInfoLocation}>{board.location}</Text>
+                    <Text>{` · ${formatTripDateRangeWithYear(startDate, endDate)}`}</Text>
+                  </>
+                ) : formatTripDateRangeWithYear(startDate, endDate)}
               </Text>
             </BlurView>
           </View>
@@ -922,24 +926,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 
         {/* Floating content card */}
         <View style={styles.floatingCard}>
-          <View style={styles.detailTitleGroup}>
-            <View style={styles.detailTitleRow}>
-              <Text style={styles.detailTitle} numberOfLines={2}>
-                {board.title}
-              </Text>
-            </View>
-            {board.location ? (
-              <View style={[styles.detailLocationPill, { backgroundColor: locationAccent.bg, borderColor: locationAccent.bg }]}>
-                <Text style={[styles.detailLocation, { color: locationAccent.text }]} numberOfLines={1}>
-                  {board.location}
-                </Text>
-              </View>
-            ) : null}
-            <Text style={styles.detailDatesInline}>
-              {formatTripDateRangeWithYear(startDate, endDate)}
-            </Text>
-          </View>
-
           {board.description ? (
             <Text style={styles.detailDescription}>{board.description}</Text>
           ) : null}
@@ -1057,7 +1043,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             )}
           </View>
           <View style={styles.detailBody}>
-            <View style={styles.itinerarySectionCard}>
+            <BlurView tint="light" intensity={60} style={styles.itinerarySectionCard}>
               <View style={styles.itineraryHeaderRow}>
                 <View>
                   <Text style={[styles.sectionTitle, styles.itineraryHeading]}>Itinerary</Text>
@@ -1069,7 +1055,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                   onPress={handleAddActivityToSelectedDay}
                 >
                   <BlurView intensity={28} tint="extraLight" style={styles.itineraryAddButtonBlur}>
-                    <Text style={styles.itineraryAddButtonText}>+</Text>
+                    <Ionicons name="add" size={24} color="#F26B64" />
                   </BlurView>
                 </TouchableOpacity>
               </View>
@@ -1128,10 +1114,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                       </View>
                     ) : (
                       <View style={styles.itineraryItemsList}>
-                        {/* Vertical timeline thread */}
-                        {selectedItinerarySection.places.length > 1 && (
-                          <View style={styles.timelineTrack} pointerEvents="none" />
-                        )}
+                        <BlurView intensity={28} tint="extraLight" style={styles.itineraryGroupGlass} />
                         {selectedItinerarySection.places.map((p, placeIndex) => {
                           const isDragged = draggedPlaceId === p.id;
                           const isEditingTime = editingTimePlaceId === p.id;
@@ -1140,8 +1123,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                           const timeValue = isEditingTime
                             ? (timeDrafts[p.id] ?? formatItineraryTimeValue(p.displayTime))
                             : formatItineraryTimeValue(p.displayTime);
-                          const iconAccent = ACTIVITY_ICON_COLORS[placeIndex % ACTIVITY_ICON_COLORS.length];
-                          const iconName = getActivityIcon(p.name);
                           return (
                             <Animated.View
                               key={p.id}
@@ -1172,12 +1153,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                               {...createPlacePanHandlers(p.id)}
                             >
                               <View style={styles.itineraryRowShell}>
-                                {/* Timeline node dot */}
-                                <View style={styles.timelineNodeCol}>
-                                  <View style={[styles.timelineNodeDot, { borderColor: iconAccent.icon }]} />
-                                </View>
-
-                                {/* Card */}
                                 <View style={styles.itineraryRowCard}>
                                   {isEditingActivity ? (
                                     <View style={styles.itineraryEditArea}>
@@ -1211,10 +1186,27 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                     </View>
                                   ) : (
                                     <View style={styles.cardContentRow}>
-                                      {/* Pastel icon box */}
-                                      <View style={[styles.itineraryIconBox, { backgroundColor: iconAccent.bg }]}>
-                                        <Ionicons name={iconName} size={15} color={iconAccent.icon} />
+                                      <View style={styles.itineraryTimeLeft}>
+                                        <TextInput
+                                          style={[
+                                            styles.itineraryTimeInput,
+                                            isEditingTime && styles.itineraryTimeInputEditing
+                                          ]}
+                                          value={timeValue}
+                                          onFocus={() => startEditingTime(p)}
+                                          onChangeText={(value) => updateTimeDraft(p.id, value)}
+                                          onBlur={() => finishEditingTime(p)}
+                                          onSubmitEditing={() => finishEditingTime(p)}
+                                          keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+                                          returnKeyType="done"
+                                          maxLength={5}
+                                          selectTextOnFocus
+                                          placeholder="09:00"
+                                          placeholderTextColor="#8C867E"
+                                        />
                                       </View>
+
+                                      <View style={styles.itineraryTimeDivider} />
 
                                       {/* Activity text — pressable */}
                                       <Pressable
@@ -1235,31 +1227,6 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         <Text style={styles.itineraryName} numberOfLines={2}>{p.name}</Text>
                                         {p.note ? <Text style={styles.itineraryNote} numberOfLines={1}>{p.note}</Text> : null}
                                       </Pressable>
-
-                                      {/* Time — right column with divider */}
-                                      <View style={styles.itineraryTimeRight}>
-                                        <View style={styles.itineraryTimeDivider} />
-                                        <View style={styles.itineraryTimeColumn}>
-                                          <TextInput
-                                            style={[
-                                              styles.itineraryTimeInput,
-                                              isEditingTime && styles.itineraryTimeInputEditing
-                                            ]}
-                                            value={timeValue}
-                                            onFocus={() => startEditingTime(p)}
-                                            onChangeText={(value) => updateTimeDraft(p.id, value)}
-                                            onBlur={() => finishEditingTime(p)}
-                                            onSubmitEditing={() => finishEditingTime(p)}
-                                            keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-                                            returnKeyType="done"
-                                            maxLength={5}
-                                            selectTextOnFocus
-                                            placeholder="09:00"
-                                            placeholderTextColor="#8C867E"
-                                          />
-                                          <Ionicons name="time-outline" size={11} color="#8C867E" />
-                                        </View>
-                                      </View>
                                     </View>
                                   )}
                                 </View>
@@ -1273,7 +1240,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 </View>
               ) : null}
               </View>
-            </View>
+            </BlurView>
           </View>
 
           <View style={styles.addLinkFooter}>
@@ -1287,7 +1254,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                 autoCapitalize="none"
                 returnKeyType="done"
                 onSubmitEditing={handleAddLink}
-                placeholderTextColor="#8a8987"
+                placeholderTextColor={colors.textMuted}
               />
               <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink} activeOpacity={0.85}>
                 <Text style={styles.detailActionText}>Add</Text>
@@ -1547,10 +1514,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 18,
     right: 18,
-    bottom: 28,
+    bottom: 40,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.12,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
@@ -1559,10 +1526,10 @@ const styles = StyleSheet.create({
   heroInfoCardBlur: {
     paddingHorizontal: 18,
     paddingVertical: 16,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    backgroundColor: 'rgba(255,255,255,0.52)',
   },
   heroInfoTitle: {
-    color: '#2c2b28',
+    color: '#000000',
     fontSize: 19,
     lineHeight: 23,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1570,23 +1537,30 @@ const styles = StyleSheet.create({
   },
   heroInfoMeta: {
     marginTop: 2,
-    color: '#8a8987',
+    color: '#000000',
     fontSize: 15,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular',
     fontWeight: Platform.OS === 'ios' ? '500' : '400'
   },
+  heroInfoLocation: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: Platform.OS === 'ios' ? '500' : '400',
+    color: '#5A5853',
+  },
 
   // Floating content card
   floatingCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     marginTop: -24,
     padding: 20,
     paddingBottom: 8,
     flex: 1,
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.06,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -4 },
@@ -1594,7 +1568,7 @@ const styles = StyleSheet.create({
   },
 
   editCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     padding: 16
   },
@@ -1611,7 +1585,7 @@ const styles = StyleSheet.create({
     marginBottom: 22
   },
   editHeaderTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 22,
     lineHeight: 26,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1621,13 +1595,13 @@ const styles = StyleSheet.create({
     minWidth: 54,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ffba30',
+    backgroundColor: '#F26B64',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14
   },
   editSaveButtonText: {
-    color: '#2c2b28',
+    color: '#ffffff',
     fontSize: 13,
     lineHeight: 16,
     fontFamily: 'Nunito_700Bold',
@@ -1643,7 +1617,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   backButtonText: {
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 26,
     lineHeight: 26,
     fontFamily: 'Nunito_700Bold',
@@ -1659,7 +1633,7 @@ const styles = StyleSheet.create({
     height: 28
   },
   headerMenuButtonText: {
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 26,
     lineHeight: 26,
     marginTop: -4,
@@ -1673,7 +1647,7 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#2c2b28'
+    color: colors.text
   },
   detailLocation: {
     fontSize: 14,
@@ -1707,13 +1681,13 @@ const styles = StyleSheet.create({
   detailDescription: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     marginBottom: 14,
     textAlign: 'center'
   },
   detailDatesInline: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
@@ -1724,8 +1698,8 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#ffffff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     marginBottom: 12
   },
@@ -1743,7 +1717,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    color: '#2c2b28',
+    color: colors.text,
     marginBottom: 8,
     marginLeft: 4
   },
@@ -1756,7 +1730,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular',
-    color: '#2c2b28',
+    color: colors.text,
     textAlign: 'left',
     writingDirection: 'ltr'
   },
@@ -1796,16 +1770,16 @@ const styles = StyleSheet.create({
   accommodationClearButtonText: {
     fontSize: 18,
     lineHeight: 20,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
   accommodationDropdown: {
     marginTop: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     overflow: 'hidden'
   },
   accommodationDropdownLoading: {
@@ -1816,11 +1790,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#e8e5e0'
+    borderTopColor: colors.border
   },
   accommodationNoResults: {
     fontSize: 13,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     fontWeight: '500'
   },
@@ -1830,19 +1804,19 @@ const styles = StyleSheet.create({
   },
   accommodationOptionDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: '#e8e5e0'
+    borderBottomColor: colors.border
   },
   accommodationOptionPrimary: {
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '600' : '700',
-    color: '#2c2b28'
+    color: colors.text
   },
   accommodationOptionFull: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     marginTop: 2
   },
@@ -1854,15 +1828,16 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: '#2c2b28',
+    color: colors.text,
     marginTop: 4
   },
   itinerarySectionCard: {
     marginTop: 4,
     borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#faf8f5',
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,252,249,0.55)',
     padding: 16,
   },
   itineraryHeaderRow: {
@@ -1877,7 +1852,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   itinerarySubheading: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
     fontFamily: 'Nunito_400Regular'
@@ -1887,23 +1862,14 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(216,216,210,0.95)',
-    backgroundColor: 'transparent'
+    borderWidth: 0,
+    backgroundColor: 'rgba(242,107,100,0.12)'
   },
   itineraryAddButtonBlur: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(243,243,241,0.86)'
-  },
-  itineraryAddButtonText: {
-    color: '#7a7770',
-    fontSize: 24,
-    lineHeight: 24,
-    marginTop: -1,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: '500'
+    backgroundColor: 'transparent'
   },
   itineraryDateScroll: {
     marginBottom: 18
@@ -1922,14 +1888,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
   },
   itineraryDateChipActive: {
-    backgroundColor: '#EFCE7B',
-    borderColor: '#EFCE7B',
+    backgroundColor: '#F26B64',
+    borderColor: '#F26B64',
   },
   itineraryDateChipDayNumber: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 18,
     lineHeight: 20,
     fontFamily: 'Nunito_800ExtraBold',
@@ -1937,7 +1903,7 @@ const styles = StyleSheet.create({
   },
   itineraryDateChipWeekday: {
     marginTop: 2,
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 10,
     lineHeight: 12,
     fontFamily: 'Nunito_700Bold',
@@ -1945,7 +1911,7 @@ const styles = StyleSheet.create({
   },
   itineraryDateChipMonth: {
     marginTop: 1,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 9,
     lineHeight: 10,
     textTransform: 'uppercase',
@@ -1954,7 +1920,7 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   itineraryDateChipTextActive: {
-    color: '#2c2b28'
+    color: '#ffffff'
   },
   itineraryList: {
     overflow: 'visible'
@@ -1962,13 +1928,13 @@ const styles = StyleSheet.create({
   itineraryEmptyState: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     backgroundColor: '#f0efed',
     paddingHorizontal: 16,
     paddingVertical: 18
   },
   itineraryEmptyTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 16,
     lineHeight: 20,
     marginBottom: 4,
@@ -1976,7 +1942,7 @@ const styles = StyleSheet.create({
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryEmpty: {
-    color: '#8a8987',
+    color: colors.textMuted,
     marginBottom: 0,
     fontSize: 14,
     lineHeight: 18,
@@ -1998,29 +1964,16 @@ const styles = StyleSheet.create({
     overflow: 'visible'
   },
   itineraryItemsList: {
-    gap: 10,
     position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'transparent',
   },
-  timelineTrack: {
-    position: 'absolute',
-    left: 13,
-    top: 18,
-    bottom: 18,
-    width: 1.5,
-    backgroundColor: '#e8e5e0',
-  },
-  timelineNodeCol: {
-    width: 28,
-    alignItems: 'center',
-    paddingTop: 15,
-    flexShrink: 0,
-  },
-  timelineNodeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
+  itineraryGroupGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(240,239,237,0.90)',
   },
   itineraryRow: {
     overflow: 'visible',
@@ -2028,15 +1981,11 @@ const styles = StyleSheet.create({
   itineraryRowShell: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 0,
   },
   itineraryRowCard: {
     flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#ffffff',
     overflow: 'hidden',
+    backgroundColor: 'rgba(248,246,243,0.72)',
   },
   itineraryEditArea: {
     paddingVertical: 12,
@@ -2048,53 +1997,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 58,
   },
-  itineraryIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    margin: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   itineraryTextFlex: {
     flex: 1,
     paddingVertical: 12,
-    paddingRight: 4,
+    paddingRight: 12,
+    paddingLeft: 12,
     justifyContent: 'center',
     minHeight: 56,
   },
-  itineraryTimeRight: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
+  itineraryTimeLeft: {
+    alignItems: 'center',
     flexShrink: 0,
+    justifyContent: 'center',
+    paddingLeft: 12,
+    paddingRight: 10,
+    paddingVertical: 8,
+    minWidth: 54,
   },
   itineraryTimeDivider: {
+    alignSelf: 'center',
     width: 1,
-    backgroundColor: '#e8e5e0',
-    marginVertical: 10,
-  },
-  itineraryTimeColumn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 50,
-    gap: 3,
+    height: 22,
+    backgroundColor: 'rgba(233, 198, 190, 0.85)',
   },
   itineraryTextWrap: {
     flex: 1,
     minWidth: 0
   },
   itineraryRowDragging: {
-    backgroundColor: '#f0efed',
+    backgroundColor: colors.surfaceDeep,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#CCC5BB',
     opacity: 0.96,
     zIndex: 10,
     elevation: 6,
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 }
@@ -2104,7 +2042,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    color: '#2c2b28'
+    color: colors.text
   },
   itineraryNameInput: {
     fontSize: 16,
@@ -2112,34 +2050,35 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     paddingHorizontal: 0,
     marginBottom: 6,
-    color: '#2c2b28',
+    color: colors.text,
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   itineraryTimeInput: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 11,
-    lineHeight: 14,
+    lineHeight: 13,
     letterSpacing: 0.2,
+    width: 44,
     minHeight: 18,
     paddingVertical: 0,
     paddingHorizontal: 0,
-    textAlign: 'center',
+    textAlign: 'left',
     fontFamily: 'Nunito_700Bold',
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
   },
   itineraryTimeInputEditing: {
-    color: '#2c2b28',
+    color: colors.text,
   },
   itineraryNote: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 18,
     marginTop: 2,
     fontFamily: 'Nunito_400Regular'
   },
   itineraryNoteInput: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 18,
     minHeight: 38,
@@ -2154,7 +2093,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#2c2b28',
+    backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -2169,7 +2108,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   editLabel: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 12,
     lineHeight: 16,
     marginBottom: 8,
@@ -2181,11 +2120,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 16,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular'
@@ -2205,7 +2144,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   editDateValue: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 15,
     lineHeight: 19,
     fontFamily: 'Nunito_400Regular'
@@ -2213,8 +2152,8 @@ const styles = StyleSheet.create({
   editCalendarWrap: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#ffffff',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     marginBottom: 16
   },
@@ -2224,21 +2163,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginTop: 2
   },
   editPrivacyTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 15,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
   editPrivacySubtitle: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
     marginTop: 3,
@@ -2251,13 +2190,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.surfaceDeep
   },
   editPrivacyPillActive: {
-    backgroundColor: '#2c2b28'
+    backgroundColor: colors.text
   },
   editPrivacyPillText: {
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 14,
     fontFamily: 'Nunito_700Bold',
@@ -2274,13 +2213,13 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center'
   },
   editSecondaryActionText: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 14,
     lineHeight: 18,
     fontFamily: 'Nunito_700Bold',
@@ -2316,13 +2255,13 @@ const styles = StyleSheet.create({
   },
   linkInput: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular'
@@ -2331,12 +2270,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 44,
     paddingHorizontal: 18,
-    backgroundColor: '#ffba30',
+    backgroundColor: '#F26B64',
     alignItems: 'center',
     justifyContent: 'center',
   },
   detailActionText: {
-    color: '#2c2b28',
+    color: '#ffffff',
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700',
     fontSize: 14,
@@ -2344,13 +2283,13 @@ const styles = StyleSheet.create({
   recommendationsButton: {
     borderRadius: 14,
     height: 50,
-    backgroundColor: 'rgba(211,182,211,0.30)',
+    backgroundColor: 'rgba(242,107,100,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
   },
   recommendationsButtonText: {
-    color: '#D3B6D3',
+    color: '#F26B64',
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_700Bold',
@@ -2372,15 +2311,15 @@ const styles = StyleSheet.create({
   addActivityAddressDropdown: {
     marginTop: 4,
     marginBottom: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     overflow: 'hidden'
   },
   addActivityCard: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     maxHeight: '90%',
     overflow: 'hidden',
@@ -2397,14 +2336,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '800',
-    color: '#2c2b28',
+    color: colors.text,
     fontFamily: 'Nunito_800ExtraBold',
     marginBottom: 4
   },
   addActivityDate: {
     fontSize: 13,
     lineHeight: 16,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     marginBottom: 16
   },
@@ -2412,13 +2351,13 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
     lineHeight: 20,
-    color: '#2c2b28',
+    color: colors.text,
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular',
     marginBottom: 10
@@ -2427,8 +2366,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     paddingHorizontal: 14,
     paddingVertical: 11,
     justifyContent: 'center',
@@ -2437,22 +2376,22 @@ const styles = StyleSheet.create({
   addActivityFieldValue: {
     fontSize: 15,
     lineHeight: 19,
-    color: '#2c2b28',
+    color: colors.text,
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular'
   },
   addActivityFieldPlaceholder: {
     fontSize: 15,
     lineHeight: 19,
-    color: '#8a8987',
+    color: colors.textMuted,
     textAlign: 'left',
     fontFamily: 'Nunito_400Regular'
   },
   addActivityTimePickerWrap: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     overflow: 'hidden',
     marginBottom: 10
   },
@@ -2464,20 +2403,20 @@ const styles = StyleSheet.create({
   addActivityTimePickerDoneText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#2c2b28',
+    color: colors.text,
     fontFamily: 'Nunito_700Bold'
   },
   addActivityNoteInput: {
     minHeight: 72,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 15,
     lineHeight: 19,
-    color: '#2c2b28',
+    color: colors.text,
     textAlign: 'left',
     textAlignVertical: 'top',
     fontFamily: 'Nunito_400Regular',
@@ -2494,13 +2433,13 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center'
   },
   addActivityCancelText: {
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 15,
     fontWeight: '600',
     fontFamily: 'Nunito_700Bold'
@@ -2509,12 +2448,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#ffba30',
+    backgroundColor: '#F26B64',
     alignItems: 'center',
     justifyContent: 'center'
   },
   addActivityDoneText: {
-    color: '#2c2b28',
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'

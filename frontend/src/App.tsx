@@ -4,7 +4,7 @@ import Homepage from './pages/Homepage';
 
 function App() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="atlas-shell min-h-screen text-slate-900">
       <Routes>
         <Route path="/" element={<Homepage />} />
         <Route path="/dashboard" element={<Dashboard />} />

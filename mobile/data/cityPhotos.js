@@ -738,6 +738,7 @@ export async function hydrateTripImages(trips) {
   });
 
   return trips.map((trip) => {
+    if (typeof trip.image === 'number') return trip;
     const location = trip.location || trip.title;
     return {
       ...trip,

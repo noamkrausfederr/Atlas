@@ -25,6 +25,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "assetBundlePatterns": [
+      "assets/**"
+    ],
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-font"

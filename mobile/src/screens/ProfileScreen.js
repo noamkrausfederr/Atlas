@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useState } from 'react';
+import { colors, fonts, radius, shadow } from '../theme';
+import { IllustratedTripCard } from '../components/IllustratedTripCard';
 
 function formatSocialCount(value) {
   if (typeof value === 'string') return value;
@@ -14,13 +16,25 @@ function getProfileTripLikeCount(board) {
   return 120 + (seed % 780);
 }
 
+function formatTripDateRange(board) {
+  if (!board.startDate || !board.endDate) return '';
+  const start = new Date(board.startDate);
+  const end = new Date(board.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+  const opts = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, opts)}`;
+}
+
 function PublicTripGridCard({ board, onPress }) {
+  const dateText = formatTripDateRange(board);
+
   return (
     <TouchableOpacity style={styles.tripCard} activeOpacity={0.88} onPress={() => onPress(board)}>
       <Image source={{ uri: board.image }} style={styles.tripCardImage} />
       <View style={styles.tripCardBody}>
         <Text style={styles.tripCardTitle} numberOfLines={2}>{board.title}</Text>
         <Text style={styles.tripCardLocation} numberOfLines={1}>{board.location || board.subtitle}</Text>
+        {dateText ? <Text style={styles.tripCardDate} numberOfLines={1}>{dateText}</Text> : null}
       </View>
     </TouchableOpacity>
   );
@@ -57,7 +71,7 @@ export function PublicProfileView({
           <Text style={styles.headerTitle}>Profile</Text>
           {showSettingsButton ? (
             <TouchableOpacity style={styles.settingsButton} activeOpacity={0.85} onPress={onSettingsPress}>
-              <Ionicons name="settings-outline" size={22} color="#8a8987" />
+              <Ionicons name="settings-outline" size={22} color={colors.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -147,25 +161,130 @@ export function PublicProfileView({
   );
 }
 
-export function ProfileScreen({ boards, followingCount, onOpenBoard, onOpenSettings }) {
+export function TripListScreen({ title, boards, compact, onBack, onOpenBoard }) {
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.screenContent, { paddingTop: 8 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.tripListHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.tripListBackBtn} activeOpacity={0.75}>
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.tripListTitle}>{title}</Text>
+      </View>
+      {boards.length > 0 ? (
+        <View style={styles.tripsSection}>
+          <View style={styles.curatedTripGrid}>
+            {boards.map((board) => (
+              <IllustratedTripCard key={board.id} board={board} onPress={onOpenBoard} compact={compact} />
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No trips here yet.</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+export function ProfileScreen({
+  boards,
+  upcomingBoards,
+  pastTrips,
+  followingCount,
+  onOpenBoard,
+  onSeeAllUpcoming,
+  onSeeAllPast,
+  onSettingsPress,
+}) {
   const publicBoards = boards.filter((board) => board.isPublic === true);
   const totalLikesReceived = publicBoards.reduce((sum, board) => sum + getProfileTripLikeCount(board), 0);
 
   return (
-    <PublicProfileView
-      name="Sofia Walker"
-      handle="@sofiawalks"
-      bio="Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat."
-      followers="12.4K"
-      following={followingCount}
-      likes={totalLikesReceived}
-      publicBoards={publicBoards}
-      onOpenBoard={onOpenBoard}
-      hideTripsSection
-      showSettingsButton
-      onSettingsPress={onOpenSettings}
-      showFollowButton={false}
-    />
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.screenContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.profileHero}>
+        <View style={styles.profileAvatarWrap}>
+          <View style={styles.profilePhotoPlaceholder}>
+            <Text style={styles.profilePhotoInitial}>S</Text>
+          </View>
+          <TouchableOpacity style={styles.profileAvatarEdit} activeOpacity={0.8} onPress={onSettingsPress}>
+            <Ionicons name="pencil-outline" size={16} color="#1F1E1C" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.profileName}>Sofia Walker</Text>
+        <Text style={styles.profileHandle}>@sofiawalks</Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>12.4K</Text>
+            <Text style={styles.statLabel}>Followers</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatSocialCount(followingCount)}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardLast]}>
+            <Text style={styles.statValue}>{formatSocialCount(totalLikesReceived)}</Text>
+            <Text style={styles.statLabel}>Likes</Text>
+          </View>
+        </View>
+        <Text style={styles.profileBio}>
+          Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.
+        </Text>
+      </View>
+
+      <View style={styles.profileDivider} />
+
+      <View style={styles.tripsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Upcoming trips</Text>
+          <TouchableOpacity onPress={onSeeAllUpcoming} activeOpacity={0.7}>
+            <Text style={styles.sectionMeta}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {upcomingBoards.length > 0 ? (
+          <View style={styles.curatedTripGrid}>
+            {upcomingBoards.slice(0, 2).map((board) => (
+              <IllustratedTripCard key={board.id} board={board} onPress={onOpenBoard} />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No upcoming trips yet.</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.tripsSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Past trips</Text>
+          <TouchableOpacity onPress={onSeeAllPast} activeOpacity={0.7}>
+            <Text style={styles.sectionMeta}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {pastTrips.length > 0 ? (
+          <View>
+            {pastTrips.map((board) => (
+              <IllustratedTripCard key={board.id} board={board} onPress={onOpenBoard} compact />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No past trips yet.</Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -196,7 +315,7 @@ function SettingsLinkRow({ label, detail = '', onPress, tone = 'default' }) {
         <Text style={labelStyle}>{label}</Text>
         {detail ? <Text style={styles.settingsDetail}>{detail}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={tone === 'danger' ? '#C9524E' : '#8a8987'} />
+      <Ionicons name="chevron-forward" size={18} color={tone === 'danger' ? '#C9524E' : colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -283,7 +402,29 @@ export function SettingsScreen({ onBack }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
+  },
+  tripListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  tripListBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(242,107,100,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripListTitle: {
+    fontSize: 22,
+    fontFamily: 'Nunito_800ExtraBold',
+    fontWeight: '800',
+    color: colors.text,
   },
   screenContent: {
     flexGrow: 1,
@@ -299,7 +440,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8
   },
   headerTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 26,
     lineHeight: 30,
     fontWeight: '800',
@@ -322,24 +463,35 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 12
   },
+  profileAvatarEdit: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
   profilePhoto: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.surfaceDeep
   },
   profilePhotoPlaceholder: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#fff4d9',
+    backgroundColor: '#E8E6E3',
     alignItems: 'center',
     justifyContent: 'center'
   },
   profilePhotoInitial: {
     fontSize: 34,
     fontWeight: '800',
-    color: '#c48a00',
+    color: '#F26B64',
     fontFamily: 'Nunito_800ExtraBold'
   },
   profileAvatarCamera: {
@@ -349,7 +501,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#2c2b28',
+    backgroundColor: colors.text,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -359,14 +511,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 26,
     fontWeight: '800',
-    color: '#2c2b28',
+    color: colors.text,
     fontFamily: 'Nunito_800ExtraBold'
   },
   profileHandle: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
-    color: '#8a8987',
+    color: colors.textMuted,
     fontFamily: 'Nunito_400Regular'
   },
   profileBio: {
@@ -374,12 +526,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontFamily: 'Nunito_400Regular',
     maxWidth: 280
   },
   followButton: {
-    backgroundColor: '#ffba30',
+    backgroundColor: '#F26B64',
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 30,
@@ -387,7 +539,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   followButtonText: {
-    color: '#2c2b28',
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '800',
     fontFamily: 'Nunito_700Bold'
@@ -399,25 +551,25 @@ const styles = StyleSheet.create({
     gap: 10
   },
   followButtonActive: {
-    backgroundColor: '#f0efed',
+    backgroundColor: '#F26B64',
     borderWidth: 1,
-    borderColor: '#e8e5e0'
+    borderColor: '#F26B64'
   },
   followButtonTextActive: {
-    color: '#7a7770'
+    color: '#ffffff'
   },
   headerMessageButton: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 999,
     minHeight: 44,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     justifyContent: 'center'
   },
   headerMessageButtonText: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
@@ -432,7 +584,7 @@ const styles = StyleSheet.create({
   },
   profileDivider: {
     height: 1,
-    backgroundColor: '#e8e5e0',
+    backgroundColor: colors.border,
     marginHorizontal: 8,
     marginBottom: 8
   },
@@ -441,20 +593,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     alignItems: 'center',
     borderRightWidth: 1,
-    borderRightColor: '#e8e5e0'
+    borderRightColor: colors.border
   },
   statCardLast: {
     borderRightWidth: 0
   },
   statValue: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
   statLabel: {
     marginTop: 2,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -462,16 +614,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   sectionCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     padding: 18,
     marginBottom: 12
   },
   tripsSection: {
     marginTop: 12,
     marginBottom: 12
+  },
+  curatedTripGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -480,13 +638,13 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
   sectionMeta: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -499,49 +657,55 @@ const styles = StyleSheet.create({
   },
   tripCard: {
     width: '48%',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e8e5e0',
-    shadowColor: '#2c2b28',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1
+    overflow: 'visible'
   },
   tripCardImage: {
     width: '100%',
-    height: 120,
-    backgroundColor: '#e8e5e0'
+    aspectRatio: 0.82,
+    backgroundColor: colors.surfaceDeep,
+    borderRadius: radius.trip,
+    borderWidth: 1.5,
+    borderColor: colors.redBorder,
+    ...shadow.sm
   },
   tripCardBody: {
-    padding: 10
+    paddingHorizontal: 6,
+    paddingTop: 10,
+    paddingBottom: 4
   },
   tripCardTitle: {
-    color: '#2c2b28',
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: '800',
-    marginBottom: 3,
-    fontFamily: 'Nunito_700Bold'
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 19,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
+    marginBottom: 1
   },
   tripCardLocation: {
-    color: '#8a8987',
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 16,
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400'
+  },
+  tripCardDate: {
+    color: colors.textMuted,
+    fontSize: 12,
     lineHeight: 15,
-    fontFamily: 'Nunito_400Regular'
+    fontFamily: 'Nunito_400Regular',
+    fontWeight: '400',
+    marginTop: 1
   },
   emptyState: {
-    backgroundColor: '#f0efed',
+    backgroundColor: colors.surfaceDeep,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     padding: 18,
     alignItems: 'center'
   },
   emptyStateText: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -558,7 +722,7 @@ const styles = StyleSheet.create({
     marginBottom: 18
   },
   settingsTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
@@ -572,7 +736,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   settingsSectionTitle: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -582,10 +746,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   settingsCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     overflow: 'hidden'
   },
   settingsRow: {
@@ -601,7 +765,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   settingsLabel: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
@@ -614,7 +778,7 @@ const styles = StyleSheet.create({
   },
   settingsDetail: {
     marginTop: 3,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular'
@@ -622,6 +786,6 @@ const styles = StyleSheet.create({
   settingsDivider: {
     height: 1,
     marginLeft: 16,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.border
   }
 });

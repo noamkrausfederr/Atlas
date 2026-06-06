@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.accent,
+    backgroundColor: '#F26B64',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

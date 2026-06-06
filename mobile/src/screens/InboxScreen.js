@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../theme';
 
 const TAG_COLORS = [
   { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
@@ -132,11 +134,6 @@ function ThreadList({ threads, selectedProfileName, onSelectThread }) {
                   <Text style={styles.threadPreview} numberOfLines={2} ellipsizeMode="tail">
                     {thread.lastMessageText}
                   </Text>
-                  {thread.tripName ? (
-                    <View style={[styles.threadTripTag, { backgroundColor: tagColor.bg }]}>
-                      <Text style={[styles.threadTripTagText, { color: tagColor.text }]}>{thread.tripName}</Text>
-                    </View>
-                  ) : null}
                 </View>
               </TouchableOpacity>
             );
@@ -280,7 +277,7 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
           <BlurView intensity={28} tint="extraLight" style={styles.chatInputBlur} />
           <TextInput
             placeholder="Message..."
-            placeholderTextColor="#8a8987"
+            placeholderTextColor={colors.textMuted}
             value={draftMessage}
             onChangeText={setDraftMessage}
             style={styles.chatInput}
@@ -297,6 +294,74 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
   );
 }
 
+const MOCK_TRIP_NAMES = ['Weekend in Tokyo', 'Lisbon Food Tour', 'Paris Hidden Gems', 'NYC Coffee Run', 'Amalfi Road Trip'];
+const MOCK_ACTIVITIES_TEMPLATE = [
+  { type: 'like', profileIndex: 0, tripIndex: 0, minutesAgo: 14 },
+  { type: 'save', profileIndex: 1, tripIndex: 1, minutesAgo: 52 },
+  { type: 'like', profileIndex: 2, tripIndex: 2, minutesAgo: 130 },
+  { type: 'like', profileIndex: 1, tripIndex: 4, minutesAgo: 310 },
+  { type: 'save', profileIndex: 0, tripIndex: 3, minutesAgo: 720 },
+  { type: 'like', profileIndex: 2, tripIndex: 0, minutesAgo: 1440 },
+  { type: 'save', profileIndex: 1, tripIndex: 2, minutesAgo: 2100 },
+];
+
+function formatActivityTime(minutesAgo) {
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+  if (minutesAgo < 1440) return `${Math.floor(minutesAgo / 60)}h ago`;
+  if (minutesAgo < 2880) return 'Yesterday';
+  return `${Math.floor(minutesAgo / 1440)}d ago`;
+}
+
+function ActivityFeed({ profileDirectory }) {
+  const profiles = Object.values(profileDirectory);
+  if (profiles.length === 0) return null;
+
+  const activities = MOCK_ACTIVITIES_TEMPLATE.map((item) => ({
+    ...item,
+    profile: profiles[item.profileIndex % profiles.length],
+    tripName: MOCK_TRIP_NAMES[item.tripIndex % MOCK_TRIP_NAMES.length],
+  }));
+
+  return (
+    <ScrollView
+      style={styles.threadListScroll}
+      contentContainerStyle={styles.threadListContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.threadList}>
+        {activities.map((item, idx) => {
+          const initial = item.profile?.ownerName?.[0]?.toUpperCase() ?? '?';
+          const isLike = item.type === 'like';
+          return (
+            <View key={idx} style={styles.activityCard}>
+              <View style={styles.activityAvatarWrap}>
+                {item.profile?.image ? (
+                  <Image source={{ uri: item.profile.image }} style={styles.threadAvatarImage} />
+                ) : (
+                  <View style={styles.threadAvatar}>
+                    <Text style={styles.threadAvatarInitial}>{initial}</Text>
+                  </View>
+                )}
+                <View style={styles.activityIconBadge}>
+                  <Ionicons name={isLike ? 'heart' : 'bookmark'} size={10} color="#ffffff" />
+                </View>
+              </View>
+              <View style={styles.activityBody}>
+                <Text style={styles.activityText} numberOfLines={2}>
+                  <Text style={styles.activityName}>{item.profile?.ownerName}</Text>
+                  {isLike ? ' liked your trip ' : ' saved your trip to their page '}
+                  <Text style={styles.activityTripName}>{item.tripName}</Text>
+                </Text>
+                <Text style={styles.activityTime}>{formatActivityTime(item.minutesAgo)}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
 export function InboxScreen({
   profileDirectory,
   threads,
@@ -307,6 +372,8 @@ export function InboxScreen({
   onSendMessage,
   onNavigateToTab
 }) {
+  const [activeTab, setActiveTab] = useState('inbox');
+
   const threadList = useMemo(
     () => Object.values(threads)
       .filter((thread) => (thread.messages?.length ?? 0) > 0)
@@ -345,22 +412,23 @@ export function InboxScreen({
     <View style={styles.inboxScreen}>
       <View style={styles.inboxTopHeader}>
         <View style={styles.inboxTabRow}>
-          <View style={[styles.inboxTabPill, styles.inboxTabPillActive]}>
-            <Text style={[styles.inboxTabText, styles.inboxTabTextActive]}>Inbox</Text>
-          </View>
-          <TouchableOpacity style={styles.inboxTabPill} onPress={() => onNavigateToTab?.('Profile')} activeOpacity={0.75}>
-            <Text style={styles.inboxTabText}>Profile</Text>
+          <TouchableOpacity style={[styles.inboxTabPill, activeTab === 'inbox' && styles.inboxTabPillActive]} onPress={() => setActiveTab('inbox')} activeOpacity={0.75}>
+            <Text style={[styles.inboxTabText, activeTab === 'inbox' && styles.inboxTabTextActive]}>Notifications</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inboxTabPill} onPress={() => onNavigateToTab?.('Profile')} activeOpacity={0.75}>
-            <Text style={styles.inboxTabText}>Settings</Text>
+          <TouchableOpacity style={[styles.inboxTabPill, activeTab === 'activity' && styles.inboxTabPillActive]} onPress={() => setActiveTab('activity')} activeOpacity={0.75}>
+            <Text style={[styles.inboxTabText, activeTab === 'activity' && styles.inboxTabTextActive]}>Activity</Text>
           </TouchableOpacity>
         </View>
       </View>
-      <ThreadList
-        threads={threadList}
-        selectedProfileName={selectedProfileName}
-        onSelectThread={onSelectThread}
-      />
+      {activeTab === 'inbox' ? (
+        <ThreadList
+          threads={threadList}
+          selectedProfileName={selectedProfileName}
+          onSelectThread={onSelectThread}
+        />
+      ) : (
+        <ActivityFeed profileDirectory={profileDirectory} />
+      )}
     </View>
   );
 }
@@ -368,7 +436,7 @@ export function InboxScreen({
 const styles = StyleSheet.create({
   inboxScreen: {
     flex: 1,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   inboxTopHeader: {
     paddingHorizontal: 18,
@@ -386,19 +454,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: '#ddd5c8',
-    borderWidth: 1,
-    borderColor: '#ddd5c8'
+    backgroundColor: 'rgba(242,107,100,0.12)',
+    borderWidth: 0,
   },
   inboxTabPillActive: {
-    backgroundColor: '#EFCE7B',
-    borderColor: '#EFCE7B'
+    backgroundColor: '#F26B64',
   },
   inboxTabText: {
     fontSize: 17,
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold',
-    color: '#8a7a6a'
+    color: '#F26B64'
   },
   inboxTabTextActive: {
     color: '#ffffff'
@@ -413,13 +479,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3
   },
   inboxTabBadgeText: {
-    color: '#1c1b18',
+    color: colors.text,
     fontSize: 9,
     fontWeight: '800'
   },
   threadListScroll: {
     flex: 1,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   threadListContent: {
     flexGrow: 1,
@@ -433,20 +499,20 @@ const styles = StyleSheet.create({
   threadCard: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#edebe8',
+    borderColor: colors.border,
     padding: 15,
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.04,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1
   },
   threadCardActive: {
-    borderColor: '#d4cfc9',
-    backgroundColor: '#fafaf8'
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceAlt
   },
   threadAvatarWrap: {
     position: 'relative',
@@ -456,21 +522,21 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#f0ede8',
+    backgroundColor: '#E8E6E3',
     alignItems: 'center',
     justifyContent: 'center'
   },
   threadAvatarInitial: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#888480',
+    color: '#F26B64',
     fontFamily: 'Nunito_800ExtraBold'
   },
   threadAvatarImage: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.surfaceDeep
   },
   unreadBadge: {
     position: 'absolute',
@@ -479,15 +545,15 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#EFCE7B',
+    backgroundColor: 'rgba(242,107,100,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#ffffff'
+    borderWidth: 0.5,
+    borderColor: '#F26B64'
   },
   unreadBadgeText: {
-    color: '#2c2b28',
+    color: '#F26B64',
     fontSize: 10,
     fontWeight: '800',
     fontFamily: 'Nunito_700Bold'
@@ -504,7 +570,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   threadName: {
-    color: '#1a1918',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold',
@@ -512,14 +578,14 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   threadTime: {
-    color: '#a09d9a',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '400',
     fontFamily: 'Nunito_400Regular',
     flexShrink: 0
   },
   threadPreview: {
-    color: '#6e6c69',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: 'Nunito_400Regular'
@@ -535,26 +601,79 @@ const styles = StyleSheet.create({
   threadTripTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontFamily: 'Nunito_600SemiBold'
   },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(242,107,100,0.07)',
+    borderRadius: 18,
+    marginBottom: 8,
+  },
+  activityAvatarWrap: {
+    position: 'relative',
+    flexShrink: 0,
+  },
+  activityIconBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#F26B64',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  activityBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+  },
+  activityText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    fontFamily: 'Nunito_400Regular',
+  },
+  activityName: {
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
+    color: colors.text,
+  },
+  activityTripName: {
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700',
+    color: '#F26B64',
+  },
+  activityTime: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontFamily: 'Nunito_400Regular',
+  },
   emptyState: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     padding: 22,
     alignItems: 'center'
   },
   emptyStateTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 6,
     fontFamily: 'Nunito_800ExtraBold'
   },
   emptyStateText: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -570,7 +689,7 @@ const styles = StyleSheet.create({
   },
   chatScreen: {
     flex: 1,
-    backgroundColor: '#f3f2ef'
+    backgroundColor: colors.background
   },
   chatScroll: {
     flex: 1
@@ -579,7 +698,7 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: 16,
     marginBottom: 14,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.border
   },
   backButton: {
     alignItems: 'center',
@@ -590,7 +709,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   backButtonArrow: {
-    color: '#7a7770',
+    color: colors.textSecondary,
     fontSize: 26,
     lineHeight: 26,
     fontWeight: Platform.OS === 'ios' ? '700' : '800',
@@ -604,23 +723,23 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.surfaceDeep
   },
   chatProfileAvatarFallback: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#e8e5e0'
+    backgroundColor: colors.surfaceDeep
   },
   chatTitle: {
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
   chatHandle: {
     marginTop: 2,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
     fontFamily: 'Nunito_400Regular'
@@ -639,15 +758,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#e8e5e0',
-    backgroundColor: '#f0efed'
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep
   },
   chatDayBadgeBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent'
   },
   chatDayBadgeText: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -657,7 +776,7 @@ const styles = StyleSheet.create({
     paddingTop: 28
   },
   emptyChatText: {
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -687,16 +806,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   chatBubbleIncoming: {
-    backgroundColor: '#f0efed',
+    backgroundColor: colors.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#e8e5e0'
+    borderColor: colors.border
   },
   chatBubbleIncomingBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent'
   },
   chatBubbleOutgoing: {
-    backgroundColor: '#2c2b28',
+    backgroundColor: colors.text,
     borderWidth: 0
   },
   chatBubbleOutgoingBlur: {
@@ -709,14 +828,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   chatBubbleTextIncoming: {
-    color: '#2c2b28'
+    color: colors.text
   },
   chatBubbleTextOutgoing: {
     color: '#ffffff'
   },
   chatMessageTime: {
     marginTop: 5,
-    color: '#8a8987',
+    color: colors.textMuted,
     fontSize: 11,
     lineHeight: 14,
     fontFamily: 'Nunito_400Regular'
@@ -745,7 +864,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e8e5e0',
+    borderColor: colors.border,
     backgroundColor: 'transparent'
   },
   chatInputBlur: {
@@ -756,7 +875,7 @@ const styles = StyleSheet.create({
     paddingLeft: 18,
     paddingRight: 16,
     paddingVertical: 14,
-    color: '#2c2b28',
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
@@ -767,14 +886,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
     overflow: 'hidden',
-    backgroundColor: '#ffba30'
+    backgroundColor: '#F26B64'
   },
   sendButtonBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent'
   },
   sendButtonText: {
-    color: '#2c2b28',
+    color: '#ffffff',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',

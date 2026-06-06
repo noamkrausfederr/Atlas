@@ -1,19 +1,22 @@
 export const colors = {
-  background: '#f3f2ef',
-  surface: '#ffffff',
-  surfaceAlt: '#faf8f5',
-  surfaceDeep: '#f5f3f0',
-  text: '#2c2b28',
-  textSecondary: '#7a7770',
-  textMuted: '#8a8987',
-  border: '#e8e5e0',
-  borderStrong: '#d4cfc9',
+  background: '#FFF5F0',
+  surface: '#FFF5F0',
+  surfaceAlt: '#FFF8F5',
+  surfaceDeep: '#FCEEE7',
+  text: '#2C2B28',
+  textSecondary: '#5A5853',
+  textMuted: '#7A7770',
+  border: '#E8CFC7',
+  borderStrong: '#D8B8AE',
 
   // Primary CTA: amber
   accent: '#ffba30',
   accentSoft: '#fff4d9',
   accentMid: '#ffd57a',
   accentDark: '#c48a00',
+  butterBorder: '#f1df9c',
+  butterBorderSoft: '#f7edc4',
+  redBorder: 'rgba(242,107,100,0.20)',
 
   // Secondary: sage
   sage: '#bac98e',
@@ -41,7 +44,7 @@ export const colors = {
 
   upcoming: '#ffba30',
   upcomingSoft: '#fff4d9',
-  past: '#8a8987',
+  past: '#8A8987',
   pastSoft: '#f0efed',
 
   success: '#bac98e',
@@ -51,8 +54,8 @@ export const colors = {
   warning: '#ffba30',
   warningSoft: '#fff4d9',
 
-  overlay: 'rgba(44,43,40,0.38)',
-  overlayDark: 'rgba(44,43,40,0.62)',
+  overlay: 'rgba(95,10,0,0.16)',
+  overlayDark: 'rgba(95,10,0,0.34)',
 };
 
 export const fonts = {
@@ -62,6 +65,7 @@ export const fonts = {
   semiBold: 'Nunito_600SemiBold',
   medium: 'Nunito_500Medium',
   regular: 'Nunito_400Regular',
+  scriptFallback: 'Nunito_400Regular',
 };
 
 export const radius = {
@@ -70,6 +74,7 @@ export const radius = {
   lg: 16,
   xl: 20,
   xxl: 24,
+  trip: 28,
   full: 999,
 };
 
@@ -84,21 +89,21 @@ export const spacing = {
 
 export const shadow = {
   sm: {
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   md: {
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.08,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
   lg: {
-    shadowColor: '#2c2b28',
+    shadowColor: '#B9A09B',
     shadowOpacity: 0.12,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 8 },
