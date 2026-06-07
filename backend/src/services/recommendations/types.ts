@@ -9,6 +9,17 @@ export type TravelCategory =
   | 'hotel'
   | 'experience';
 
+export type RecommendationProviderName =
+  | 'google'
+  | 'tripadvisor'
+  | 'yelp'
+  | 'opentripmap'
+  | 'wikipedia'
+  | 'foursquare'
+  | 'geoapify'
+  | 'ticketmaster'
+  | 'mock';
+
 export interface RecommendationRequest {
   destination: string;
   accommodation?: string;
@@ -22,13 +33,14 @@ export interface RecommendationRequest {
   budget?: 'budget' | 'mid-range' | 'luxury';
   vibeTags?: string[];
   categories?: TravelCategory[];
+  allowedProviders?: RecommendationProviderName[];
   limit?: number;
   excludeCanonicalIds?: string[];
   bypassCache?: boolean;
 }
 
 export interface PlaceSourceAttribution {
-  provider: 'google' | 'tripadvisor' | 'yelp' | 'opentripmap' | 'wikipedia' | 'foursquare' | 'geoapify' | 'ticketmaster' | 'mock';
+  provider: RecommendationProviderName;
   providerId: string;
   url?: string;
   rating?: number;
@@ -37,7 +49,7 @@ export interface PlaceSourceAttribution {
 }
 
 export interface PlaceReview {
-  provider: 'google' | 'tripadvisor' | 'yelp' | 'opentripmap' | 'wikipedia' | 'foursquare' | 'geoapify' | 'ticketmaster' | 'mock';
+  provider: RecommendationProviderName;
   author?: string;
   rating?: number;
   text: string;
@@ -72,7 +84,7 @@ export interface RankedRecommendation extends NormalizedPlace {
 export interface RecommendationResponse {
   destination: string;
   recommendations: RankedRecommendation[];
-  providersUsed: Array<'google' | 'tripadvisor' | 'yelp' | 'opentripmap' | 'wikipedia' | 'foursquare' | 'geoapify' | 'ticketmaster' | 'mock'>;
+  providersUsed: RecommendationProviderName[];
   usedMockData: boolean;
 }
 
@@ -89,7 +101,7 @@ export interface ProviderContext {
 }
 
 export interface RecommendationProvider {
-  name: 'google' | 'tripadvisor' | 'yelp' | 'opentripmap' | 'wikipedia' | 'foursquare' | 'geoapify' | 'ticketmaster' | 'mock';
+  name: RecommendationProviderName;
   enabled(): boolean;
   fetchPlaces(context: ProviderContext): Promise<NormalizedPlace[]>;
 }

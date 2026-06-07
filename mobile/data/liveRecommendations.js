@@ -538,9 +538,10 @@ export async function autocompleteAccommodation(text, destination) {
 }
 
 export async function fetchBoardRecommendations(board, options = {}) {
-  const { loadMore = false, searchQuery = '' } = options;
+  const { loadMore = false, searchQuery = '', allowedProviders = undefined } = options;
   const trimmedSearchQuery = String(searchQuery || '').trim();
-  const cacheKey = buildCacheKey(board, trimmedSearchQuery);
+  const normalizedProviders = Array.isArray(allowedProviders) ? [...allowedProviders].sort() : [];
+  const cacheKey = `${buildCacheKey(board, trimmedSearchQuery)}:${normalizedProviders.join(',')}`;
   const cached = recommendationCache.get(cacheKey);
   if (
     !loadMore &&
@@ -563,6 +564,7 @@ export async function fetchBoardRecommendations(board, options = {}) {
     budget: mapBudget(board.budget),
     vibeTags: buildVibeTags(board),
     categories: inferCategoriesFromSearch(trimmedSearchQuery),
+    allowedProviders: normalizedProviders,
     limit: RECOMMENDATION_BATCH_SIZE,
     excludeCanonicalIds: loadMore
       ? getSeenRecommendations(cached).map((recommendation) => recommendation.canonicalId).filter(Boolean)

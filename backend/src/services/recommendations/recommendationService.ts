@@ -391,6 +391,7 @@ export async function getRecommendations(request: RecommendationRequest): Promis
     budget: request.budget,
     vibeTags: request.vibeTags ?? [],
     categories: request.categories ?? [],
+    allowedProviders: (request.allowedProviders ?? []).slice().sort(),
     limit,
     excludeCanonicalIds
   });
@@ -425,6 +426,7 @@ export async function getRecommendations(request: RecommendationRequest): Promis
   const fetched = await Promise.all(
     providers
       .filter((provider) => provider.enabled())
+      .filter((provider) => !request.allowedProviders?.length || request.allowedProviders.includes(provider.name))
       .filter((provider) => !eventSearch || provider.name === 'ticketmaster')
       .map((provider) => provider.fetchPlaces(providerContext))
   );

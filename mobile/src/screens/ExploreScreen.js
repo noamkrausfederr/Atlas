@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RecommendationGroup } from '../components/RecommendationCard';
+import { BackButton } from '../components/BackButton';
+import { RecommendationCard } from '../components/RecommendationCard';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { formatDateRange } from '../../data/recommendations';
 import { fetchBoardRecommendations } from '../../data/liveRecommendations';
@@ -513,9 +514,7 @@ function ExploreFilterScreen({
   return (
     <View style={styles.exploreSubScreen}>
       <View style={styles.exploreSubHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <BackButton onPress={onBack} />
       </View>
 
       <View style={styles.filterPanel}>
@@ -802,11 +801,7 @@ function PublicTripDetail({
             </View>
           )}
           <View style={styles.publicDetailHeroGradient} />
-          <TouchableOpacity onPress={onBack} style={styles.publicDetailHeroBackBtn} activeOpacity={0.8}>
-            <View style={styles.publicDetailHeroBtnInner}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </View>
-          </TouchableOpacity>
+          <BackButton onPress={onBack} style={styles.publicDetailHeroBackBtn} />
           <View style={styles.publicDetailHeroInfoCard}>
             <BlurView intensity={22} tint="light" style={styles.publicDetailHeroInfoCardBlur}>
               <Text style={styles.publicDetailHeroInfoTitle} numberOfLines={2}>{trip.title}</Text>
@@ -954,9 +949,7 @@ function PublicProfile({ ownerName, trips, isFollowing, onBack, onOpenTrip, onTo
   return (
     <View>
       <View style={styles.exploreSubHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        <BackButton onPress={onBack} />
       </View>
       <PublicProfileView
         name={ownerName}
@@ -1013,22 +1006,10 @@ function FilterChips({ label, options, value, onChange, compact = false }) {
   );
 }
 
-function groupRecommendations(recs) {
-  const groups = {};
-  recs.forEach((rec) => {
-    const cat = rec.category || 'Places';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(rec);
-  });
-  return Object.entries(groups);
-}
-
-export function ExploreMoreScreen({ board, onBack }) {
+export function ExploreMoreScreen({ board, onBack, onAddRecommendation }) {
   const [recommendations, setRecommendations] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
-  const [searchInput, setSearchInput] = useState('');
-  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [sourceMeta, setSourceMeta] = useState({
     usedFallback: false,
     usedMockData: false,
@@ -1036,96 +1017,46 @@ export function ExploreMoreScreen({ board, onBack }) {
     error: '',
     hasMore: true
   });
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const locationAccent = getExploreAccent(
-    board.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  );
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const hasSearched = Boolean(activeSearchQuery);
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = Math.max(insets.bottom, 6);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const handleKeyboardShow = (event) => {
-      setKeyboardHeight(event.endCoordinates?.height ?? 0);
-    };
-
-    const handleKeyboardHide = () => {
-      setKeyboardHeight(0);
-    };
-
-    const showSubscription = Keyboard.addListener(showEvent, handleKeyboardShow);
-    const hideSubscription = Keyboard.addListener(hideEvent, handleKeyboardHide);
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-
-  const runSearch = async () => {
-    const trimmedSearchQuery = searchInput.trim();
-    if (!trimmedSearchQuery) {
-      setActiveSearchQuery('');
-      setRecommendations([]);
-      setSourceMeta({
-        usedFallback: false,
-        usedMockData: false,
-        providersUsed: [],
-        error: '',
-        hasMore: true
-      });
-      return;
-    }
-
-    Keyboard.dismiss();
-    setSearchInput('');
+  const loadRecommendations = async () => {
     setIsLoading(true);
-    setActiveSearchQuery(trimmedSearchQuery);
-
-    let result = await fetchBoardRecommendations(board, { searchQuery: trimmedSearchQuery });
-    let remainingBatches = 8;
+    let result = await fetchBoardRecommendations(board, {
+      allowedProviders: ['google', 'ticketmaster']
+    });
+    let remainingBatches = 3;
     const seenProviders = new Set((result.meta.providersUsed || []).filter((p) => p !== 'mock'));
 
     while (result.meta.hasMore && remainingBatches > 0) {
-      result = await fetchBoardRecommendations(board, { loadMore: true, searchQuery: trimmedSearchQuery });
+      result = await fetchBoardRecommendations(board, {
+        loadMore: true,
+        allowedProviders: ['google', 'ticketmaster']
+      });
       remainingBatches -= 1;
       (result.meta.providersUsed || []).filter((p) => p !== 'mock').forEach((p) => seenProviders.add(p));
     }
 
-    const allProviders = seenProviders.size > 0 ? Array.from(seenProviders) : ['mock'];
+    const allProviders = seenProviders.size > 0 ? Array.from(seenProviders) : [];
     setRecommendations(result.recommendations);
     setSourceMeta({ ...result.meta, providersUsed: allProviders, usedMockData: seenProviders.size === 0 });
     setIsLoading(false);
+    setHasLoaded(true);
   };
 
-  const bottomMargin = Platform.OS === 'ios' && keyboardHeight > 0
-    ? keyboardHeight - tabBarHeight + 12
-    : 16;
+  useEffect(() => {
+    loadRecommendations();
+  }, [board.id]);
 
   return (
     <View style={styles.recScreen}>
       <View style={styles.recCard}>
         <View style={styles.recPageHeader}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerMenuButton} disabled>
-            <Text style={styles.headerMenuButtonText} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.recTitleGroup}>
-          <Text style={styles.recPageTitle}>{board.title}</Text>
-          {board.location ? (
-            <Text style={[styles.recPageLocation, { color: locationAccent.text }]}>{board.location}</Text>
-          ) : null}
-          <Text style={styles.recPageMeta}>
-            {hasSearched ? `${formatDateRange(board)} · ${recommendations.length} results` : formatDateRange(board)}
-          </Text>
+          <BackButton onPress={onBack} />
+          <View style={styles.recHeaderTitleWrap}>
+            <Text style={styles.recPageTitle}>Recommendations</Text>
+            <Text style={styles.recPageSubtitle}>{`for ${board.title}`}</Text>
+          </View>
+          <View style={styles.recHeaderSpacer} />
         </View>
 
         <ScrollView
@@ -1134,45 +1065,28 @@ export function ExploreMoreScreen({ board, onBack }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {hasSearched ? (
-            <View style={styles.userQueryBubbleRow}>
-              <View style={styles.userQueryBubble}>
-                <Text style={styles.userQueryBubbleText}>{activeSearchQuery}</Text>
-              </View>
-            </View>
-          ) : null}
-
           {isLoading ? (
             <View style={styles.recommendationStateCard}>
               <ActivityIndicator color="#ffba30" />
-              <Text style={styles.recommendationStateText}>Finding {activeSearchQuery.toLowerCase()}...</Text>
+              <Text style={styles.recommendationStateText}>Finding places you'll probably love...</Text>
             </View>
           ) : null}
 
-          {!isLoading && !hasSearched ? (
+          {!isLoading && hasLoaded && !recommendations.length ? (
             <View style={styles.recommendationStateCard}>
-              <Text style={styles.recommendationStateText}>
-                Search for museums, cafes, shopping, concerts and more.
-              </Text>
+              <Text style={styles.recommendationStateText}>No recommendations found right now.</Text>
             </View>
           ) : null}
 
-          {!isLoading && hasSearched && !recommendations.length ? (
-            <View style={styles.recommendationStateCard}>
-              <Text style={styles.recommendationStateText}>{`No results for "${activeSearchQuery}".`}</Text>
-            </View>
-          ) : null}
-
-          {groupRecommendations(recommendations).map(([category, recs]) => (
-            <RecommendationGroup
-              key={category}
-              category={category}
-              recs={recs}
-              onPress={(item) => setSelectedRecommendation(item)}
+          {recommendations.map((item) => (
+            <RecommendationCard
+              key={item.id ?? item.title}
+              rec={item}
+              onPress={(rec) => setSelectedRecommendation(rec)}
             />
           ))}
 
-          {hasSearched && sourceMeta.providersUsed?.length ? (
+          {sourceMeta.providersUsed?.length ? (
             <Text style={styles.recommendationSourceMeta}>
               {`Live from ${sourceMeta.providersUsed
                 .map((p) => ({ geoapify: 'Geoapify', wikipedia: 'Wikipedia', opentripmap: 'OpenTripMap', ticketmaster: 'Ticketmaster', foursquare: 'Foursquare', google: 'Google', tripadvisor: 'Tripadvisor', yelp: 'Yelp', mock: 'mock data' }[p] ?? p))
@@ -1180,28 +1094,6 @@ export function ExploreMoreScreen({ board, onBack }) {
             </Text>
           ) : null}
         </ScrollView>
-
-        <View style={[styles.recommendationSearchComposer, { marginBottom: bottomMargin }]}>
-          <View style={styles.recommendationSearchRow}>
-            <TextInput
-              value={searchInput}
-              onChangeText={setSearchInput}
-              placeholder="Museums, cafes, shopping, concerts..."
-              placeholderTextColor={colors.textMuted}
-              style={styles.recommendationSearchInput}
-              returnKeyType="search"
-              onSubmitEditing={runSearch}
-              textAlign="left"
-            />
-            <TouchableOpacity
-              onPress={runSearch}
-              style={[styles.recommendationSearchButton, !searchInput.trim() && styles.recommendationSearchButtonDisabled]}
-              disabled={!searchInput.trim()}
-            >
-              <Text style={styles.recommendationSearchButtonText}>Search</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
 
       <PlaceDetailModal
@@ -1212,6 +1104,13 @@ export function ExploreMoreScreen({ board, onBack }) {
         dateLabel={selectedRecommendation?.dayLabel}
         fallbackImage={board.image}
         onClose={() => setSelectedRecommendation(null)}
+        actionLabel="+ Add to itinerary"
+        actionTone="add"
+        onAction={() => {
+          if (!selectedRecommendation) return;
+          onAddRecommendation?.(selectedRecommendation);
+          setSelectedRecommendation(null);
+        }}
       />
     </View>
   );
@@ -1265,25 +1164,27 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(253,240,238,0.9)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.18)',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    ...shadow.sm
   },
   filterPanel: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(253,240,238,0.94)',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.14)',
     padding: 18,
-    marginBottom: 16
+    marginBottom: 0,
+    ...shadow.sm
   },
   filterGroup: {
     marginTop: 20
   },
   filterLabel: {
-    color: colors.text,
+    color: colors.blushDark,
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 10
@@ -1294,19 +1195,20 @@ const styles = StyleSheet.create({
   },
   filterDateButton: {
     flex: 1,
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(253,240,238,0.9)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.18)',
     paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingVertical: 10,
+    ...shadow.sm
   },
   filterDateButtonActive: {
-    backgroundColor: '#eef3e4',
-    borderColor: '#bac98e'
+    backgroundColor: 'rgba(242,107,100,0.14)',
+    borderColor: '#F26B64'
   },
   filterDateButtonLabel: {
-    color: colors.textMuted,
+    color: colors.blushDark,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'lowercase',
@@ -1325,10 +1227,11 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: 'rgba(242,107,100,0.16)',
+    backgroundColor: 'rgba(253,240,238,0.92)',
     overflow: 'hidden',
-    marginTop: 10
+    marginTop: 10,
+    ...shadow.sm
   },
   inlineCalendar: {
     width: Platform.OS === 'ios' ? '108%' : '100%',
@@ -1343,35 +1246,38 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   selectedCountryBubble: {
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(242,107,100,0.12)',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.18)',
     paddingHorizontal: 11,
-    paddingVertical: 7
+    paddingVertical: 7,
+    ...shadow.sm
   },
   selectedCountryBubbleText: {
-    color: colors.text,
+    color: colors.blushDark,
     fontSize: 12,
     fontWeight: '700'
   },
   countryDropdownPanel: {
     marginTop: 10,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(253,240,238,0.92)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10
+    borderColor: 'rgba(242,107,100,0.16)',
+    padding: 10,
+    ...shadow.sm
   },
   countrySearchInput: {
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(253,240,238,0.9)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.16)',
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: colors.text,
-    marginBottom: 0
+    marginBottom: 0,
+    ...shadow.sm
   },
   countryOptionList: {
     flexDirection: 'row',
@@ -1381,14 +1287,15 @@ const styles = StyleSheet.create({
   countryOption: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceDeep,
+    borderColor: 'rgba(242,107,100,0.16)',
+    backgroundColor: 'rgba(253,240,238,0.9)',
     paddingHorizontal: 10,
-    paddingVertical: 7
+    paddingVertical: 7,
+    ...shadow.sm
   },
   countryOptionSelected: {
-    backgroundColor: '#eef3e4',
-    borderColor: '#bac98e'
+    backgroundColor: 'rgba(242,107,100,0.12)',
+    borderColor: '#F26B64'
   },
   countryOptionText: {
     color: colors.textSecondary,
@@ -1396,16 +1303,17 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   countryOptionTextSelected: {
-    color: '#6b8a48'
+    color: colors.blushDark
   },
   daysRangeContainer: {
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(253,240,238,0.9)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.16)',
     paddingHorizontal: 14,
     paddingTop: 12,
-    paddingBottom: 10
+    paddingBottom: 10,
+    ...shadow.sm
   },
   daysRangeValue: {
     color: colors.text,
@@ -1421,14 +1329,14 @@ const styles = StyleSheet.create({
   daysRangeTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: colors.border
+    backgroundColor: colors.blush
   },
   daysRangeFill: {
     position: 'absolute',
     top: 12,
     height: 4,
     borderRadius: 999,
-    backgroundColor: '#ffba30'
+    backgroundColor: '#F26B64'
   },
   daysRangeThumb: {
     position: 'absolute',
@@ -1436,7 +1344,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 999,
-    backgroundColor: colors.text,
+    backgroundColor: '#F26B64',
     borderWidth: 3,
     borderColor: '#ffffff'
   },
@@ -1467,31 +1375,36 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(253,240,238,0.9)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(242,107,100,0.16)',
     paddingHorizontal: 12,
-    paddingVertical: 8
+    paddingVertical: 8,
+    ...shadow.sm
   },
   filterChipActive: {
-    backgroundColor: '#eef3e4',
-    borderColor: '#bac98e'
+    backgroundColor: 'rgba(242,107,100,0.12)',
+    borderColor: '#F26B64'
   },
   filterChipText: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700'
   },
   filterChipTextActive: {
-    color: '#6b8a48'
+    color: colors.blushDark
   },
   clearFiltersButton: {
     marginTop: 22,
+    backgroundColor: '#F26B64',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#F26B64',
     alignItems: 'center',
-    paddingVertical: 10
+    paddingVertical: 12
   },
   clearFiltersText: {
-    color: colors.text,
+    color: '#ffffff',
     fontWeight: '700'
   },
   publicTripMasonry: {
@@ -1640,21 +1553,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     left: 16,
-  },
-  publicDetailHeroBtnInner: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(75,74,70,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
   publicDetailHeroInfoCard: {
     position: 'absolute',
@@ -2050,41 +1948,47 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   recScreen: {
-    paddingBottom: 24
+    flex: 1
   },
   recCard: {
+    flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderLeftColor: colors.border,
+    borderRightColor: colors.border
   },
   recPageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10
+    marginBottom: 22
   },
-  recTitleGroup: {
-    marginBottom: 16
+  recHeaderSpacer: {
+    minWidth: 28,
+    height: 28
+  },
+  recHeaderTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   recPageTitle: {
     fontSize: 24,
     lineHeight: 28,
     fontFamily: 'Nunito_800ExtraBold',
     fontWeight: '800',
-    color: colors.text,
-    textTransform: 'lowercase'
+    color: colors.text
   },
-  recPageLocation: {
-    color: colors.textSecondary,
+  recPageSubtitle: {
+    marginTop: 4,
+    color: colors.textMuted,
     fontSize: 14,
     lineHeight: 18,
-    fontFamily: 'Nunito_400Regular',
-    fontWeight: Platform.OS === 'ios' ? '600' : '500',
-    marginTop: 4
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700'
   },
   recPageMeta: {
     color: colors.textMuted,
@@ -2107,7 +2011,7 @@ const styles = StyleSheet.create({
     fontSize: 22
   },
   exploreSubScreen: {
-    paddingBottom: 24
+    paddingBottom: 0
   },
   exploreSubScreenEmpty: {
     minHeight: 720,
@@ -2117,23 +2021,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  backButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-    marginTop: 0,
-    marginLeft: 2,
-    minWidth: 28,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    height: 28
-  },
-  backButtonText: {
-    color: colors.textSecondary,
-    fontSize: 26,
-    lineHeight: 26,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
   },
   publicDetailHeaderText: {
     alignItems: 'flex-end'
@@ -2165,10 +2052,9 @@ const styles = StyleSheet.create({
     lineHeight: 18
   },
   recommendationStateCard: {
-    backgroundColor: colors.surfaceDeep,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -2183,13 +2069,13 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   recommendationSearchComposer: {
-    marginTop: 18,
-    marginBottom: 16,
-    backgroundColor: colors.surfaceDeep,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14
+    marginTop: 12,
+    marginBottom: 0,
+    marginHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent'
   },
   recommendationSearchLabel: {
     color: colors.textMuted,
@@ -2206,29 +2092,33 @@ const styles = StyleSheet.create({
   },
   recommendationSearchInput: {
     flex: 1,
-    minHeight: 48,
-    backgroundColor: colors.surface,
-    borderRadius: 14,
+    minHeight: 52,
+    backgroundColor: 'rgba(246,244,241,0.78)',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
+    borderColor: '#E8E6E3',
+    paddingHorizontal: 18,
     color: colors.text,
     fontSize: 14
   },
   recommendationSearchButton: {
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: '#F26B64',
-    paddingHorizontal: 16,
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: '#E8E6E3',
+    borderWidth: 1,
+    borderColor: 'rgba(246,244,241,0.78)',
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center'
   },
   recommendationSearchButtonDisabled: {
-    backgroundColor: '#d4cfc9'
+    backgroundColor: '#E8E6E3',
+    borderColor: 'rgba(246,244,241,0.78)',
+    opacity: 0.55
   },
   recommendationSearchButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
+    color: '#F26B64',
+    fontSize: 14,
     fontWeight: '800'
   },
   keyboardAvoidingContainer: {

@@ -13,20 +13,16 @@ export function RecommendationCard({ rec, onPress }) {
   return (
     <TouchableOpacity style={styles.row} onPress={() => onPress(rec)} activeOpacity={0.75}>
       <View style={styles.leftDot}>
-        <Ionicons name="location" size={14} color={colors.accentDark} />
+        <Ionicons name="location" size={14} color="#F26B64" />
       </View>
       <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={1}>{rec.title}</Text>
-        {rec.reason ? (
-          <Text style={styles.reason} numberOfLines={2}>{rec.reason}</Text>
-        ) : null}
-        {rec.distanceFromAccommodation ? (
-          <Text style={styles.distance}>{rec.distanceFromAccommodation} from stay</Text>
-        ) : null}
+        <View style={styles.copy}>
+          <Text style={styles.title} numberOfLines={2}>{rec.title}</Text>
+          {rec.distanceFromAccommodation ? (
+            <Text style={styles.distance}>{rec.distanceFromAccommodation} from stay</Text>
+          ) : null}
+        </View>
       </View>
-      <TouchableOpacity style={styles.addBtn} onPress={() => onPress(rec)} activeOpacity={0.8}>
-        <Ionicons name="add" size={18} color="#ffffff" />
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 }
@@ -81,9 +77,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
+    width: '92%',
     backgroundColor: colors.surface,
     borderRadius: 14,
-    padding: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     marginBottom: 8,
     gap: 12,
     borderWidth: 1,
@@ -93,42 +92,31 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: 'rgba(242,107,100,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   body: {
     flex: 1,
-    gap: 2,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  copy: {
+    justifyContent: 'center',
+    gap: 4,
   },
   title: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 21,
     fontFamily: fonts.bold,
     fontWeight: '700',
     color: colors.text,
-  },
-  reason: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontFamily: fonts.regular,
-    color: colors.textSecondary,
   },
   distance: {
     fontSize: 11,
     fontFamily: fonts.semiBold,
     fontWeight: '600',
     color: colors.textMuted,
-    marginTop: 2,
-  },
-  addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F26B64',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
 });

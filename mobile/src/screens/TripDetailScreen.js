@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { BackButton } from '../components/BackButton';
 import { PlaceDetailModal } from '../components/PlaceDetailModal';
 import { autocompleteAccommodation } from '../../data/liveRecommendations';
 import { colors } from '../theme';
@@ -14,10 +16,10 @@ const ACTIVITY_ICON_COLORS = [
   { bg: 'rgba(200,196,190,0.45)', icon: '#2C2B28' },
 ];
 const LOCATION_ACCENTS = [
-  { bg: 'rgba(184,206,232,0.30)', text: '#B8CEE8' },
-  { bg: 'rgba(211,182,211,0.30)', text: '#D3B6D3' },
-  { bg: 'rgba(109,184,190,0.40)', text: '#6DB8BE' },
-  { bg: 'rgba(165,187,26,0.30)', text: '#A5BB1A' },
+  { bg: 'rgba(244,211,206,0.34)', text: '#A85048' },
+  { bg: 'rgba(252,238,231,0.9)', text: '#F26B64' },
+  { bg: 'rgba(240,239,237,0.92)', text: '#5A5853' },
+  { bg: 'rgba(255,244,217,0.78)', text: '#C48A00' },
 ];
 
 function getActivityIcon(name) {
@@ -185,10 +187,37 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
   const [location, setLocation] = useState(board.location ?? board.subtitle ?? '');
   const [description, setDescription] = useState(board.description ?? '');
   const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
+  const [image, setImage] = useState(board.image ?? null);
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
   const [isPublic, setIsPublic] = useState(Boolean(board.isPublic));
   const [activeDateField, setActiveDateField] = useState(null);
+  const [isPickingTripPhoto, setIsPickingTripPhoto] = useState(false);
+  const [tripPhotoError, setTripPhotoError] = useState('');
+
+  const handlePickTripPhoto = async () => {
+    if (isPickingTripPhoto) return;
+
+    setTripPhotoError('');
+    setIsPickingTripPhoto(true);
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+        allowsEditing: true,
+        aspect: [4, 5],
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      setTripPhotoError('Could not open photo library. Try restarting Expo once.');
+    } finally {
+      setIsPickingTripPhoto(false);
+    }
+  };
 
   const handleSave = () => {
     onSave?.({
@@ -197,6 +226,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
       subtitle: location.trim() || board.subtitle,
       description: description.trim(),
       accommodation: accommodation.trim(),
+      image,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       days: Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1),
@@ -226,13 +256,41 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
       <ScrollView contentContainerStyle={styles.editScrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.editCard}>
           <View style={styles.editHeader}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>←</Text>
-            </TouchableOpacity>
+            <BackButton onPress={onBack} />
             <Text style={styles.editHeaderTitle}>Edit trip</Text>
             <TouchableOpacity onPress={handleSave} style={styles.editSaveButton} activeOpacity={0.8}>
               <Text style={styles.editSaveButtonText}>Save</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.editFieldGroup}>
+            <Text style={styles.editLabel}>Trip photo</Text>
+            <TouchableOpacity
+              style={styles.editPhotoPickerButton}
+              activeOpacity={0.85}
+              onPress={handlePickTripPhoto}
+            >
+              {image ? (
+                <Image
+                  source={typeof image === 'number' ? image : { uri: image }}
+                  style={styles.editPhotoPickerPreview}
+                />
+              ) : (
+                <View style={styles.editPhotoPickerPlaceholder}>
+                  <Ionicons name="image-outline" size={26} color="#F26B64" />
+                  <Text style={styles.editPhotoPickerPlaceholderText}>Choose trip photo</Text>
+                  <Text style={styles.editPhotoPickerHelperText}>
+                    {isPickingTripPhoto ? 'Opening photo library...' : 'Tap to upload or replace the cover image'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {image ? (
+              <Text style={styles.editPhotoPickerHelperText}>
+                {isPickingTripPhoto ? 'Opening photo library...' : 'Tap the image to replace it'}
+              </Text>
+            ) : null}
+            {tripPhotoError ? <Text style={styles.editPhotoPickerError}>{tripPhotoError}</Text> : null}
           </View>
 
           <View style={styles.editFieldGroup}>
@@ -336,21 +394,32 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
             />
           </View>
 
-          <TouchableOpacity
-            style={styles.editPrivacyRow}
-            activeOpacity={0.8}
-            onPress={() => setIsPublic((current) => !current)}
-          >
+          <View style={styles.editPrivacyRow}>
             <View>
               <Text style={styles.editPrivacyTitle}>Trip privacy</Text>
               <Text style={styles.editPrivacySubtitle}>{isPublic ? 'Visible on your public profile' : 'Only visible to you'}</Text>
             </View>
-            <View style={[styles.editPrivacyPill, isPublic && styles.editPrivacyPillActive]}>
-              <Text style={[styles.editPrivacyPillText, isPublic && styles.editPrivacyPillTextActive]}>
-                {isPublic ? 'Public' : 'Private'}
-              </Text>
+            <View style={styles.editPrivacyToggle}>
+              <TouchableOpacity
+                style={[styles.editPrivacyPill, !isPublic && styles.editPrivacyPillActive]}
+                activeOpacity={0.85}
+                onPress={() => setIsPublic(false)}
+              >
+                <Text style={[styles.editPrivacyPillText, !isPublic && styles.editPrivacyPillTextActive]}>
+                  Private
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editPrivacyPill, isPublic && styles.editPrivacyPillActive]}
+                activeOpacity={0.85}
+                onPress={() => setIsPublic(true)}
+              >
+                <Text style={[styles.editPrivacyPillText, isPublic && styles.editPrivacyPillTextActive]}>
+                  Public
+                </Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
 
           <View style={styles.editActionsSection}>
             <TouchableOpacity style={styles.editSecondaryAction} activeOpacity={0.8} onPress={onDuplicateBoard}>
@@ -897,11 +966,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             </View>
           )}
           <View style={styles.heroGradient} />
-          <TouchableOpacity onPress={onBack} style={styles.heroBackBtn} activeOpacity={0.8}>
-            <View style={styles.heroBtnInner}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </View>
-          </TouchableOpacity>
+          <BackButton onPress={onBack} style={styles.heroBackBtn} />
           <TouchableOpacity onPress={onOpenEditTrip} style={styles.heroMenuBtn} activeOpacity={0.8}>
             <View style={styles.heroBtnInner}>
               <Ionicons name="ellipsis-horizontal" size={18} color={colors.text} />
@@ -1449,7 +1514,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 const styles = StyleSheet.create({
   detailScreen: {
     flex: 1,
-    backgroundColor: '#f0efed'
+    backgroundColor: colors.background
   },
   detailScrollContent: {
     paddingHorizontal: 0,
@@ -1467,15 +1532,17 @@ const styles = StyleSheet.create({
     height: 240,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: colors.surfaceDeep,
   },
   heroImage: {
     width: '100%',
     height: 240,
+    backgroundColor: colors.surfaceDeep,
   },
   heroPlaceholder: {
     width: '100%',
     height: 240,
-    backgroundColor: '#7a6ab8',
+    backgroundColor: colors.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1607,22 +1674,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
   },
-  backButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-    marginTop: 0,
-    minWidth: 28,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    height: 28
-  },
-  backButtonText: {
-    color: colors.textSecondary,
-    fontSize: 26,
-    lineHeight: 26,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
-  },
   headerMenuButton: {
     minWidth: 28,
     alignItems: 'center',
@@ -1684,7 +1735,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: 'Nunito_400Regular',
     marginBottom: 14,
-    textAlign: 'center'
+    textAlign: 'center',
+    paddingHorizontal: 22
   },
   detailDatesInline: {
     color: colors.text,
@@ -2107,6 +2159,47 @@ const styles = StyleSheet.create({
   editFieldGroup: {
     marginBottom: 16
   },
+  editPhotoPickerButton: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden'
+  },
+  editPhotoPickerPreview: {
+    width: '100%',
+    height: 180,
+    backgroundColor: colors.surfaceDeep
+  },
+  editPhotoPickerPlaceholder: {
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.surfaceDeep,
+    paddingHorizontal: 20
+  },
+  editPhotoPickerPlaceholderText: {
+    color: colors.text,
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: '700'
+  },
+  editPhotoPickerHelperText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular',
+    marginTop: 8
+  },
+  editPhotoPickerError: {
+    color: '#C9524E',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'Nunito_400Regular',
+    marginTop: 8
+  },
   editLabel: {
     color: colors.text,
     fontSize: 12,
@@ -2183,20 +2276,30 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontFamily: 'Nunito_400Regular'
   },
+  editPrivacyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    padding: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(242,107,100,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(242,107,100,0.18)'
+  },
   editPrivacyPill: {
-    minWidth: 72,
-    height: 32,
+    minWidth: 62,
+    height: 30,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    backgroundColor: colors.surfaceDeep
+    paddingHorizontal: 10,
+    backgroundColor: 'transparent'
   },
   editPrivacyPillActive: {
-    backgroundColor: colors.text
+    backgroundColor: '#F26B64',
   },
   editPrivacyPillText: {
-    color: colors.textSecondary,
+    color: '#F26B64',
     fontSize: 12,
     lineHeight: 14,
     fontFamily: 'Nunito_700Bold',

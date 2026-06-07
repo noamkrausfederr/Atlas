@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useState } from 'react';
 import { colors, fonts, radius, shadow } from '../theme';
+import { BackButton } from '../components/BackButton';
 import { IllustratedTripCard } from '../components/IllustratedTripCard';
 
 function formatSocialCount(value) {
@@ -94,17 +95,18 @@ export function PublicProfileView({
         </View>
         <Text style={styles.profileName}>{name}</Text>
         <Text style={styles.profileHandle}>{handle}</Text>
-
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(followers)}</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(following)}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
-          <View style={[styles.statCard, styles.statCardLast]}>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(likes)}</Text>
             <Text style={styles.statLabel}>Likes</Text>
           </View>
@@ -169,9 +171,7 @@ export function TripListScreen({ title, boards, compact, onBack, onOpenBoard }) 
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.tripListHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.tripListBackBtn} activeOpacity={0.75}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <BackButton onPress={onBack} />
         <Text style={styles.tripListTitle}>{title}</Text>
       </View>
       {boards.length > 0 ? (
@@ -199,7 +199,7 @@ export function ProfileScreen({
   onOpenBoard,
   onSeeAllUpcoming,
   onSeeAllPast,
-  onSettingsPress,
+  onEditProfilePress,
 }) {
   const publicBoards = boards.filter((board) => board.isPublic === true);
   const totalLikesReceived = publicBoards.reduce((sum, board) => sum + getProfileTripLikeCount(board), 0);
@@ -215,23 +215,21 @@ export function ProfileScreen({
           <View style={styles.profilePhotoPlaceholder}>
             <Text style={styles.profilePhotoInitial}>S</Text>
           </View>
-          <TouchableOpacity style={styles.profileAvatarEdit} activeOpacity={0.8} onPress={onSettingsPress}>
-            <Ionicons name="pencil-outline" size={16} color="#1F1E1C" />
-          </TouchableOpacity>
         </View>
         <Text style={styles.profileName}>Sofia Walker</Text>
         <Text style={styles.profileHandle}>@sofiawalks</Text>
-
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>12.4K</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(followingCount)}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
-          <View style={[styles.statCard, styles.statCardLast]}>
+          <View style={styles.statDivider} />
+          <View style={styles.statCard}>
             <Text style={styles.statValue}>{formatSocialCount(totalLikesReceived)}</Text>
             <Text style={styles.statLabel}>Likes</Text>
           </View>
@@ -288,6 +286,70 @@ export function ProfileScreen({
   );
 }
 
+export function EditProfileScreen({ onBack }) {
+  const [name, setName] = useState('Sofia Walker');
+  const [username, setUsername] = useState('@sofiawalks');
+  const [bio, setBio] = useState('Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.');
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.settingsScreenContent, styles.editProfileScreenContent]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.settingsHeader}>
+        <BackButton onPress={onBack} />
+        <Text style={styles.settingsTitle}>Edit profile</Text>
+        <View style={styles.settingsHeaderSpacer} />
+      </View>
+
+      <View style={styles.editFieldGroup}>
+        <View style={styles.editProfilePhotoRow}>
+          <TouchableOpacity style={styles.profilePhotoPlaceholder} activeOpacity={0.85}>
+            <Text style={styles.profilePhotoInitial}>{name?.[0]?.toUpperCase() ?? 'A'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.editPhotoHelperText}>Tap the photo to replace it</Text>
+        </View>
+      </View>
+
+      <View style={styles.editFieldGroup}>
+        <Text style={styles.editLabel}>Name</Text>
+        <TextInput
+          style={styles.editInput}
+          value={name}
+          onChangeText={setName}
+          placeholder="Your name"
+          placeholderTextColor={colors.textMuted}
+        />
+      </View>
+
+      <View style={styles.editFieldGroup}>
+        <Text style={styles.editLabel}>Username</Text>
+        <TextInput
+          style={styles.editInput}
+          value={username}
+          onChangeText={setUsername}
+          placeholder="@username"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+        />
+      </View>
+
+      <View style={styles.editFieldGroup}>
+        <Text style={styles.editLabel}>Bio</Text>
+        <TextInput
+          style={[styles.editInput, styles.editTextArea]}
+          value={bio}
+          onChangeText={setBio}
+          placeholder="Write a short bio"
+          placeholderTextColor={colors.textMuted}
+          multiline
+        />
+      </View>
+    </ScrollView>
+  );
+}
+
 function SettingsToggleRow({ label, value, onValueChange, detail = '' }) {
   return (
     <View style={styles.settingsRow}>
@@ -298,7 +360,7 @@ function SettingsToggleRow({ label, value, onValueChange, detail = '' }) {
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: '#d4cfc9', true: '#ffba30' }}
+        trackColor={{ false: '#d4cfc9', true: '#F26B64' }}
         thumbColor="#ffffff"
         ios_backgroundColor="#d4cfc9"
       />
@@ -320,7 +382,7 @@ function SettingsLinkRow({ label, detail = '', onPress, tone = 'default' }) {
   );
 }
 
-export function SettingsScreen({ onBack }) {
+export function SettingsScreen({ onBack, onEditProfilePress, onLogoutPress }) {
   const [pushAlertsEnabled, setPushAlertsEnabled] = useState(true);
   const [privateAccountEnabled, setPrivateAccountEnabled] = useState(false);
   const [friendActivityEnabled, setFriendActivityEnabled] = useState(true);
@@ -328,21 +390,17 @@ export function SettingsScreen({ onBack }) {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.settingsScreenContent}
+      contentContainerStyle={[styles.settingsScreenContent, styles.settingsScreenContentOffset, styles.settingsScreenContentWide]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.settingsHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.85}>
-          <Text style={styles.backButtonArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.settingsTitle}>Settings</Text>
-        <View style={styles.settingsHeaderSpacer} />
+        <Text style={styles.settingsTitleCentered}>Settings</Text>
       </View>
 
       <View style={styles.settingsSection}>
         <Text style={styles.settingsSectionTitle}>Account</Text>
         <View style={styles.settingsCard}>
-          <SettingsLinkRow label="Edit profile" detail="Name, bio, username, and photo" onPress={() => {}} />
+          <SettingsLinkRow label="Edit profile" detail="Name, bio, username, and photo" onPress={onEditProfilePress} />
           <View style={styles.settingsDivider} />
           <SettingsLinkRow label="Password" detail="Last updated 3 months ago" onPress={() => {}} />
           <View style={styles.settingsDivider} />
@@ -377,7 +435,7 @@ export function SettingsScreen({ onBack }) {
       <View style={styles.settingsSection}>
         <Text style={styles.settingsSectionTitle}>Preferences</Text>
         <View style={styles.settingsCard}>
-          <SettingsLinkRow label="Saved places" detail="Manage your pinned recommendations." onPress={() => {}} />
+          <SettingsLinkRow label="Liked places" detail="Manage your pinned recommendations." onPress={() => {}} />
           <View style={styles.settingsDivider} />
           <SettingsLinkRow label="Download preferences" detail="Offline maps and media quality." onPress={() => {}} />
           <View style={styles.settingsDivider} />
@@ -392,7 +450,7 @@ export function SettingsScreen({ onBack }) {
           <View style={styles.settingsDivider} />
           <SettingsLinkRow label="Privacy policy" onPress={() => {}} />
           <View style={styles.settingsDivider} />
-          <SettingsLinkRow label="Log out" tone="danger" onPress={() => {}} />
+          <SettingsLinkRow label="Log out" tone="danger" onPress={onLogoutPress} />
         </View>
       </View>
     </ScrollView>
@@ -411,14 +469,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingTop: 8,
     paddingBottom: 16,
-  },
-  tripListBackBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(242,107,100,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   tripListTitle: {
     fontSize: 22,
@@ -462,17 +512,6 @@ const styles = StyleSheet.create({
   profileAvatarWrap: {
     position: 'relative',
     marginBottom: 12
-  },
-  profileAvatarEdit: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
   },
   profilePhoto: {
     width: 88,
@@ -521,8 +560,16 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: 'Nunito_400Regular'
   },
+  statsRow: {
+    marginTop: 12,
+    width: '100%',
+    maxWidth: 270,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   profileBio: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
@@ -574,14 +621,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Nunito_700Bold'
   },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 0,
-    marginTop: 12,
-    paddingHorizontal: 8
-  },
   profileDivider: {
     height: 1,
     backgroundColor: colors.border,
@@ -589,14 +628,15 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   statCard: {
+    flex: 1,
     paddingVertical: 4,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: colors.border
+    paddingHorizontal: 10,
+    alignItems: 'center'
   },
-  statCardLast: {
-    borderRightWidth: 0
+  statDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: colors.border
   },
   statValue: {
     color: colors.text,
@@ -715,11 +755,21 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 16
   },
+  settingsScreenContentOffset: {
+    paddingTop: 28
+  },
+  settingsScreenContentWide: {
+    paddingHorizontal: 20
+  },
+  editProfileScreenContent: {
+    paddingHorizontal: 28
+  },
   settingsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18
+    marginBottom: 18,
+    position: 'relative'
   },
   settingsTitle: {
     color: colors.text,
@@ -728,9 +778,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
+  settingsTitleCentered: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: colors.text,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold'
+  },
   settingsHeaderSpacer: {
-    width: 28,
-    height: 28
+    width: 36,
+    height: 36
   },
   settingsSection: {
     marginBottom: 16
@@ -763,6 +824,44 @@ const styles = StyleSheet.create({
   },
   settingsCopy: {
     flex: 1
+  },
+  editFieldGroup: {
+    marginBottom: 16
+  },
+  editLabel: {
+    color: colors.text,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+    marginLeft: 4,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800'
+  },
+  editInput: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceDeep,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    color: colors.text,
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: 'Nunito_400Regular'
+  },
+  editTextArea: {
+    minHeight: 112
+  },
+  editProfilePhotoRow: {
+    alignItems: 'center',
+    gap: 10
+  },
+  editPhotoHelperText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Nunito_400Regular'
   },
   settingsLabel: {
     color: colors.text,

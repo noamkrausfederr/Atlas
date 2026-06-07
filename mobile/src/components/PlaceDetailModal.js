@@ -135,7 +135,16 @@ function Row({ label, children, extraSpacing }) {
   );
 }
 
-function PlaceDetailContent({ place, location, dateLabel, onClose, onDelete }) {
+function PlaceDetailContent({
+  place,
+  location,
+  dateLabel,
+  onClose,
+  onDelete,
+  actionLabel = 'Delete',
+  actionTone = 'danger',
+  onAction
+}) {
   if (!place) return null;
 
   const address = place.address || location;
@@ -168,7 +177,6 @@ function PlaceDetailContent({ place, location, dateLabel, onClose, onDelete }) {
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderText}>
           <Text style={styles.cardTitle} numberOfLines={2}>{place.name || place.title}</Text>
-          {dateLabel ? <Text style={styles.cardDate}>{dateLabel}</Text> : null}
         </View>
         <TouchableOpacity style={styles.closeButton} activeOpacity={0.8} onPress={onClose}>
           <Text style={styles.closeButtonText}>✕</Text>
@@ -215,14 +223,18 @@ function PlaceDetailContent({ place, location, dateLabel, onClose, onDelete }) {
         </View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.deleteButton} activeOpacity={0.8} onPress={onDelete}>
-        <Text style={styles.deleteButtonText}>Delete</Text>
+      <TouchableOpacity
+        style={[styles.deleteButton, actionTone === 'add' && styles.addButton]}
+        activeOpacity={0.8}
+        onPress={onAction || onDelete}
+      >
+        <Text style={[styles.deleteButtonText, actionTone === 'add' && styles.addButtonText]}>{actionLabel}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack, onDelete }) {
+export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack, onDelete, actionLabel, actionTone, onAction }) {
   return (
     <View style={styles.screen}>
       <PlaceDetailContent
@@ -231,12 +243,15 @@ export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallb
         dateLabel={dateLabel}
         onClose={onBack}
         onDelete={onDelete}
+        actionLabel={actionLabel}
+        actionTone={actionTone}
+        onAction={onAction}
       />
     </View>
   );
 }
 
-export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose, onDelete }) {
+export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose, onDelete, actionLabel, actionTone, onAction }) {
   if (!place) return null;
 
   return (
@@ -249,6 +264,9 @@ export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabe
             dateLabel={dateLabel}
             onClose={onClose}
             onDelete={onDelete}
+            actionLabel={actionLabel}
+            actionTone={actionTone}
+            onAction={onAction}
           />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -432,5 +450,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#C0392B',
     fontFamily: 'Nunito_700Bold'
+  },
+  addButton: {
+    borderColor: '#E8E6E3',
+    backgroundColor: '#E8E6E3'
+  },
+  addButtonText: {
+    color: '#F26B64'
   }
 });

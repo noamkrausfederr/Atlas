@@ -12,6 +12,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { BackButton } from '../components/BackButton';
 import { colors } from '../theme';
 
 const TAG_COLORS = [
@@ -208,13 +209,15 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
   return (
     <View style={styles.chatScreen}>
       <View style={styles.chatHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.85}>
-          <Text style={styles.backButtonArrow}>←</Text>
-        </TouchableOpacity>
+        <BackButton onPress={onBack} />
         {profile.image ? (
           <Image source={{ uri: profile.image }} style={styles.chatProfilePhoto} />
         ) : (
-          <View style={styles.chatProfileAvatarFallback} />
+          <View style={styles.chatProfileAvatarFallback}>
+            <Text style={styles.chatProfileAvatarInitial}>
+              {profile.ownerName?.[0]?.toUpperCase() ?? '?'}
+            </Text>
+          </View>
         )}
         <View style={styles.chatHeaderText}>
           <Text style={styles.chatTitle}>{profile.ownerName}</Text>
@@ -234,7 +237,6 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
           item.type === 'day' ? (
             <View key={item.id} style={styles.chatDayRow}>
               <View style={styles.chatDayBadge}>
-                <BlurView intensity={28} tint="extraLight" style={styles.chatDayBadgeBlur} />
                 <Text style={styles.chatDayBadgeText}>{item.label}</Text>
               </View>
             </View>
@@ -243,6 +245,17 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
               key={item.id}
               style={[styles.chatBubbleRow, item.incoming ? styles.chatBubbleRowLeft : styles.chatBubbleRowRight]}
             >
+              {item.incoming ? (
+                profile.image ? (
+                  <Image source={{ uri: profile.image }} style={styles.chatInlineAvatarImage} />
+                ) : (
+                  <View style={styles.chatInlineAvatarFallback}>
+                    <Text style={styles.chatInlineAvatarInitial}>
+                      {profile.ownerName?.[0]?.toUpperCase() ?? '?'}
+                    </Text>
+                  </View>
+                )
+              ) : null}
               <View style={[styles.chatBubbleStack, item.incoming ? styles.chatBubbleStackLeft : styles.chatBubbleStackRight]}>
                 <View style={[styles.chatBubble, item.incoming ? styles.chatBubbleIncoming : styles.chatBubbleOutgoing]}>
                   <BlurView
@@ -270,14 +283,14 @@ function ChatScreen({ profile, messages, onBack, onSendMessage }) {
       <View
         style={[
           styles.chatComposer,
-          { bottom: keyboardHeight > 0 ? keyboardHeight + 8 : 14 }
+          { bottom: keyboardHeight > 0 ? keyboardHeight + 24 : 36 }
         ]}
       >
         <View style={styles.chatInputWrap}>
           <BlurView intensity={28} tint="extraLight" style={styles.chatInputBlur} />
           <TextInput
             placeholder="Message..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor="#000000"
             value={draftMessage}
             onChangeText={setDraftMessage}
             style={styles.chatInput}
@@ -312,6 +325,10 @@ function formatActivityTime(minutesAgo) {
   return `${Math.floor(minutesAgo / 1440)}d ago`;
 }
 
+function isNewActivity(item) {
+  return item.minutesAgo <= 120;
+}
+
 function ActivityFeed({ profileDirectory }) {
   const profiles = Object.values(profileDirectory);
   if (profiles.length === 0) return null;
@@ -332,8 +349,9 @@ function ActivityFeed({ profileDirectory }) {
         {activities.map((item, idx) => {
           const initial = item.profile?.ownerName?.[0]?.toUpperCase() ?? '?';
           const isLike = item.type === 'like';
+          const isNew = isNewActivity(item);
           return (
-            <View key={idx} style={styles.activityCard}>
+            <View key={idx} style={[styles.activityCard, isNew && styles.activityCardNew]}>
               <View style={styles.activityAvatarWrap}>
                 {item.profile?.image ? (
                   <Image source={{ uri: item.profile.image }} style={styles.threadAvatarImage} />
@@ -348,9 +366,9 @@ function ActivityFeed({ profileDirectory }) {
               </View>
               <View style={styles.activityBody}>
                 <Text style={styles.activityText} numberOfLines={2}>
-                  <Text style={styles.activityName}>{item.profile?.ownerName}</Text>
+                  <Text style={[styles.activityName, isNew && styles.activityNameNew]}>{item.profile?.ownerName}</Text>
                   {isLike ? ' liked your trip ' : ' saved your trip to their page '}
-                  <Text style={styles.activityTripName}>{item.tripName}</Text>
+                  <Text style={[styles.activityTripName, !isNew && styles.activityTripNameSeen]}>{item.tripName}</Text>
                 </Text>
                 <Text style={styles.activityTime}>{formatActivityTime(item.minutesAgo)}</Text>
               </View>
@@ -413,7 +431,7 @@ export function InboxScreen({
       <View style={styles.inboxTopHeader}>
         <View style={styles.inboxTabRow}>
           <TouchableOpacity style={[styles.inboxTabPill, activeTab === 'inbox' && styles.inboxTabPillActive]} onPress={() => setActiveTab('inbox')} activeOpacity={0.75}>
-            <Text style={[styles.inboxTabText, activeTab === 'inbox' && styles.inboxTabTextActive]}>Notifications</Text>
+            <Text style={[styles.inboxTabText, activeTab === 'inbox' && styles.inboxTabTextActive]}>Inbox</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.inboxTabPill, activeTab === 'activity' && styles.inboxTabPillActive]} onPress={() => setActiveTab('activity')} activeOpacity={0.75}>
             <Text style={[styles.inboxTabText, activeTab === 'activity' && styles.inboxTabTextActive]}>Activity</Text>
@@ -610,9 +628,15 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(242,107,100,0.07)',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 18,
     marginBottom: 8,
+  },
+  activityCardNew: {
+    backgroundColor: 'rgba(242,107,100,0.07)',
+    borderColor: 'rgba(242,107,100,0.16)',
   },
   activityAvatarWrap: {
     position: 'relative',
@@ -647,10 +671,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+  activityNameNew: {
+    color: '#F26B64',
+  },
   activityTripName: {
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700',
     color: '#F26B64',
+  },
+  activityTripNameSeen: {
+    color: colors.text,
   },
   activityTime: {
     fontSize: 11,
@@ -700,21 +730,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     backgroundColor: colors.border
   },
-  backButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 28,
-    height: 28,
-    paddingHorizontal: 2,
-    paddingVertical: 4
-  },
-  backButtonArrow: {
-    color: colors.textSecondary,
-    fontSize: 26,
-    lineHeight: 26,
-    fontWeight: Platform.OS === 'ios' ? '700' : '800',
-    fontFamily: 'Nunito_700Bold'
-  },
   chatHeaderText: {
     flex: 1,
     minWidth: 0
@@ -729,7 +744,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surfaceDeep
+    backgroundColor: '#E8E6E3',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  chatProfileAvatarInitial: {
+    color: '#F26B64',
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold'
   },
   chatTitle: {
     color: colors.text,
@@ -739,7 +762,7 @@ const styles = StyleSheet.create({
   },
   chatHandle: {
     marginTop: 2,
-    color: colors.textMuted,
+    color: '#000000',
     fontSize: 13,
     fontWeight: '600',
     fontFamily: 'Nunito_400Regular'
@@ -758,15 +781,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceDeep
-  },
-  chatDayBadgeBlur: {
-    ...StyleSheet.absoluteFillObject,
+    borderColor: 'rgba(242,107,100,0.22)',
     backgroundColor: 'transparent'
   },
   chatDayBadgeText: {
-    color: colors.textMuted,
+    color: '#000000',
     fontSize: 12,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
@@ -776,13 +795,15 @@ const styles = StyleSheet.create({
     paddingTop: 28
   },
   emptyChatText: {
-    color: colors.textMuted,
+    color: '#000000',
     fontSize: 14,
     fontWeight: '700',
     fontFamily: 'Nunito_400Regular'
   },
   chatBubbleRow: {
-    flexDirection: 'row'
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8
   },
   chatBubbleRowLeft: {
     justifyContent: 'flex-start'
@@ -792,6 +813,26 @@ const styles = StyleSheet.create({
   },
   chatBubbleStack: {
     maxWidth: '82%'
+  },
+  chatInlineAvatarImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceDeep
+  },
+  chatInlineAvatarFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E8E6E3',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  chatInlineAvatarInitial: {
+    color: '#F26B64',
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: 'Nunito_800ExtraBold'
   },
   chatBubbleStackLeft: {
     alignItems: 'flex-start'
@@ -806,17 +847,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   chatBubbleIncoming: {
-    backgroundColor: colors.surfaceDeep,
+    backgroundColor: 'rgba(246,244,241,0.78)',
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: '#E8E6E3'
   },
   chatBubbleIncomingBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent'
   },
   chatBubbleOutgoing: {
-    backgroundColor: colors.text,
-    borderWidth: 0
+    backgroundColor: '#E8E6E3',
+    borderWidth: 1,
+    borderColor: 'rgba(246,244,241,0.78)'
   },
   chatBubbleOutgoingBlur: {
     ...StyleSheet.absoluteFillObject,
@@ -828,14 +870,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito_400Regular'
   },
   chatBubbleTextIncoming: {
-    color: colors.text
+    color: '#000000'
   },
   chatBubbleTextOutgoing: {
-    color: '#ffffff'
+    color: '#000000'
   },
   chatMessageTime: {
     marginTop: 5,
-    color: colors.textMuted,
+    color: '#000000',
     fontSize: 11,
     lineHeight: 14,
     fontFamily: 'Nunito_400Regular'
@@ -850,8 +892,8 @@ const styles = StyleSheet.create({
   },
   chatComposer: {
     position: 'absolute',
-    left: 18,
-    right: 18,
+    left: 32,
+    right: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -864,18 +906,18 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8E6E3',
     backgroundColor: 'transparent'
   },
   chatInputBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(240,239,237,0.92)'
+    backgroundColor: 'rgba(246,244,241,0.78)'
   },
   chatInput: {
     paddingLeft: 18,
     paddingRight: 16,
     paddingVertical: 14,
-    color: colors.text,
+    color: '#000000',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
@@ -886,14 +928,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
     overflow: 'hidden',
-    backgroundColor: '#F26B64'
+    backgroundColor: '#E8E6E3',
+    borderWidth: 1,
+    borderColor: 'rgba(246,244,241,0.78)'
   },
   sendButtonBlur: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent'
   },
   sendButtonText: {
-    color: '#ffffff',
+    color: '#F26B64',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',

@@ -45,6 +45,7 @@ router.post('/', rateLimit, async (req, res) => {
       budget: body.budget,
       vibeTags: body.vibeTags ?? [],
       categories: body.categories ?? [],
+      allowedProviders: body.allowedProviders ?? [],
       limit: body.limit,
       excludeCanonicalIds: body.excludeCanonicalIds ?? [],
       bypassCache: Boolean(body.bypassCache)

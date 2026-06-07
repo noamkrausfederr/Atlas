@@ -25,7 +25,8 @@ import { BoardCard } from './src/components/BoardCard';
 import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen';
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
-import { ProfileScreen, SettingsScreen, TripListScreen } from './src/screens/ProfileScreen';
+import { EditProfileScreen, ProfileScreen, SettingsScreen, TripListScreen } from './src/screens/ProfileScreen';
+import { CreateAccountScreen, LoginScreen, WelcomeScreen } from './src/screens/AuthScreens';
 
 function formatInboxHandle(ownerName) {
   return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
@@ -102,8 +103,11 @@ function InnerApp() {
   const [selectedBoard, setSelectedBoard] = useState(null);
   const [tripStack, setTripStack] = useState(null);
   const [activeTab, setActiveTab] = useState('Profile');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authScreen, setAuthScreen] = useState('welcome');
   const [exploreStack, setExploreStack] = useState(null);
   const [profileStack, setProfileStack] = useState(null);
+  const [settingsStack, setSettingsStack] = useState(null);
   const [exploreResetKey, setExploreResetKey] = useState(0);
   const [likedPublicTripIds, setLikedPublicTripIds] = useState([]);
   const [followedProfileNames, setFollowedProfileNames] = useState([]);
@@ -267,6 +271,38 @@ function InnerApp() {
   const insets = useSafeAreaInsets();
 
   if (!fontsLoaded) return null;
+
+  if (!isAuthenticated) {
+    const finishAuth = () => setIsAuthenticated(true);
+
+    return (
+      <SafeAreaView
+        style={[styles.safeArea, authScreen === 'welcome' && { backgroundColor: colors.surfaceDeep }]}
+        edges={['top', 'bottom']}
+      >
+        <StatusBar style="dark" />
+        {authScreen === 'login' ? (
+          <LoginScreen
+            onBack={() => setAuthScreen('welcome')}
+            onSubmit={finishAuth}
+            onCreateAccountPress={() => setAuthScreen('createAccount')}
+          />
+        ) : authScreen === 'createAccount' ? (
+          <CreateAccountScreen
+            onBack={() => setAuthScreen('welcome')}
+            onSubmit={finishAuth}
+            onLoginPress={() => setAuthScreen('login')}
+          />
+        ) : (
+          <WelcomeScreen
+            onLoginPress={() => setAuthScreen('login')}
+            onCreateAccountPress={() => setAuthScreen('createAccount')}
+          />
+        )}
+      </SafeAreaView>
+    );
+  }
+
   const isInboxChatOpen = activeTab === 'Inbox' && isInboxThreadOpen;
   
   const upcomingBoards = getUpcomingTrips(boards);
@@ -275,6 +311,7 @@ function InnerApp() {
   const isExploreView = activeTab === 'Explore';
   const isInboxView = activeTab === 'Inbox';
   const isProfileView = activeTab === 'Profile';
+  const isSettingsView = activeTab === 'Settings';
   const isTripDetailView = Boolean(selectedBoard);
   const inboxProfileDirectory = hydratedPublicTrips.reduce((profiles, trip) => {
     if (!profiles[trip.ownerName]) {
@@ -332,12 +369,24 @@ function InnerApp() {
     setTripStack(null);
     setExploreStack(null);
     setProfileStack(null);
+    setSettingsStack(null);
     if (tab === 'Explore') {
       setExploreResetKey((current) => current + 1);
     }
     if (tab === 'Inbox') {
       setIsInboxThreadOpen(false);
     }
+  };
+
+  const handleLogout = () => {
+    setActiveTab('Profile');
+    setSelectedBoard(null);
+    setTripStack(null);
+    setExploreStack(null);
+    setProfileStack(null);
+    setSettingsStack(null);
+    setAuthScreen('welcome');
+    setIsAuthenticated(false);
   };
 
   const markInboxThreadRead = (ownerName) => {
@@ -772,6 +821,22 @@ function InnerApp() {
         <ExploreMoreScreen
           board={board}
           onBack={() => setTripStack(null)}
+          onAddRecommendation={(recommendation) => {
+            const startDate = board.startDate ? new Date(board.startDate) : new Date();
+            const nextPlace = {
+              id: `p-${Date.now()}`,
+              name: recommendation.title,
+              note: recommendation.reason || recommendation.description || '',
+              address: recommendation.address || '',
+              sourceUrl: recommendation.websiteUrl || recommendation.sourceAttributions?.[0]?.url || '',
+              dayIndex: 0,
+              day: 1,
+              date: startDate.toISOString()
+            };
+            updateBoard(board.id, {
+              placesList: [...(board.placesList ?? []), nextPlace]
+            });
+          }}
         />
       );
     }
@@ -809,10 +874,19 @@ function InnerApp() {
     }
 
     if (activeTab === 'Profile') {
+      if (profileStack?.screen === 'editProfile') {
+        return (
+          <EditProfileScreen
+            onBack={() => setProfileStack(null)}
+          />
+        );
+      }
+
       if (profileStack?.screen === 'settings') {
         return (
           <SettingsScreen
             onBack={() => setProfileStack(null)}
+            onLogoutPress={handleLogout}
           />
         );
       }
@@ -850,7 +924,25 @@ function InnerApp() {
           onOpenBoard={openBoard}
           onSeeAllUpcoming={() => setProfileStack({ screen: 'allUpcoming' })}
           onSeeAllPast={() => setProfileStack({ screen: 'allPast' })}
-          onSettingsPress={() => setProfileStack({ screen: 'settings' })}
+          onEditProfilePress={() => setProfileStack({ screen: 'editProfile' })}
+        />
+      );
+    }
+
+    if (activeTab === 'Settings') {
+      if (settingsStack?.screen === 'editProfile') {
+        return (
+          <EditProfileScreen
+            onBack={() => setSettingsStack(null)}
+          />
+        );
+      }
+
+      return (
+        <SettingsScreen
+          onBack={() => openTab('Profile')}
+          onEditProfilePress={() => setSettingsStack({ screen: 'editProfile' })}
+          onLogoutPress={handleLogout}
         />
       );
     }
@@ -876,14 +968,14 @@ function InnerApp() {
     return null;
   };
 
-  const showTabBar = !selectedBoard && !isInboxChatOpen;
+  const showTabBar = !selectedBoard && !isInboxChatOpen && !isExploreFilterHeaderHidden;
   const floatingFabBottom = (showTabBar ? 88 : 20) + insets.bottom;
 
   return (
     <SafeAreaView
       style={[
         styles.safeArea,
-        (isExploreView || isInboxView || isProfileView) && styles.tripsSafeArea,
+        (isExploreView || isInboxView || isProfileView || isSettingsView) && styles.tripsSafeArea,
         isTripDetailView && styles.detailSafeArea
       ]}
       edges={['top']}
@@ -899,22 +991,14 @@ function InnerApp() {
                 <Text style={styles.appHeaderBrandTextDot}>.</Text>
               </Text>
             </View>
-            {isExploreView || isProfileView || isInboxView ? (
+            {isExploreView || isProfileView || isInboxView || isSettingsView ? (
               <View style={styles.appHeaderActions}>
                 <TouchableOpacity
-                  style={[
-                    styles.appHeaderActionButton,
-                    styles.appHeaderActionButtonRelative,
-                    isInboxView && styles.appHeaderActionInboxButton
-                  ]}
+                  style={[styles.appHeaderActionButton, styles.appHeaderActionButtonRelative]}
                   onPress={() => openTab('Inbox')}
                   activeOpacity={0.8}
                 >
-                  {isInboxView ? (
-                    <Text style={styles.appHeaderActionInboxText}>Inbox</Text>
-                  ) : (
-                    <Ionicons name={activeTab === 'Inbox' ? 'notifications' : 'notifications-outline'} size={20} color={colors.text} />
-                  )}
+                  <Ionicons name={activeTab === 'Inbox' ? 'notifications' : 'notifications-outline'} size={20} color={colors.text} />
                   {inboxUnreadCount > 0 && (
                     <View style={styles.appHeaderBadge}>
                       <Text style={styles.appHeaderBadgeText}>{inboxUnreadCount > 9 ? '9+' : String(inboxUnreadCount)}</Text>
@@ -928,6 +1012,13 @@ function InnerApp() {
                 >
                   <Ionicons name={activeTab === 'Profile' ? 'person' : 'person-outline'} size={20} color={colors.text} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.appHeaderActionButton, styles.appHeaderProfileButton]}
+                  onPress={() => openTab('Settings')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={activeTab === 'Settings' ? 'settings' : 'settings-outline'} size={20} color={colors.text} />
+                </TouchableOpacity>
               </View>
             ) : null}
           </View>
@@ -938,14 +1029,14 @@ function InnerApp() {
         style={[
           styles.contentWrapper,
           isTripDetailView && styles.detailContentWrapper,
-          (isExploreView || isInboxView || isProfileView) && styles.tripsContentWrapper
+          (isExploreView || isInboxView || isProfileView || isSettingsView) && styles.tripsContentWrapper
         ]}
       >
         {selectedBoard ? (
-          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: 24 }]}>
+          <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: 0 }]}>
             {renderSelectedBoardContent()}
           </View>
-        ) : activeTab === 'Inbox' || activeTab === 'Profile' ? (
+        ) : activeTab === 'Inbox' || activeTab === 'Profile' || activeTab === 'Settings' ? (
           <View style={[styles.detailContainer, styles.tripDetailContainer, { paddingBottom: 0 }]}>
             {renderContent()}
           </View>
@@ -1259,17 +1350,6 @@ const styles = StyleSheet.create({
   appHeaderActionButtonRelative: {
     position: 'relative'
   },
-  appHeaderActionInboxButton: {
-    width: 'auto',
-    paddingHorizontal: 4,
-  },
-  appHeaderActionInboxText: {
-    color: colors.text,
-    fontSize: 15,
-    lineHeight: 18,
-    fontFamily: 'Nunito_700Bold',
-    fontWeight: Platform.OS === 'ios' ? '700' : '800'
-  },
   appHeaderBadge: {
     position: 'absolute',
     top: 3,
@@ -1291,8 +1371,6 @@ const styles = StyleSheet.create({
   },
   bottomTabBar: {
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     zIndex: 20
   },
   bottomTabBarInner: {
@@ -1300,7 +1378,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
-    paddingTop: 10
+    paddingTop: 10,
+    backgroundColor: colors.background
   },
   bottomTabButton: {
     width: 40,
