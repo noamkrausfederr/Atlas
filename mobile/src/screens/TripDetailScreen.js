@@ -179,6 +179,363 @@ function getPlaceSectionIndex(place, sectionCount) {
   return 0;
 }
 
+function decodeHtmlEntities(text) {
+  return (text || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function decodeJsonEscapedText(text) {
+  if (!text) return '';
+  try {
+    return JSON.parse(`"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+  } catch (_error) {
+    return text
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\u0026/g, '&')
+      .replace(/\\u003d/g, '=')
+      .replace(/\\u002F/gi, '/')
+      .replace(/\\\\/g, '\\');
+  }
+}
+
+function cleanExtractedTitle(text) {
+  return decodeHtmlEntities(text || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+[|•·]\s+/g, ' | ')
+    .replace(/\b(TikTok|Instagram|Reels|YouTube|Shorts)\b/gi, '')
+    .replace(/^\s*watch\s+/i, '')
+    .trim()
+    .replace(/^[-|:,\s]+|[-|:,\s]+$/g, '');
+}
+
+function cleanExtractedDescription(text) {
+  return decodeHtmlEntities(text || '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+}
+
+function sanitizeExtractedCandidate(text) {
+  return cleanExtractedTitle(text)
+    .replace(/^(\d+[\).\s-]+|day\s+\d+[:\-\s]+)/i, '')
+    .replace(/^(save|visit|stop at|go to|eat at|try|see)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
+function extractActivityNameFromCandidate(text) {
+  const base = sanitizeExtractedCandidate(text);
+  if (!base) return '';
+
+  const afterColon = base.includes(':') ? base.split(':').pop()?.trim() || base : base;
+  const activityPhraseMatch = afterColon.match(
+    /(?:went to|stopped at|stop at|visited|visit|checked out|check out|explored|explore|had|tried|try|ate at|eat at|ate|grabbed|drank at|drank|shopped at|thrifted at|headed to|walked through)\s+(.+)/i
+  );
+  const activityTail = activityPhraseMatch?.[1]?.trim() || afterColon;
+
+  const trimmedTail = activityTail
+    .replace(/\b(for lunch|for dinner|for breakfast|for brunch|for coffee)\b.*$/i, '')
+    .replace(/\b(in tokyo|in japan|around tokyo|while in tokyo)\b.*$/i, '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const firstListPart = trimmedTail
+    .split(/\s*,\s*|\s+\band\b\s+/i)
+    .map((part) => part.trim())
+    .find(Boolean) || trimmedTail;
+
+  const afterPreposition = firstListPart.match(/\b(?:at|to|in|from)\s+(.+)/i)?.[1]?.trim() || firstListPart;
+
+  return sanitizeExtractedCandidate(afterPreposition)
+    .replace(/^(the|a|an)\s+/i, '')
+    .trim();
+}
+
+function isUsefulActivityCandidate(text) {
+  if (!text || text.length < 3 || text.length > 48) return false;
+  if (/^(part|episode|travel|trip|vacation|itinerary|video|reel|reels|tiktok|instagram)$/i.test(text)) return false;
+  if (/https?:\/\//i.test(text)) return false;
+  return /[a-zA-Z]/.test(text);
+}
+
+function normalizePlaceLookupText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const GENERIC_PLACE_TERMS = /(cafe|coffee|restaurant|bar|bistro|bakery|market|museum|gallery|temple|shrine|park|beach|lake|river|garden|castle|palace|tower|bridge|plaza|square|street|road|avenue|district|neighborhood|mall|store|shop|boutique|hotel|hostel|station|pier|harbor|port|island|mount|mountain|trail|hike|waterfall|viewpoint|lookout|monument|church|cathedral|mosque|synagogue|library|theater|cinema|stadium|arena|zoo|aquarium|spa|onsen|ramen|sushi|pizza|burger|sandwich|brunch|breakfast|diner|bbq|grill|thrift|vintage|bookstore|university|campus|farmers market|food hall|brewery|winery)/i;
+const GENERIC_PLACE_TYPE_TOKENS = new Set([
+  'cafe', 'coffee', 'restaurant', 'bar', 'bistro', 'bakery', 'market', 'museum', 'gallery', 'temple', 'shrine',
+  'park', 'beach', 'lake', 'river', 'garden', 'castle', 'palace', 'tower', 'bridge', 'plaza', 'square', 'street',
+  'road', 'avenue', 'district', 'neighborhood', 'mall', 'store', 'shop', 'boutique', 'hotel', 'hostel', 'station',
+  'pier', 'harbor', 'port', 'island', 'mount', 'mountain', 'trail', 'hike', 'waterfall', 'viewpoint', 'lookout',
+  'monument', 'church', 'cathedral', 'mosque', 'synagogue', 'library', 'theater', 'cinema', 'stadium', 'arena',
+  'zoo', 'aquarium', 'spa', 'onsen', 'ramen', 'sushi', 'pizza', 'burger', 'sandwich', 'brunch', 'breakfast',
+  'diner', 'bbq', 'grill', 'thrift', 'vintage', 'bookstore', 'university', 'campus', 'brewery', 'winery',
+  'shopping', 'center', 'centre', 'food', 'tea'
+]);
+const GENERIC_CONNECTOR_TOKENS = new Set([
+  'and', 'the', 'of', 'in', 'at', 'on', 'for', 'to', 'with', 'a', 'an', 'my', 'our', 'your', 'day', 'days'
+]);
+
+function looksLikeBroadTravelNoise(text) {
+  return /^(weekly vlog|travel vlog|city guide|travel guide|vacation guide|trip ideas|things to do|best places|must visit|must see|where to eat|where to stay|where to go|itinerary|bucket list|day trip|travel tips|travel diary|city break|europe trip|asia trip|cafe hopping|shopping center|street snacks(?:\s*&\s*tea)?|rainy days(?:\s*&\s*inspirations)?|weekend|weekend guide)$/i.test(text);
+}
+
+function looksLikeUrlFragment(text) {
+  return /([a-z0-9-]+\.)+[a-z]{2,}/i.test(text) || /goo\.gl|maps\.app/i.test(text);
+}
+
+function isGenericPlaceOnlyPhrase(text) {
+  const tokens = normalizePlaceLookupText(text)
+    .split(' ')
+    .filter(Boolean)
+    .filter((token) => token.length >= 2);
+
+  if (!tokens.length) return false;
+
+  const meaningfulTokens = tokens.filter((token) => !GENERIC_CONNECTOR_TOKENS.has(token));
+  if (!meaningfulTokens.length) return true;
+
+  return meaningfulTokens.every((token) => GENERIC_PLACE_TYPE_TOKENS.has(token));
+}
+
+function looksLikeNamedPlace(text) {
+  if (!text) return false;
+  const normalized = text.trim();
+  if (normalized.length < 3 || normalized.length > 48) return false;
+  if (looksLikeBroadTravelNoise(normalized)) return false;
+  if (looksLikeUrlFragment(normalized)) return false;
+  if (isGenericPlaceOnlyPhrase(normalized)) return false;
+  if (/^[#@]/.test(normalized)) return false;
+  if (/^\d+$/.test(normalized)) return false;
+  if (/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)$/i.test(normalized)) return false;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const significantWords = words.filter((word) => word.length >= 3);
+  if (!significantWords.length) return false;
+
+  const titleCaseWords = significantWords.filter((word) => /^[A-Z][a-z'’&.-]+$/.test(word));
+  const allCapsWords = significantWords.filter((word) => /^[A-Z0-9&'’.-]{2,}$/.test(word));
+  const hasPlaceTerm = GENERIC_PLACE_TERMS.test(normalized);
+  const hasTwoWordName = significantWords.length >= 2 && (titleCaseWords.length >= 2 || allCapsWords.length >= 2);
+  const hasSingleDistinctiveName = significantWords.length === 1 && /^[A-Z][a-z'’&.-]{3,}$/.test(significantWords[0]);
+
+  return hasPlaceTerm || hasTwoWordName || hasSingleDistinctiveName;
+}
+
+function looksLikePlaceKeyword(text) {
+  if (!isUsefulActivityCandidate(text)) return false;
+  if (looksLikeBroadTravelNoise(text)) {
+    return false;
+  }
+  if (looksLikeUrlFragment(text)) return false;
+  if (isGenericPlaceOnlyPhrase(text)) return false;
+  return looksLikeNamedPlace(text) || GENERIC_PLACE_TERMS.test(text);
+}
+
+function splitExtractedTextIntoCandidates(text) {
+  const cleaned = cleanExtractedTitle(text);
+  if (!cleaned) return [];
+
+  const listLikeText = cleaned
+    .replace(/\s*[|•·]\s*/g, '\n')
+    .replace(/\s*;\s*/g, '\n')
+    .replace(/\s+[–-]\s+/g, '\n')
+    .replace(/\s*\/\s*/g, '\n')
+    .replace(/\s*,\s*/g, '\n')
+    .replace(/[.!?](\s+|$)/g, '\n')
+    .replace(/\b(?:then|after that|next|plus)\b/gi, '\n')
+    .replace(/\s{2,}/g, ' ');
+
+  const rawCandidates = listLikeText
+    .split(/\n+/g)
+    .map((part) => extractActivityNameFromCandidate(part))
+    .filter(Boolean);
+
+  if (rawCandidates.length === 1) {
+    return [extractActivityNameFromCandidate(cleaned)].filter(isUsefulActivityCandidate);
+  }
+
+  return rawCandidates.filter(isUsefulActivityCandidate);
+}
+
+function buildCandidateNamesFromExtractedTexts(texts) {
+  return texts
+    .flatMap((text) => splitExtractedTextIntoCandidates(text))
+    .filter((part, index, array) => array.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === index)
+    .slice(0, 14);
+}
+
+function buildCandidateNamesFromKeywordList(text) {
+  if (!text) return [];
+
+  return text
+    .split(',')
+    .map((part) => sanitizeExtractedCandidate(part))
+    .filter(looksLikePlaceKeyword)
+    .filter((part, index, array) => array.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === index)
+    .slice(0, 20);
+}
+
+function looksLikeExternalPlaceUrl(text) {
+  return /^(https?:\/\/)?(maps\.app\.goo\.gl|www\.google\.com\/maps|google\.com\/maps|maps\.google\.com)\//i.test(String(text || '').trim());
+}
+
+function extractLinkedPlaceEntriesFromDescription(text) {
+  if (!text) return [];
+
+  const normalizedText = decodeJsonEscapedText(decodeHtmlEntities(text))
+    .replace(/\r/g, '')
+    .replace(/\\n/g, '\n');
+
+  const lines = normalizedText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const entries = [];
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const currentLine = sanitizeExtractedCandidate(lines[index]);
+    const nextLine = lines[index + 1]?.trim() || '';
+    if (!currentLine || !nextLine) continue;
+    if (/^(places mentioned|accommodation|about me|socials?|links?)[:\s]*$/i.test(currentLine)) continue;
+    if (looksLikeExternalPlaceUrl(currentLine)) continue;
+    if (!looksLikeExternalPlaceUrl(nextLine)) continue;
+    if (looksLikeBroadTravelNoise(currentLine) || looksLikeUrlFragment(currentLine)) continue;
+
+    entries.push({
+      name: currentLine,
+      sourceUrl: nextLine
+    });
+  }
+
+  return entries.filter(
+    (entry, index, array) => array.findIndex((candidate) => candidate.name.toLowerCase() === entry.name.toLowerCase()) === index
+  );
+}
+
+function buildPlacesFromVerifiedCandidates(candidates, selectedDaySeed) {
+  return candidates.map((candidate, index) => ({
+    id: `p-${Date.now()}-k-${index + 1}`,
+    name: candidate.name,
+    note: 'From video link',
+    address: candidate.address || '',
+    placeId: candidate.placeId || null,
+    lat: candidate.lat ?? undefined,
+    lng: candidate.lng ?? undefined,
+    ...selectedDaySeed
+  }));
+}
+
+function buildPlacesFromLinkedEntries(entries, verifiedPlaces, selectedDaySeed) {
+  const verifiedByName = new Map(
+    verifiedPlaces.map((place) => [place.name.toLowerCase(), place])
+  );
+
+  return entries.map((entry, index) => {
+    const verified = verifiedByName.get(entry.name.toLowerCase());
+    return {
+      id: `p-${Date.now()}-l-${index + 1}`,
+      name: entry.name,
+      note: 'From video link',
+      address: verified?.address || '',
+      placeId: verified?.placeId || null,
+      lat: verified?.lat ?? undefined,
+      lng: verified?.lng ?? undefined,
+      sourceUrl: entry.sourceUrl || undefined,
+      ...selectedDaySeed
+    };
+  });
+}
+
+async function tryFetchMetadata(url) {
+  const providers = [];
+  let providerTitle = '';
+  let providerDescription = '';
+
+  if (/tiktok\.com/i.test(url)) {
+    providers.push(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+  }
+  if (/youtube\.com|youtu\.be/i.test(url)) {
+    providers.push(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+  }
+  providers.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+
+  for (const endpoint of providers) {
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) continue;
+      const data = await response.json();
+      const title = cleanExtractedTitle(data?.title || '');
+      const description = cleanExtractedDescription(data?.description || data?.author_name || '');
+      if (!providerTitle && title) {
+        providerTitle = title;
+      }
+      if (!providerDescription && description) {
+        providerDescription = description;
+      }
+    } catch (_error) {
+      // Try the next provider.
+    }
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml'
+      }
+    });
+    if (!response.ok) return { title: '', description: '' };
+    const html = await response.text();
+    const ogTitleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const twitterTitleMatch = html.match(/<meta[^>]+name=["']twitter:title["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const ogDescriptionMatch = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const twitterDescriptionMatch = html.match(/<meta[^>]+name=["']twitter:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const metaDescriptionMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const metaKeywordsMatch = html.match(/<meta[^>]+name=["']keywords["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+    const shortDescriptionMatch = html.match(/"shortDescription":"((?:\\.|[^"])*)"/i);
+    const attributedDescriptionMatch = html.match(/"attributedDescriptionBodyText":\{"content":"((?:\\.|[^"])*)"/i);
+    const simpleDescriptionMatch = html.match(/"description":\{"simpleText":"((?:\\.|[^"])*)"/i);
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const rawDescription = decodeJsonEscapedText(
+      shortDescriptionMatch?.[1] ||
+      attributedDescriptionMatch?.[1] ||
+      simpleDescriptionMatch?.[1] ||
+      ogDescriptionMatch?.[1] ||
+      twitterDescriptionMatch?.[1] ||
+      metaDescriptionMatch?.[1] ||
+      providerDescription ||
+      ''
+    );
+    return {
+      title: cleanExtractedTitle(ogTitleMatch?.[1] || twitterTitleMatch?.[1] || titleMatch?.[1] || providerTitle || ''),
+      description: cleanExtractedDescription(rawDescription),
+      keywords: decodeHtmlEntities(metaKeywordsMatch?.[1] || ''),
+    };
+  } catch (_error) {
+    return { title: providerTitle, description: providerDescription, keywords: '' };
+  }
+}
+
 export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDeleteBoard }) {
   const today = startOfToday();
   const initialStartDate = clampDateToMin(getSafeDate(board.startDate, today), today);
@@ -194,6 +551,38 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
   const [activeDateField, setActiveDateField] = useState(null);
   const [isPickingTripPhoto, setIsPickingTripPhoto] = useState(false);
   const [tripPhotoError, setTripPhotoError] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isDescriptionFocused, setIsDescriptionFocused] = useState(false);
+  const [descriptionY, setDescriptionY] = useState(0);
+  const editScrollViewRef = useRef(null);
+  const descriptionFocusScrollTimer = useRef(null);
+
+  const scrollDescriptionIntoView = () => {
+    editScrollViewRef.current?.scrollTo({ y: Math.max(0, descriptionY - 220), animated: true });
+  };
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const handleShow = (event) => setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    const handleHide = () => setKeyboardHeight(0);
+    const showSub = Keyboard.addListener(showEvent, handleShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDescriptionFocused && keyboardHeight > 0) {
+      scrollDescriptionIntoView();
+    }
+  }, [keyboardHeight, isDescriptionFocused, descriptionY]);
+
+  useEffect(() => () => {
+    clearTimeout(descriptionFocusScrollTimer.current);
+  }, []);
 
   const handlePickTripPhoto = async () => {
     if (isPickingTripPhoto) return;
@@ -253,7 +642,15 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
 
   return (
     <View style={styles.detailScreen}>
-      <ScrollView contentContainerStyle={styles.editScrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={editScrollViewRef}
+        contentContainerStyle={[
+          styles.editScrollContent,
+          isDescriptionFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 36 }
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="always"
+      >
         <View style={styles.editCard}>
           <View style={styles.editHeader}>
             <BackButton onPress={onBack} />
@@ -379,7 +776,7 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
             />
           </View>
 
-          <View style={styles.editFieldGroup}>
+          <View style={styles.editFieldGroup} onLayout={(event) => setDescriptionY(event.nativeEvent.layout.y)}>
             <Text style={styles.editLabel}>Description</Text>
             <TextInput
               value={description}
@@ -391,6 +788,20 @@ export function TripEditScreen({ board, onBack, onSave, onDuplicateBoard, onDele
               textAlignVertical="top"
               returnKeyType="done"
               blurOnSubmit
+              onFocus={() => {
+                setIsDescriptionFocused(true);
+                requestAnimationFrame(() => {
+                  scrollDescriptionIntoView();
+                });
+                clearTimeout(descriptionFocusScrollTimer.current);
+                descriptionFocusScrollTimer.current = setTimeout(() => {
+                  scrollDescriptionIntoView();
+                }, 260);
+              }}
+              onBlur={() => {
+                setIsDescriptionFocused(false);
+                clearTimeout(descriptionFocusScrollTimer.current);
+              }}
             />
           </View>
 
@@ -467,6 +878,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const [timeDrafts, setTimeDrafts] = useState({});
   const [editingActivityPlaceId, setEditingActivityPlaceId] = useState(null);
   const [activityDrafts, setActivityDrafts] = useState({});
+  const [activityDatePickerPlaceId, setActivityDatePickerPlaceId] = useState(null);
+  const [activityTimePickerPlaceId, setActivityTimePickerPlaceId] = useState(null);
   const [addActivityModal, setAddActivityModal] = useState(null);
   const [showAddActivityTimePicker, setShowAddActivityTimePicker] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -476,6 +889,10 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const addressBlurTimer = useRef(null);
   const addActivityScrollRef = useRef(null);
   const [linkInput, setLinkInput] = useState('');
+  const [linkInputError, setLinkInputError] = useState('');
+  const [isExtractingLinkPlaces, setIsExtractingLinkPlaces] = useState(false);
+  const [isLinkInputFocused, setIsLinkInputFocused] = useState(false);
+  const [linkSectionY, setLinkSectionY] = useState(0);
   const [selectedPlaceDetail, setSelectedPlaceDetail] = useState(null);
   const [accommodation, setAccommodation] = useState(board.accommodation ?? '');
   const [isAccommodationFocused, setIsAccommodationFocused] = useState(false);
@@ -488,7 +905,12 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const accommodationInputRef = useRef(null);
   const accommodationBlurTimer = useRef(null);
   const accommodationRequestId = useRef(0);
+  const linkFocusScrollTimer = useRef(null);
   const itinerarySections = getTripDateSections(startDate, endDate).map((section) => ({ ...section, places: [] }));
+
+  const scrollLinkSectionIntoView = () => {
+    scrollViewRef.current?.scrollTo({ y: Math.max(0, linkSectionY - 185), animated: true });
+  };
 
   itinerary.forEach((place) => {
     const target = getPlaceSectionIndex(place, itinerarySections.length);
@@ -519,6 +941,83 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
   const safeSelectedItineraryDayIndex = Math.min(Math.max(selectedItineraryDayIndex, 0), Math.max(itinerarySections.length - 1, 0));
   const selectedItinerarySection = itinerarySections[safeSelectedItineraryDayIndex] ?? itinerarySections[0] ?? null;
 
+  const destinationContext = board.location ?? board.subtitle ?? '';
+  const normalizedDestination = normalizePlaceLookupText(destinationContext);
+  const normalizedDestinationParts = normalizedDestination
+    .split(/[,\s]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3);
+
+  const isTooBroadDestinationMatch = (value) => {
+    const normalizedValue = normalizePlaceLookupText(value);
+    if (!normalizedValue) return false;
+    if (normalizedDestination && normalizedValue === normalizedDestination) return true;
+    if (normalizedDestinationParts.includes(normalizedValue)) return true;
+    if (normalizedValue.split(' ').every((part) => normalizedDestinationParts.includes(part))) return true;
+    if (/^(tokyo|japan|paris|france|london|england|lisbon|portugal|seoul|korea|mexico city|mexico|cape town|south africa)$/i.test(normalizedValue)) {
+      return true;
+    }
+    return false;
+  };
+
+  const isVerifiedPlaceMatch = (candidate, suggestion) => {
+    const normalizedCandidate = normalizePlaceLookupText(candidate);
+    const normalizedName = normalizePlaceLookupText(suggestion?.name || '');
+    const normalizedAddress = normalizePlaceLookupText(suggestion?.address || '');
+    if (!normalizedCandidate || (!normalizedName && !normalizedAddress)) return false;
+    if (isGenericPlaceOnlyPhrase(candidate)) return false;
+    if (normalizedName.includes(normalizedCandidate) || normalizedAddress.includes(normalizedCandidate)) return true;
+
+    const candidateTokens = normalizedCandidate.split(' ').filter((token) => token.length >= 3);
+    if (candidateTokens.length === 0) return false;
+    const distinctiveTokens = candidateTokens.filter(
+      (token) => !GENERIC_PLACE_TYPE_TOKENS.has(token) && !GENERIC_CONNECTOR_TOKENS.has(token)
+    );
+    if (distinctiveTokens.length === 0) return false;
+
+    const matchedTokens = distinctiveTokens.filter(
+      (token) => normalizedName.includes(token) || normalizedAddress.includes(token)
+    );
+
+    return matchedTokens.length >= Math.max(1, Math.ceil(distinctiveTokens.length * 0.6));
+  };
+
+  const verifyCandidatePlaceNames = async (candidateNames) => {
+    const verifiedPlaces = [];
+    const destination = destinationContext;
+
+    for (const candidate of candidateNames) {
+      if (isTooBroadDestinationMatch(candidate)) continue;
+      if (looksLikeBroadTravelNoise(candidate)) continue;
+      if (looksLikeUrlFragment(candidate)) continue;
+      if (isGenericPlaceOnlyPhrase(candidate)) continue;
+      try {
+        const suggestions = await autocompleteAccommodation(candidate, destination);
+        const match = suggestions.find((suggestion) => isVerifiedPlaceMatch(candidate, suggestion));
+        if (!match) continue;
+
+        const verifiedName = sanitizeExtractedCandidate(match.name || candidate);
+        const verifiedAddress = match.address?.trim() || '';
+        if (!verifiedName) continue;
+        if (isTooBroadDestinationMatch(verifiedName)) continue;
+        if (isTooBroadDestinationMatch(candidate)) continue;
+        if (verifiedPlaces.some((existing) => existing.name.toLowerCase() === verifiedName.toLowerCase())) continue;
+
+        verifiedPlaces.push({
+          name: verifiedName,
+          address: verifiedAddress,
+          placeId: match.placeId || null,
+          lat: match.lat ?? undefined,
+          lng: match.lng ?? undefined,
+        });
+      } catch (_error) {
+        // Ignore failed lookups and keep checking the next candidate.
+      }
+    }
+
+    return verifiedPlaces;
+  };
+
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -535,8 +1034,15 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     }
   }, [keyboardHeight, isAccommodationFocused, accommodationY]);
 
+  useEffect(() => {
+    if (isLinkInputFocused && keyboardHeight > 0) {
+      scrollLinkSectionIntoView();
+    }
+  }, [keyboardHeight, isLinkInputFocused, linkSectionY]);
+
   useEffect(() => () => {
     clearTimeout(accommodationBlurTimer.current);
+    clearTimeout(linkFocusScrollTimer.current);
   }, []);
 
   useEffect(() => {
@@ -794,29 +1300,61 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
     if (!url) return [];
     const selectedDateIso = itinerarySections[safeSelectedItineraryDayIndex]?.date?.toISOString?.() ?? startDate.toISOString();
     const selectedDaySeed = { dayIndex: safeSelectedItineraryDayIndex, day: safeSelectedItineraryDayIndex + 1, date: selectedDateIso };
-    if (url.includes('tiktok.com')) {
-      return [
-        { id: `p-${Date.now()}-1`, name: `${board.title} - Highlight 1`, note: 'From TikTok', sourceUrl: url, ...selectedDaySeed },
-        { id: `p-${Date.now()}-2`, name: `${board.title} - Highlight 2`, note: 'From TikTok', sourceUrl: url, ...selectedDaySeed }
-      ];
+
+    const metadata = await tryFetchMetadata(url);
+    const linkedPlaceEntries = extractLinkedPlaceEntriesFromDescription(metadata.description);
+    if (linkedPlaceEntries.length) {
+      const verifiedLinkedPlaces = await verifyCandidatePlaceNames(linkedPlaceEntries.map((entry) => entry.name));
+      return buildPlacesFromLinkedEntries(linkedPlaceEntries, verifiedLinkedPlaces, selectedDaySeed);
     }
-    try {
-      const parts = new URL(url).pathname.split('/').filter(Boolean);
-      const token = parts.slice(-1)[0] || url;
-      return [{ id: `p-${Date.now()}`, name: decodeURIComponent(token), note: 'From link', sourceUrl: url, ...selectedDaySeed }];
-    } catch (e) {
-      return [{ id: `p-${Date.now()}`, name: url, note: 'From link', sourceUrl: url, ...selectedDaySeed }];
+
+    const extractedCandidateNames = buildCandidateNamesFromExtractedTexts(
+      [metadata.title, metadata.description].filter(Boolean)
+    );
+    const keywordCandidateNames = buildCandidateNamesFromKeywordList(metadata.keywords);
+    const mergedCandidateNames = [...extractedCandidateNames, ...keywordCandidateNames]
+      .filter((name, index, array) => array.findIndex((value) => value.toLowerCase() === name.toLowerCase()) === index)
+      .slice(0, 12);
+
+    const verifiedPlaces = await verifyCandidatePlaceNames(mergedCandidateNames);
+    if (verifiedPlaces.length) {
+      return buildPlacesFromVerifiedCandidates(verifiedPlaces, selectedDaySeed);
     }
+    return [];
   };
 
   const handleAddLink = async () => {
-    const places = await extractPlacesFromUrl(linkInput.trim());
-    if (places.length) {
-      const next = buildSortedItinerary([...itinerary, ...places]);
-      setItinerary(next);
-      persistItinerary(next);
+    const trimmedUrl = linkInput.trim();
+    if (!trimmedUrl) {
+      setLinkInputError('Paste a video link first.');
+      return;
     }
-    setLinkInput('');
+
+    try {
+      new URL(trimmedUrl);
+    } catch (_error) {
+      setLinkInputError('Enter a valid link.');
+      return;
+    }
+
+    setLinkInputError('');
+    setIsExtractingLinkPlaces(true);
+
+    try {
+      const places = await extractPlacesFromUrl(trimmedUrl);
+      if (places.length) {
+        const next = buildSortedItinerary([...itinerary, ...places]);
+        setItinerary(next);
+        persistItinerary(next);
+        setLinkInput('');
+        return;
+      }
+      setLinkInputError('Could not extract places from this link yet.');
+    } catch (_error) {
+      setLinkInputError('Could not extract places from this link right now.');
+    } finally {
+      setIsExtractingLinkPlaces(false);
+    }
   };
 
   const handleAddActivityToSelectedDay = () => {
@@ -906,18 +1444,23 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
       [placeId]: {
         name: current[placeId]?.name ?? '',
         note: current[placeId]?.note ?? '',
+        time: current[placeId]?.time ?? '',
+        date: current[placeId]?.date ?? '',
         [field]: value
       }
     }));
   };
 
   const startEditingActivity = (place) => {
+    setEditingTimePlaceId((current) => (current === place.id ? null : current));
     setEditingActivityPlaceId(place.id);
     setActivityDrafts((current) => ({
       ...current,
       [place.id]: {
         name: place.name ?? '',
-        note: place.note ?? ''
+        note: place.note ?? '',
+        time: formatItineraryTimeValue(place.time || place.displayTime || ''),
+        date: getSafeDate(place.date || itinerarySections[place.sectionIndex ?? 0]?.date || startDate).toISOString()
       }
     }));
   };
@@ -931,17 +1474,75 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
 
     const nextName = draft.name.trim() || 'New activity';
     const nextNote = draft.note.trim();
+    const parsedDraftTime = parseItineraryTimeValue(draft.time);
+    const existingTime = parseItineraryTimeValue(place.time || place.displayTime || '');
+    const resolvedTime = formatMinutesAsTime(parsedDraftTime ?? existingTime ?? (9 * 60));
+    const desiredDate = getSafeDate(draft.date || place.date || startDate, startDate);
+    const matchingSectionIndex = itinerarySections.findIndex((section) => section.key === getDateKey(desiredDate));
+    const resolvedSectionIndex = matchingSectionIndex >= 0
+      ? matchingSectionIndex
+      : Math.min(Math.max(place.sectionIndex ?? safeSelectedItineraryDayIndex, 0), Math.max(itinerarySections.length - 1, 0));
+    const resolvedDate = itinerarySections[resolvedSectionIndex]?.date ?? desiredDate;
     const nextItinerary = itinerary.map((entry) => (
-      entry.id === place.id ? { ...entry, name: nextName, note: nextNote } : entry
+      entry.id === place.id
+        ? {
+            ...entry,
+            name: nextName,
+            note: nextNote,
+            time: resolvedTime,
+            dayIndex: resolvedSectionIndex,
+            day: resolvedSectionIndex + 1,
+            date: resolvedDate.toISOString()
+          }
+        : entry
     ));
-    setItinerary(nextItinerary);
-    persistItinerary(nextItinerary);
+    const sortedItinerary = buildSortedItinerary(nextItinerary);
+    setItinerary(sortedItinerary);
+    persistItinerary(sortedItinerary);
     setEditingActivityPlaceId(null);
+    setActivityDatePickerPlaceId((current) => (current === place.id ? null : current));
+    setActivityTimePickerPlaceId((current) => (current === place.id ? null : current));
     setActivityDrafts((current) => {
       const next = { ...current };
       delete next[place.id];
       return next;
     });
+  };
+
+  const handleSaveSelectedPlaceDetails = (updates) => {
+    if (!selectedPlaceDetail?.place) return;
+    const place = selectedPlaceDetail.place;
+    const parsedDraftTime = parseItineraryTimeValue(updates?.time || place.time || place.displayTime || '');
+    const existingTime = parseItineraryTimeValue(place.time || place.displayTime || '');
+    const resolvedTime = formatMinutesAsTime(parsedDraftTime ?? existingTime ?? (9 * 60));
+    const desiredDate = getSafeDate(updates?.date || place.date || startDate, startDate);
+    const matchingSectionIndex = itinerarySections.findIndex((section) => section.key === getDateKey(desiredDate));
+    const resolvedSectionIndex = matchingSectionIndex >= 0
+      ? matchingSectionIndex
+      : Math.min(Math.max(place.sectionIndex ?? safeSelectedItineraryDayIndex, 0), Math.max(itinerarySections.length - 1, 0));
+    const resolvedDate = itinerarySections[resolvedSectionIndex]?.date ?? desiredDate;
+    const nextItinerary = itinerary.map((entry) => (
+      entry.id === place.id
+        ? {
+            ...entry,
+            note: updates?.note?.trim?.() ?? entry.note ?? '',
+            time: resolvedTime,
+            dayIndex: resolvedSectionIndex,
+            day: resolvedSectionIndex + 1,
+            date: resolvedDate.toISOString()
+          }
+        : entry
+    ));
+    const sortedItinerary = buildSortedItinerary(nextItinerary);
+    setItinerary(sortedItinerary);
+    persistItinerary(sortedItinerary);
+    const updatedPlace = sortedItinerary.find((entry) => entry.id === place.id);
+    if (updatedPlace) {
+      setSelectedPlaceDetail({
+        place: updatedPlace,
+        dateLabel: itinerarySections[resolvedSectionIndex]?.title ?? selectedPlaceDetail.dateLabel
+      });
+    }
   };
 
   return (
@@ -950,7 +1551,8 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         ref={scrollViewRef}
         contentContainerStyle={[
           styles.detailScrollContent,
-          isAccommodationFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 240 }
+          isAccommodationFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 240 },
+          isLinkInputFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 24 }
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDraggingItinerary}
@@ -1188,6 +1790,9 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                           const timeValue = isEditingTime
                             ? (timeDrafts[p.id] ?? formatItineraryTimeValue(p.displayTime))
                             : formatItineraryTimeValue(p.displayTime);
+                          const activityDraftDate = activityDraft?.date
+                            ? getSafeDate(activityDraft.date, selectedItinerarySection.date)
+                            : getSafeDate(p.date || selectedItinerarySection.date, selectedItinerarySection.date);
                           return (
                             <Animated.View
                               key={p.id}
@@ -1232,15 +1837,107 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
                                         onSubmitEditing={Keyboard.dismiss}
                                       />
                                       <TextInput
-                                        style={styles.itineraryNoteInput}
+                                        style={styles.itineraryDescriptionInput}
                                         value={activityDraft?.note ?? ''}
                                         onChangeText={(value) => updateActivityDraft(p.id, 'note', value)}
-                                        placeholder="Add details"
+                                        placeholder="Description"
                                         placeholderTextColor="#8C867E"
                                         multiline
                                         returnKeyType="done"
                                         blurOnSubmit
                                       />
+                                      <View style={styles.itineraryEditMetaRow}>
+                                        <TouchableOpacity
+                                          style={styles.itineraryEditMetaButton}
+                                          activeOpacity={0.82}
+                                          onPress={() => {
+                                            setActivityTimePickerPlaceId((current) => (current === p.id ? null : p.id));
+                                            setActivityDatePickerPlaceId(null);
+                                            Keyboard.dismiss();
+                                          }}
+                                        >
+                                          <Text style={styles.itineraryEditMetaLabel}>Time</Text>
+                                          <Text style={styles.itineraryEditMetaValue}>{activityDraft?.time || timeValue || '09:00'}</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                          style={[styles.itineraryEditMetaButton, styles.itineraryEditMetaButtonSecondary]}
+                                          activeOpacity={0.82}
+                                          onPress={() => {
+                                            setActivityDatePickerPlaceId((current) => (current === p.id ? null : p.id));
+                                            setActivityTimePickerPlaceId(null);
+                                            Keyboard.dismiss();
+                                          }}
+                                        >
+                                          <Text style={styles.itineraryEditMetaLabel}>Date</Text>
+                                          <Text style={styles.itineraryEditMetaValue}>
+                                            {activityDraftDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                      {activityTimePickerPlaceId === p.id ? (
+                                        <View style={styles.itineraryInlinePickerWrap}>
+                                          <DateTimePicker
+                                            value={(() => {
+                                              const d = new Date();
+                                              const minutes = parseItineraryTimeValue(activityDraft?.time || timeValue);
+                                              if (minutes !== null) {
+                                                d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                                              }
+                                              return d;
+                                            })()}
+                                            mode="time"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                            minuteInterval={5}
+                                            onChange={(event, selectedDate) => {
+                                              if (Platform.OS === 'android') setActivityTimePickerPlaceId(null);
+                                              if (selectedDate && event.type !== 'dismissed') {
+                                                const h = selectedDate.getHours();
+                                                const m = selectedDate.getMinutes();
+                                                updateActivityDraft(
+                                                  p.id,
+                                                  'time',
+                                                  `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                                                );
+                                              }
+                                            }}
+                                          />
+                                          {Platform.OS === 'ios' ? (
+                                            <TouchableOpacity
+                                              style={styles.itineraryInlinePickerDone}
+                                              activeOpacity={0.82}
+                                              onPress={() => setActivityTimePickerPlaceId(null)}
+                                            >
+                                              <Text style={styles.itineraryInlinePickerDoneText}>Done</Text>
+                                            </TouchableOpacity>
+                                          ) : null}
+                                        </View>
+                                      ) : null}
+                                      {activityDatePickerPlaceId === p.id ? (
+                                        <View style={styles.itineraryInlinePickerWrap}>
+                                          <DateTimePicker
+                                            value={activityDraftDate}
+                                            mode="date"
+                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                            minimumDate={startDate}
+                                            maximumDate={endDate}
+                                            onChange={(event, selectedDate) => {
+                                              if (Platform.OS === 'android') setActivityDatePickerPlaceId(null);
+                                              if (selectedDate && event.type !== 'dismissed') {
+                                                updateActivityDraft(p.id, 'date', selectedDate.toISOString());
+                                              }
+                                            }}
+                                          />
+                                          {Platform.OS === 'ios' ? (
+                                            <TouchableOpacity
+                                              style={styles.itineraryInlinePickerDone}
+                                              activeOpacity={0.82}
+                                              onPress={() => setActivityDatePickerPlaceId(null)}
+                                            >
+                                              <Text style={styles.itineraryInlinePickerDoneText}>Done</Text>
+                                            </TouchableOpacity>
+                                          ) : null}
+                                        </View>
+                                      ) : null}
                                       <TouchableOpacity
                                         style={styles.itinerarySaveActivityButton}
                                         activeOpacity={0.85}
@@ -1308,23 +2005,50 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
             </BlurView>
           </View>
 
-          <View style={styles.addLinkFooter}>
+          <View style={styles.addLinkFooter} onLayout={(event) => setLinkSectionY(event.nativeEvent.layout.y)}>
             <View style={styles.addLinkRow}>
               <TextInput
                 placeholder="Paste a video link"
                 value={linkInput}
-                onChangeText={setLinkInput}
-                style={styles.linkInput}
+                onChangeText={(value) => {
+                  setLinkInput(value);
+                  if (linkInputError) setLinkInputError('');
+                }}
+                onFocus={() => {
+                  setIsLinkInputFocused(true);
+                  requestAnimationFrame(() => {
+                    scrollLinkSectionIntoView();
+                  });
+                  clearTimeout(linkFocusScrollTimer.current);
+                  linkFocusScrollTimer.current = setTimeout(() => {
+                    scrollLinkSectionIntoView();
+                  }, 260);
+                }}
+                onBlur={() => {
+                  setIsLinkInputFocused(false);
+                  clearTimeout(linkFocusScrollTimer.current);
+                }}
+                style={[styles.linkInput, linkInputError && styles.linkInputError]}
                 keyboardType="url"
                 autoCapitalize="none"
                 returnKeyType="done"
                 onSubmitEditing={handleAddLink}
                 placeholderTextColor={colors.textMuted}
               />
-              <TouchableOpacity style={styles.detailActionButton} onPress={handleAddLink} activeOpacity={0.85}>
-                <Text style={styles.detailActionText}>Add</Text>
+              <TouchableOpacity
+                style={styles.detailActionButton}
+                onPress={handleAddLink}
+                activeOpacity={0.85}
+                disabled={isExtractingLinkPlaces}
+              >
+                {isExtractingLinkPlaces ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.detailActionText}>Add</Text>
+                )}
               </TouchableOpacity>
             </View>
+            {linkInputError ? <Text style={styles.linkInputErrorText}>{linkInputError}</Text> : null}
             <TouchableOpacity style={styles.recommendationsButton} onPress={onOpenRecommendations} activeOpacity={0.85}>
               <Text style={styles.recommendationsButtonText}>Personal Recommendations</Text>
             </TouchableOpacity>
@@ -1340,6 +2064,7 @@ export function TripDetailScreen({ board, onBack, onUpdateBoard, onOpenRecommend
         dateLabel={selectedPlaceDetail?.dateLabel}
         fallbackImage={board.image}
         onClose={() => setSelectedPlaceDetail(null)}
+        onEditSave={handleSaveSelectedPlaceDetails}
         onDelete={() => {
           if (!selectedPlaceDetail?.place) return;
           const nextItinerary = itinerary.filter((p) => p.id !== selectedPlaceDetail.place.id);
@@ -2052,7 +2777,7 @@ const styles = StyleSheet.create({
   itineraryTextFlex: {
     flex: 1,
     paddingVertical: 12,
-    paddingRight: 12,
+    paddingRight: 8,
     paddingLeft: 12,
     justifyContent: 'center',
     minHeight: 56,
@@ -2129,19 +2854,70 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'Nunito_400Regular'
   },
-  itineraryNoteInput: {
+  itineraryDescriptionInput: {
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 18,
-    minHeight: 38,
+    minHeight: 54,
     paddingVertical: 0,
     paddingHorizontal: 0,
     textAlignVertical: 'top',
-    fontFamily: 'Nunito_400Regular'
+    fontFamily: 'Nunito_400Regular',
+    marginBottom: 10,
+  },
+  itineraryEditMetaRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  itineraryEditMetaButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 190, 182, 0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    justifyContent: 'center',
+  },
+  itineraryEditMetaButtonSecondary: {
+    marginLeft: 10,
+  },
+  itineraryEditMetaLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 13,
+    marginBottom: 4,
+    fontFamily: 'Nunito_600SemiBold',
+  },
+  itineraryEditMetaValue: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800',
+  },
+  itineraryInlinePickerWrap: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 190, 182, 0.5)',
+    marginBottom: 10,
+  },
+  itineraryInlinePickerDone: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  itineraryInlinePickerDoneText: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 16,
+    fontFamily: 'Nunito_700Bold',
   },
   itinerarySaveActivityButton: {
     alignSelf: 'flex-start',
-    marginTop: 10,
     paddingHorizontal: 12,
     height: 30,
     borderRadius: 15,
@@ -2155,6 +2931,25 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontFamily: 'Nunito_700Bold',
     fontWeight: '700'
+  },
+  itineraryEditButton: {
+    alignSelf: 'center',
+    marginRight: 12,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 190, 182, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itineraryEditButtonText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 14,
+    fontFamily: 'Nunito_700Bold',
+    fontWeight: Platform.OS === 'ios' ? '700' : '800',
   },
   editFieldGroup: {
     marginBottom: 16
@@ -2368,6 +3163,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontFamily: 'Nunito_400Regular'
+  },
+  linkInputError: {
+    borderColor: '#E39A9A',
+  },
+  linkInputErrorText: {
+    color: '#C9524E',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 12,
+    fontFamily: 'Nunito_600SemiBold',
+    fontWeight: '600'
   },
   detailActionButton: {
     borderRadius: 12,

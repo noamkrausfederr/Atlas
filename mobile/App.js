@@ -15,6 +15,13 @@ import {
   Nunito_800ExtraBold,
   Nunito_900Black
 } from '@expo-google-fonts/nunito';
+import {
+  Montserrat_400Regular,
+  Montserrat_500Medium,
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+  Montserrat_800ExtraBold
+} from '@expo-google-fonts/montserrat';
 import { colors, fonts, radius, shadow } from './src/theme';
 
 import { publicTrips as publicTripMetadata, sampleBoards } from './data/trips';
@@ -26,7 +33,7 @@ import { TripDetailScreen, TripEditScreen } from './src/screens/TripDetailScreen
 import { ExploreScreen, ExploreMoreScreen } from './src/screens/ExploreScreen';
 import { InboxScreen } from './src/screens/InboxScreen';
 import { EditProfileScreen, ProfileScreen, SettingsScreen, TripListScreen } from './src/screens/ProfileScreen';
-import { CreateAccountScreen, LoginScreen, WelcomeScreen } from './src/screens/AuthScreens';
+import { CreateAccountScreen, LoginScreen, TermsPrivacyOverlay, WelcomeScreen } from './src/screens/AuthScreens';
 
 function formatInboxHandle(ownerName) {
   return `@${ownerName.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
@@ -90,6 +97,11 @@ function InnerApp() {
     Nunito_700Bold,
     Nunito_800ExtraBold,
     Nunito_900Black,
+    Montserrat_400Regular,
+    Montserrat_500Medium,
+    Montserrat_600SemiBold,
+    Montserrat_700Bold,
+    Montserrat_800ExtraBold,
     Gaya: require('./assets/fonts/gayatrial-italic.otf'),
     LuckyBones: require('./assets/fonts/Luckybones-Bold.otf'),
     SKMoralist: require('./assets/fonts/SKMoralist-Regular.ttf'),
@@ -105,6 +117,12 @@ function InnerApp() {
   const [activeTab, setActiveTab] = useState('Profile');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authScreen, setAuthScreen] = useState('welcome');
+  const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState({
+    name: 'Sofia Walker',
+    username: 'sofiawalks',
+    bio: 'Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.'
+  });
   const [exploreStack, setExploreStack] = useState(null);
   const [profileStack, setProfileStack] = useState(null);
   const [settingsStack, setSettingsStack] = useState(null);
@@ -273,31 +291,72 @@ function InnerApp() {
   if (!fontsLoaded) return null;
 
   if (!isAuthenticated) {
-    const finishAuth = () => setIsAuthenticated(true);
+    const finishAuth = (profile = null) => {
+      if (profile?.name || profile?.username) {
+        setCurrentUser((current) => ({
+          ...current,
+          ...(profile.name ? { name: profile.name } : {}),
+          ...(profile.username ? { username: profile.username } : {})
+        }));
+      }
+      setIsAuthenticated(true);
+    };
+    const existingUsernames = Array.from(
+      new Set([
+        'sofiawalks',
+        ...hydratedPublicTrips.map((trip) => formatInboxHandle(trip.ownerName).replace(/^@/, ''))
+      ])
+    );
+    const existingEmails = Array.from(
+      new Set(existingUsernames.map((username) => `${username}@atlas.app`))
+    );
 
     return (
       <SafeAreaView
-        style={[styles.safeArea, authScreen === 'welcome' && { backgroundColor: colors.surfaceDeep }]}
+        style={[styles.safeArea, authScreen !== 'createAccount' && { backgroundColor: '#FCF3EC' }]}
         edges={['top', 'bottom']}
       >
         <StatusBar style="dark" />
-        {authScreen === 'login' ? (
-          <LoginScreen
-            onBack={() => setAuthScreen('welcome')}
-            onSubmit={finishAuth}
-            onCreateAccountPress={() => setAuthScreen('createAccount')}
-          />
-        ) : authScreen === 'createAccount' ? (
-          <CreateAccountScreen
-            onBack={() => setAuthScreen('welcome')}
-            onSubmit={finishAuth}
-            onLoginPress={() => setAuthScreen('login')}
-          />
+        {authScreen === 'createAccount' ? (
+          <View style={styles.authStack}>
+            <WelcomeScreen
+              onLoginPress={() => setAuthScreen('login')}
+              onCreateAccountPress={() => setAuthScreen('createAccount')}
+              onTermsPress={() => setIsPolicyOpen(true)}
+              hideTerms
+            />
+            <View style={styles.authOverlay}>
+              <CreateAccountScreen
+                isPopup
+                onBack={() => setAuthScreen('welcome')}
+                onSubmit={finishAuth}
+                onLoginPress={() => setAuthScreen('login')}
+                existingUsernames={existingUsernames}
+                existingEmails={existingEmails}
+              />
+            </View>
+            {isPolicyOpen ? <TermsPrivacyOverlay onClose={() => setIsPolicyOpen(false)} /> : null}
+          </View>
         ) : (
-          <WelcomeScreen
-            onLoginPress={() => setAuthScreen('login')}
-            onCreateAccountPress={() => setAuthScreen('createAccount')}
-          />
+          <View style={styles.authStack}>
+            <WelcomeScreen
+              onLoginPress={() => setAuthScreen('login')}
+              onCreateAccountPress={() => setAuthScreen('createAccount')}
+              onTermsPress={() => setIsPolicyOpen(true)}
+              hideTerms={authScreen === 'login'}
+            />
+            {authScreen === 'login' ? (
+              <View style={styles.authOverlay}>
+                <LoginScreen
+                  isPopup
+                  onBack={() => setAuthScreen('welcome')}
+                  onSubmit={finishAuth}
+                  onCreateAccountPress={() => setAuthScreen('createAccount')}
+                />
+              </View>
+            ) : null}
+            {isPolicyOpen ? <TermsPrivacyOverlay onClose={() => setIsPolicyOpen(false)} /> : null}
+          </View>
         )}
       </SafeAreaView>
     );
@@ -878,6 +937,7 @@ function InnerApp() {
         return (
           <EditProfileScreen
             onBack={() => setProfileStack(null)}
+            currentUser={currentUser}
           />
         );
       }
@@ -921,6 +981,7 @@ function InnerApp() {
           upcomingBoards={upcomingBoards}
           pastTrips={pastTrips}
           followingCount={382 + followedProfileNames.length}
+          currentUser={currentUser}
           onOpenBoard={openBoard}
           onSeeAllUpcoming={() => setProfileStack({ screen: 'allUpcoming' })}
           onSeeAllPast={() => setProfileStack({ screen: 'allPast' })}
@@ -934,6 +995,7 @@ function InnerApp() {
         return (
           <EditProfileScreen
             onBack={() => setSettingsStack(null)}
+            currentUser={currentUser}
           />
         );
       }
@@ -943,6 +1005,7 @@ function InnerApp() {
           onBack={() => openTab('Profile')}
           onEditProfilePress={() => setSettingsStack({ screen: 'editProfile' })}
           onLogoutPress={handleLogout}
+          onPrivacyPolicyPress={() => setIsPolicyOpen(true)}
         />
       );
     }
@@ -1075,6 +1138,8 @@ function InnerApp() {
           </View>
         </View>
       )}
+
+      {isPolicyOpen ? <TermsPrivacyOverlay onClose={() => setIsPolicyOpen(false)} /> : null}
     </SafeAreaView>
   );
 }
@@ -1091,6 +1156,13 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background
+  },
+  authStack: {
+    flex: 1
+  },
+  authOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center'
   },
   tripsSafeArea: {
     backgroundColor: colors.background

@@ -1,5 +1,6 @@
-import { Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useEffect, useMemo, useState } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Keyboard, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const DAY_INDEXES = {
   Su: 0, Mo: 1, Tu: 2, We: 3, Th: 4, Fr: 5, Sa: 6
@@ -66,6 +67,19 @@ function formatPriceRange(value) {
 function formatWebsiteLabel(value) {
   if (!value) return '';
   return String(value).replace(/^https?:\/\//i, '').replace(/\/$/, '');
+}
+
+function formatEditableDate(value, fallbackLabel) {
+  if (!value) return fallbackLabel || 'Select date';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallbackLabel || 'Select date';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTimeLabel(dateValue, timeValue, fallbackLabel) {
+  const dateText = formatEditableDate(dateValue, fallbackLabel);
+  const timeText = String(timeValue || '').trim();
+  return timeText ? `${dateText}, ${timeText}` : dateText;
 }
 
 function getOpenStatus(openingHours) {
@@ -143,7 +157,8 @@ function PlaceDetailContent({
   onDelete,
   actionLabel = 'Delete',
   actionTone = 'danger',
-  onAction
+  onAction,
+  onEditSave
 }) {
   if (!place) return null;
 
@@ -155,13 +170,33 @@ function PlaceDetailContent({
 
   const [liveDetails, setLiveDetails] = useState(null);
   const detailAddress = liveDetails?.address || address;
-  const detailWebsite = liveDetails?.website || website || sourceUrl;
+  const detailWebsite = liveDetails?.website || website;
   const detailWebsiteLabel = formatWebsiteLabel(detailWebsite);
   const detailHours = liveDetails?.openingHours || openingHours;
   const openStatus = useMemo(() => getOpenStatus(detailHours), [detailHours]);
   const directionsQuery = encodeURIComponent(detailAddress || `${place.name || place.title} ${location}`);
   const formattedPrice = formatPriceRange(price);
   const openingHoursText = openStatus.label === 'Hours unavailable' ? null : openStatus.detail || detailHours || null;
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftDescription, setDraftDescription] = useState(place.note || '');
+  const [draftDate, setDraftDate] = useState(place.date || '');
+  const [draftTime, setDraftTime] = useState(place.time || place.displayTime || '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isNotesFocused, setIsNotesFocused] = useState(false);
+  const [notesSectionY, setNotesSectionY] = useState(0);
+  const scrollViewRef = useRef(null);
+  const notesFocusScrollTimer = useRef(null);
+
+  useEffect(() => {
+    setIsEditing(false);
+    setDraftDescription(place.note || '');
+    setDraftDate(place.date || '');
+    setDraftTime(place.time || place.displayTime || '');
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  }, [place.id, place.note, place.date, place.time, place.displayTime]);
 
   useEffect(() => {
     let isActive = true;
@@ -171,6 +206,44 @@ function PlaceDetailContent({
     });
     return () => { isActive = false; };
   }, [location, place.name, place.title]);
+
+  const scrollNotesIntoView = () => {
+    scrollViewRef.current?.scrollTo({ y: Math.max(0, notesSectionY - 150), animated: true });
+  };
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const handleShow = (event) => setKeyboardHeight(event.endCoordinates?.height ?? 0);
+    const handleHide = () => setKeyboardHeight(0);
+    const showSub = Keyboard.addListener(showEvent, handleShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isNotesFocused && keyboardHeight > 0) {
+      scrollNotesIntoView();
+    }
+  }, [isNotesFocused, keyboardHeight, notesSectionY]);
+
+  useEffect(() => () => {
+    clearTimeout(notesFocusScrollTimer.current);
+  }, []);
+
+  const handleSave = () => {
+    onEditSave?.({
+      note: draftDescription,
+      date: draftDate,
+      time: draftTime
+    });
+    setIsEditing(false);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  };
 
   return (
     <View style={styles.card}>
@@ -183,14 +256,108 @@ function PlaceDetailContent({
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
-        {place.note ? (
-          <View style={styles.noteBlock}>
-            <Text style={styles.noteText}>{place.note}</Text>
-          </View>
-        ) : null}
-
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollArea}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isNotesFocused && keyboardHeight > 0 && { paddingBottom: keyboardHeight + 24 }
+        ]}
+        keyboardShouldPersistTaps="always"
+      >
         <View style={styles.infoCard}>
+          <View style={styles.topMetaRow}>
+            <View style={styles.topMetaItemFull}>
+              <Text style={styles.rowLabel}>Date</Text>
+              {isEditing ? (
+                <View>
+                  <View style={styles.topMetaInlineButtons}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={styles.editValueButton}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setShowDatePicker((current) => !current);
+                        setShowTimePicker(false);
+                      }}
+                    >
+                      <Text style={styles.editValueButtonText}>{formatEditableDate(draftDate, dateLabel)}</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.topMetaComma}>,</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={styles.editValueButton}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setShowTimePicker((current) => !current);
+                        setShowDatePicker(false);
+                      }}
+                    >
+                      <Text style={styles.editValueButtonText}>{draftTime || 'Select time'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {showDatePicker ? (
+                    <View style={[styles.inlinePickerWrap, styles.inlineDatePickerWrap]}>
+                      <DateTimePicker
+                        value={draftDate ? new Date(draftDate) : new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        style={styles.inlineDatePicker}
+                        onChange={(event, selectedDate) => {
+                          if (Platform.OS === 'android') setShowDatePicker(false);
+                          if (selectedDate && event.type !== 'dismissed') {
+                            setDraftDate(selectedDate.toISOString());
+                          }
+                        }}
+                      />
+                      {Platform.OS === 'ios' ? (
+                        <TouchableOpacity style={styles.inlinePickerDone} activeOpacity={0.82} onPress={() => setShowDatePicker(false)}>
+                          <Text style={styles.inlinePickerDoneText}>Done</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {showTimePicker ? (
+                    <View style={[styles.inlinePickerWrap, styles.inlineTimePickerWrap]}>
+                      <DateTimePicker
+                        value={(() => {
+                          const base = new Date();
+                          const minutes = parseTimeValue(draftTime || '09:00');
+                          if (minutes !== null) {
+                            base.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+                          }
+                          return base;
+                        })()}
+                        mode="time"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        minuteInterval={5}
+                        style={styles.inlineTimePicker}
+                        onChange={(event, selectedDate) => {
+                          if (Platform.OS === 'android') setShowTimePicker(false);
+                          if (selectedDate && event.type !== 'dismissed') {
+                            const h = selectedDate.getHours();
+                            const m = selectedDate.getMinutes();
+                            setDraftTime(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                          }
+                        }}
+                      />
+                      {Platform.OS === 'ios' ? (
+                        <TouchableOpacity style={styles.inlinePickerDone} activeOpacity={0.82} onPress={() => setShowTimePicker(false)}>
+                          <Text style={styles.inlinePickerDoneText}>Done</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={styles.rowValueText}>
+                  {formatDateTimeLabel(place.date, place.time || place.displayTime || '', dateLabel)}
+                </Text>
+              )}
+            </View>
+          </View>
+
           {formattedPrice ? (
             <Row label="Price range">
               <Text style={styles.rowValueText}>{formattedPrice}</Text>
@@ -220,21 +387,90 @@ function PlaceDetailContent({
             </View>
             {openingHoursText ? <Text style={styles.rowValueText}>{openingHoursText}</Text> : null}
           </Row>
+
+          <View onLayout={(event) => setNotesSectionY(event.nativeEvent.layout.y)}>
+          <Row label="Notes" extraSpacing>
+            {isEditing ? (
+              <TextInput
+                value={draftDescription}
+                onChangeText={setDraftDescription}
+                placeholder="Add notes"
+                placeholderTextColor="#AFA9A1"
+                multiline
+                style={styles.descriptionInput}
+                textAlignVertical="top"
+                onFocus={() => {
+                  setIsNotesFocused(true);
+                  requestAnimationFrame(() => {
+                    scrollNotesIntoView();
+                  });
+                  clearTimeout(notesFocusScrollTimer.current);
+                  notesFocusScrollTimer.current = setTimeout(() => {
+                    scrollNotesIntoView();
+                  }, 260);
+                }}
+                onBlur={() => {
+                  setIsNotesFocused(false);
+                  clearTimeout(notesFocusScrollTimer.current);
+                }}
+              />
+            ) : place.note ? (
+              <Text style={styles.rowValueText}>{place.note}</Text>
+            ) : (
+              <Text style={styles.rowValueMuted}>No notes yet</Text>
+            )}
+          </Row>
+          </View>
         </View>
       </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.deleteButton, actionTone === 'add' && styles.addButton]}
-        activeOpacity={0.8}
-        onPress={onAction || onDelete}
-      >
-        <Text style={[styles.deleteButtonText, actionTone === 'add' && styles.addButtonText]}>{actionLabel}</Text>
-      </TouchableOpacity>
+      {onEditSave ? (
+        <View style={styles.footerActionRow}>
+          {isEditing ? (
+            <>
+              <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.82} onPress={() => {
+                setIsEditing(false);
+                setDraftDescription(place.note || '');
+                setDraftDate(place.date || '');
+                setDraftTime(place.time || place.displayTime || '');
+                setShowDatePicker(false);
+                setShowTimePicker(false);
+              }}>
+                <Text style={styles.secondaryActionButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.deleteButton, styles.saveButton]} activeOpacity={0.82} onPress={handleSave}>
+                <Text style={[styles.deleteButtonText, styles.saveButtonText]}>Save</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.secondaryActionButton} activeOpacity={0.82} onPress={() => setIsEditing(true)}>
+                <Text style={styles.secondaryActionButtonText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, actionTone === 'add' && styles.addButton]}
+                activeOpacity={0.8}
+                onPress={onAction || onDelete}
+              >
+                <Text style={[styles.deleteButtonText, actionTone === 'add' && styles.addButtonText]}>{actionLabel}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.deleteButton, actionTone === 'add' && styles.addButton]}
+          activeOpacity={0.8}
+          onPress={onAction || onDelete}
+        >
+          <Text style={[styles.deleteButtonText, actionTone === 'add' && styles.addButtonText]}>{actionLabel}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
-export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack, onDelete, actionLabel, actionTone, onAction }) {
+export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallbackImage, onBack, onDelete, actionLabel, actionTone, onAction, onEditSave }) {
   return (
     <View style={styles.screen}>
       <PlaceDetailContent
@@ -246,12 +482,13 @@ export function PlaceDetailScreen({ place, tripTitle, location, dateLabel, fallb
         actionLabel={actionLabel}
         actionTone={actionTone}
         onAction={onAction}
+        onEditSave={onEditSave}
       />
     </View>
   );
 }
 
-export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose, onDelete, actionLabel, actionTone, onAction }) {
+export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabel, fallbackImage, onClose, onDelete, actionLabel, actionTone, onAction, onEditSave }) {
   if (!place) return null;
 
   return (
@@ -267,6 +504,7 @@ export function PlaceDetailModal({ visible, place, tripTitle, location, dateLabe
             actionLabel={actionLabel}
             actionTone={actionTone}
             onAction={onAction}
+            onEditSave={onEditSave}
           />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -342,47 +580,61 @@ const styles = StyleSheet.create({
     lineHeight: 16
   },
   scrollArea: {
-    maxHeight: 340
+    maxHeight: 380
   },
   scrollContent: {
     paddingHorizontal: 18,
     paddingBottom: 4
   },
-  noteBlock: {
-    marginBottom: 12
-  },
-  noteText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#2B2927',
-    fontWeight: '700',
-    fontFamily: 'Nunito_700Bold'
-  },
   infoCard: {
-    borderRadius: 16,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     backgroundColor: '#F8F5F0',
     overflow: 'hidden',
-    marginBottom: 12
+    marginBottom: 10,
+    paddingBottom: 16,
+  },
+  topMetaRow: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  topMetaItemFull: {
+    width: '100%',
+  },
+  topMetaInlineButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  topMetaComma: {
+    marginHorizontal: 6,
+    color: '#5A5853',
+    fontSize: 16,
+    lineHeight: 18,
+    fontFamily: 'Nunito_700Bold',
   },
   row: {
-    paddingHorizontal: 14,
-    paddingVertical: 11
+    paddingHorizontal: 18,
+    paddingVertical: 8
   },
   rowExtraSpacing: {
-    paddingVertical: 15
+    paddingVertical: 10
   },
   rowLabel: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '700',
-    color: '#8C867E',
+    color: '#000000',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 4,
     fontFamily: 'Nunito_700Bold'
   },
   rowLabelExtraSpacing: {
-    marginBottom: 8
+    marginBottom: 6
   },
   rowValue: {
     gap: 4
@@ -413,6 +665,67 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: 'Nunito_800ExtraBold'
   },
+  editValueButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E7DFD6',
+    backgroundColor: '#FFFDF8',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignSelf: 'stretch'
+  },
+  editValueButtonText: {
+    fontSize: 14,
+    lineHeight: 18,
+    color: '#2B2927',
+    fontFamily: 'Nunito_700Bold'
+  },
+  inlinePickerWrap: {
+    marginTop: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FFFDF8',
+    borderWidth: 1,
+    borderColor: '#E7DFD6'
+  },
+  inlineDatePickerWrap: {
+    alignItems: 'center',
+  },
+  inlineDatePicker: {
+    alignSelf: 'center',
+    transform: [{ scale: 0.92 }],
+  },
+  inlineTimePickerWrap: {
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  inlineTimePicker: {
+    alignSelf: 'center',
+  },
+  inlinePickerDone: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  inlinePickerDoneText: {
+    fontSize: 13,
+    lineHeight: 16,
+    color: '#2B2927',
+    fontFamily: 'Nunito_700Bold'
+  },
+  descriptionInput: {
+    minHeight: 82,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    color: '#2B2927',
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: 'Nunito_400Regular',
+    backgroundColor: '#FFFDF8',
+    borderWidth: 1,
+    borderColor: '#E7DFD6',
+    borderRadius: 14,
+  },
   statusPill: {
     alignSelf: 'flex-start',
     borderRadius: 999,
@@ -433,17 +746,39 @@ const styles = StyleSheet.create({
   pillText_warning: { color: '#92400E' },
   pillText_closed: { color: '#991B1B' },
   pillText_muted: { color: '#8C867E' },
+  footerActionRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 18,
+    paddingTop: 2,
+    paddingBottom: 14,
+  },
+  secondaryActionButton: {
+    flex: 1,
+    marginRight: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E7DFD6',
+    backgroundColor: '#FFFDF8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 11
+  },
+  secondaryActionButtonText: {
+    fontSize: 14,
+    color: '#5A5853',
+    fontFamily: 'Nunito_700Bold'
+  },
   deleteButton: {
-    alignSelf: 'flex-end',
-    marginRight: 18,
-    marginTop: 4,
-    marginBottom: 16,
+    flex: 1,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#F0DADA',
     backgroundColor: '#FFF5F5',
     paddingHorizontal: 24,
-    paddingVertical: 11
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   deleteButtonText: {
     fontSize: 14,
@@ -457,5 +792,12 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#F26B64'
+  },
+  saveButton: {
+    borderColor: '#F26B64',
+    backgroundColor: '#F26B64'
+  },
+  saveButtonText: {
+    color: '#ffffff'
   }
 });

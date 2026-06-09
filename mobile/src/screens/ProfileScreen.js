@@ -196,6 +196,7 @@ export function ProfileScreen({
   upcomingBoards,
   pastTrips,
   followingCount,
+  currentUser,
   onOpenBoard,
   onSeeAllUpcoming,
   onSeeAllPast,
@@ -213,11 +214,11 @@ export function ProfileScreen({
       <View style={styles.profileHero}>
         <View style={styles.profileAvatarWrap}>
           <View style={styles.profilePhotoPlaceholder}>
-            <Text style={styles.profilePhotoInitial}>S</Text>
+            <Text style={styles.profilePhotoInitial}>{currentUser?.name?.[0]?.toUpperCase() ?? 'A'}</Text>
           </View>
         </View>
-        <Text style={styles.profileName}>Sofia Walker</Text>
-        <Text style={styles.profileHandle}>@sofiawalks</Text>
+        <Text style={styles.profileName}>{currentUser?.name ?? 'Atlas User'}</Text>
+        <Text style={styles.profileHandle}>@{currentUser?.username ?? 'atlasuser'}</Text>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>12.4K</Text>
@@ -235,7 +236,7 @@ export function ProfileScreen({
           </View>
         </View>
         <Text style={styles.profileBio}>
-          Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.
+          {currentUser?.bio ?? 'Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.'}
         </Text>
       </View>
 
@@ -286,10 +287,10 @@ export function ProfileScreen({
   );
 }
 
-export function EditProfileScreen({ onBack }) {
-  const [name, setName] = useState('Sofia Walker');
-  const [username, setUsername] = useState('@sofiawalks');
-  const [bio, setBio] = useState('Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.');
+export function EditProfileScreen({ onBack, currentUser }) {
+  const [name, setName] = useState(currentUser?.name ?? 'Atlas User');
+  const [username, setUsername] = useState(`@${currentUser?.username ?? 'atlasuser'}`);
+  const [bio, setBio] = useState(currentUser?.bio ?? 'Travel curator collecting food-first itineraries, soft city mornings, and trips worth sending to the group chat.');
 
   return (
     <ScrollView
@@ -382,7 +383,7 @@ function SettingsLinkRow({ label, detail = '', onPress, tone = 'default' }) {
   );
 }
 
-export function SettingsScreen({ onBack, onEditProfilePress, onLogoutPress }) {
+export function SettingsScreen({ onBack, onEditProfilePress, onLogoutPress, onPrivacyPolicyPress }) {
   const [pushAlertsEnabled, setPushAlertsEnabled] = useState(true);
   const [privateAccountEnabled, setPrivateAccountEnabled] = useState(false);
   const [friendActivityEnabled, setFriendActivityEnabled] = useState(true);
@@ -448,7 +449,7 @@ export function SettingsScreen({ onBack, onEditProfilePress, onLogoutPress }) {
         <View style={styles.settingsCard}>
           <SettingsLinkRow label="Help center" detail="FAQs, contact, and troubleshooting." onPress={() => {}} />
           <View style={styles.settingsDivider} />
-          <SettingsLinkRow label="Privacy policy" onPress={() => {}} />
+          <SettingsLinkRow label="Privacy policy" onPress={onPrivacyPolicyPress} />
           <View style={styles.settingsDivider} />
           <SettingsLinkRow label="Log out" tone="danger" onPress={onLogoutPress} />
         </View>
